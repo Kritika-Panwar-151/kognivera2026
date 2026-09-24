@@ -262,6 +262,9 @@ export default function TripDashboard({
     personalRemaining,
     personalPct,
     personalSafeDaily,
+    daysGone,
+    daysTotal,
+    daysLeft,
   } = useBudget(trip, activeUser, expenses)
 
   if (!trip) {
