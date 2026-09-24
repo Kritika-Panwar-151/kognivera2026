@@ -26,6 +26,23 @@ export interface User {
   locale?: string
 }
 
+export interface CategoryCaps {
+  accommodation: number
+  transport: number
+  food: number
+  activities: number
+  misc: number
+}
+
+export interface TripMemberInfo {
+  userId: string
+  role: 'owner' | 'editor' | 'viewer'
+  status: 'pending' | 'active' | 'declined'
+  personalBudget: number
+  categoryCaps?: CategoryCaps
+  invitedByUserId?: string
+}
+
 export interface Trip {
   id: string
   name: string
@@ -35,10 +52,12 @@ export interface Trip {
   currency: string
   budget: number
   spent: number
+  ownerId?: string
   adults?: number
   children?: number
   partySize?: number
   members?: string[]
+  memberDetails?: TripMemberInfo[]
   isGroupTrip?: boolean
   originCountry?: string
   originCity?: string
@@ -46,13 +65,7 @@ export interface Trip {
   destinationCity?: string
   memberBudgets?: Record<string, number>
   personalBudget?: number
-  categoryCaps?: {
-    accommodation: number
-    transport: number
-    food: number
-    activities: number
-    misc: number
-  }
+  categoryCaps?: CategoryCaps
 }
 
 export interface Expense {

@@ -55,13 +55,24 @@ export default function TripTravellersBar({ trip }: Props) {
               {traveller.avatar}
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs font-bold text-slate-900 leading-tight">{traveller.name}</span>
-                {traveller.role === 'Host' && (
-                  <span className="text-[9px] font-bold bg-teal-100 text-teal-800 px-1 py-0.2 rounded">Host</span>
+                {traveller.role === 'Host' ? (
+                  <span className="text-[9px] font-bold bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded">Admin / Host</span>
+                ) : traveller.status === 'pending' ? (
+                  <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">⏳ Pending</span>
+                ) : (
+                  <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">✓ Joined</span>
                 )}
               </div>
-              <span className="text-[10px] text-slate-400">Adult Member</span>
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5">
+                <span>Personal Budget:</span>
+                <span className="font-bold text-slate-800">
+                  {traveller.personalBudget && traveller.personalBudget > 0
+                    ? `₹${traveller.personalBudget.toLocaleString()}`
+                    : 'Awaiting input'}
+                </span>
+              </div>
             </div>
           </div>
         ))}

@@ -129,6 +129,7 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
       currency: autoCurrency,
       budget: totalGroupBudget,
       spent: 0,
+      ownerId: hostUser.id,
       adults: parseInt(adults) || 1,
       children: parseInt(children) || 0,
       partySize: totalParty,

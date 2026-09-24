@@ -14,14 +14,18 @@ import AIGuardian from './screens/AIGuardian'
 import WhatIf from './screens/WhatIf'
 import GroupSettlement from './screens/GroupSettlement'
 import LoginScreen from './screens/LoginScreen'
+import TripInviteModal from './components/TripInviteModal'
 import {
   fetchTripsFromSupabase,
   fetchExpensesFromSupabase,
   saveTripToSupabase,
   saveExpenseToSupabase,
+  acceptTripInvite,
+  fetchPendingTripInvites,
   initialTripsFallback,
   initialExpensesFallback,
 } from './services/supabaseDataService'
+import type { CategoryCaps } from './types'
 import { supabase } from './lib/supabase'
 
 export default function App() {
@@ -45,6 +49,8 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [isConverterOpen, setIsConverterOpen] = useState(false)
   const [, setLoadingData] = useState(true)
+  const [pendingInviteTrip, setPendingInviteTrip] = useState<Trip | null>(null)
+  const [showInviteModal, setShowInviteModal] = useState(false)
 
   // Load Trips & Expenses based on logged-in user
   useEffect(() => {
@@ -54,6 +60,30 @@ export default function App() {
         const loadedExpenses = (await fetchExpensesFromSupabase()) || initialExpensesFallback
 
         if (currentUser) {
+          // Check for pending trip invites for current user
+          try {
+            const pendingList = await fetchPendingTripInvites(currentUser.id)
+            if (pendingList && pendingList.length > 0) {
+              const pendingRecord = pendingList[0]
+              const pTrip = pendingRecord.trips
+              if (pTrip) {
+                setPendingInviteTrip({
+                  id: pTrip.trip_id,
+                  name: pTrip.title,
+                  destination: pTrip.destination_city_id || 'Destination',
+                  startDate: pTrip.start_date,
+                  endDate: pTrip.end_date,
+                  currency: pTrip.home_currency || 'INR',
+                  budget: Number(pTrip.budget || 0),
+                  spent: 0,
+                  partySize: pTrip.party_size || 1,
+                })
+              }
+            }
+          } catch (e) {
+            console.warn('Pending invites check error:', e)
+          }
+
           // Filter trips that belong to or include the current user
           const userTrips = loadedTrips.filter(
             (t) =>
@@ -88,6 +118,19 @@ export default function App() {
     }
     loadData()
   }, [currentUser])
+
+  const handleAcceptInvite = async (tripId: string, personalBudget: number, categoryCaps: CategoryCaps) => {
+    if (!currentUser) return
+    await acceptTripInvite(tripId, currentUser.id, personalBudget, categoryCaps)
+    const freshTrips = await fetchTripsFromSupabase()
+    setTrips(freshTrips)
+    const joined = freshTrips.find((t) => t.id === tripId)
+    if (joined) {
+      setCurrentTrip(joined)
+    }
+    setPendingInviteTrip(null)
+    setShowInviteModal(false)
+  }
 
   const navigate = (s: Screen) => {
     setScreen(s)
@@ -254,6 +297,41 @@ export default function App() {
         onSignOut={handleSignOut}
       />
 
+      {/* Pending Trip Invitation Banner */}
+      {pendingInviteTrip && screen !== 'login' && (
+        <div className="max-w-4xl mx-auto px-4 pt-3 w-full">
+          <div className="bg-linear-to-r from-teal-600 to-emerald-600 text-white p-3.5 rounded-2xl shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-teal-400/40 animate-in fade-in slide-in-from-top-3 duration-300">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl">📬</span>
+              <div>
+                <p className="text-xs font-bold leading-tight">
+                  You are invited to join <span className="underline decoration-teal-200">{pendingInviteTrip.name}</span>!
+                </p>
+                <p className="text-[11px] text-teal-100">
+                  Set your personal budget & category preferences to join the group pot.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setPendingInviteTrip(null)}
+                className="px-2.5 py-1 text-[11px] text-teal-100 hover:text-white transition"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowInviteModal(true)}
+                className="px-3.5 py-1.5 bg-white text-teal-800 text-xs font-black rounded-xl shadow-xs hover:bg-teal-50 active:scale-95 transition whitespace-nowrap"
+              >
+                Set Budget & Join
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Screen Content with pb-24 for fixed bottom navigation (only when not login) */}
       <main className={`flex-1 overflow-x-hidden ${screen === 'login' ? 'pb-0' : 'pb-24'}`}>
         {renderScreen()}
@@ -270,6 +348,16 @@ export default function App() {
         isOpen={isConverterOpen}
         onClose={() => setIsConverterOpen(false)}
       />
+
+      {/* Trip Invite Modal */}
+      {pendingInviteTrip && (
+        <TripInviteModal
+          trip={pendingInviteTrip}
+          isOpen={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          onAccept={handleAcceptInvite}
+        />
+      )}
     </div>
   )
 }
