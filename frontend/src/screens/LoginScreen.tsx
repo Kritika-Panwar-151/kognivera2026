@@ -265,79 +265,71 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
           return
         }
 
-        if (isSupabaseConfigured) {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password,
-          })
+        let authUser: User | null = null
 
-          if (error) {
-            console.warn('Supabase signin error:', error.message)
-            const failure = recordFailedLogin(email)
-            if (failure.isLocked) {
-              setMessage({
-                text: '🔒 Account locked! You entered the wrong password 5 times. Your account is blocked for 2 hours.',
-                type: 'error',
-              })
+        if (isSupabaseConfigured) {
+          try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+              email: email.trim(),
+              password,
+            })
+
+            if (!error && data?.user) {
+              const registered = getRegisteredUsers()
+              const matched = registered.find(
+                (u) =>
+                  u.email.toLowerCase() === email.trim().toLowerCase() ||
+                  u.id === data.user.id
+              )
+              authUser = matched || {
+                id: data.user.id,
+                name: data.user.user_metadata?.full_name || email.split('@')[0],
+                email: data.user.email || email,
+                homeCurrency: autoCurrency,
+                avatar: '👤',
+                role: 'Trip Organizer',
+              }
+            } else if (error) {
+              console.info('Supabase Auth login notice (falling back to user database check):', error.message)
+            }
+          } catch (spErr) {
+            console.warn('Supabase signin exception:', spErr)
+          }
+        }
+
+        // If Supabase Auth did not return a session, verify against registered user database & local credentials
+        if (!authUser) {
+          const result = verifyUserCredentials(email, password)
+          if (!result.success || !result.user) {
+            if (result.error?.includes('Incorrect password')) {
+              const failure = recordFailedLogin(email)
+              if (failure.isLocked) {
+                setMessage({
+                  text: '🔒 Account locked! You entered the wrong password 5 times. Your account is blocked for 2 hours.',
+                  type: 'error',
+                })
+              } else {
+                setMessage({
+                  text: `Incorrect password. Attempt ${5 - failure.attemptsLeft} of 5. After 5 failed attempts, your account will be locked for 2 hours.`,
+                  type: 'error',
+                })
+              }
             } else {
               setMessage({
-                text: `Incorrect credentials. Attempt ${5 - failure.attemptsLeft} of 5. After 5 failed attempts, your account will be locked for 2 hours.`,
+                text: result.error || 'Account not found. Please click "Create Account" first.',
                 type: 'error',
               })
             }
             setLoading(false)
             return
-          } else if (data?.user) {
-            clearFailedLogins(email)
-            const registered = getRegisteredUsers()
-            const matched = registered.find((u) => u.email.toLowerCase() === email.toLowerCase())
-            const authUser: User = matched || {
-              id: data.user.id,
-              name: data.user.user_metadata?.full_name || email.split('@')[0],
-              email: data.user.email || email,
-              homeCurrency: autoCurrency,
-              avatar: '👤',
-              role: 'Trip Organizer',
-            }
-
-            localStorage.setItem('tripwallet_auth_user', JSON.stringify(authUser))
-            onSelectUser(authUser)
-            setMessage({ text: 'Signed in successfully!', type: 'success' })
-            setTimeout(() => navigate('trip-dashboard'), 600)
-            return
           }
-        }
-
-        // Validate strictly against registered database
-        const result = verifyUserCredentials(email, password)
-        if (!result.success || !result.user) {
-          if (result.error?.includes('Incorrect password')) {
-            const failure = recordFailedLogin(email)
-            if (failure.isLocked) {
-              setMessage({
-                text: '🔒 Account locked! You entered the wrong password 5 times. Your account is blocked for 2 hours.',
-                type: 'error',
-              })
-            } else {
-              setMessage({
-                text: `Incorrect password. Attempt ${5 - failure.attemptsLeft} of 5. After 5 failed attempts, your account will be locked for 2 hours.`,
-                type: 'error',
-              })
-            }
-          } else {
-            setMessage({
-              text: result.error || 'Account not found. Please click "Create Account" first.',
-              type: 'error',
-            })
-          }
-          setLoading(false)
-          return
+          authUser = result.user
         }
 
         clearFailedLogins(email)
-        localStorage.setItem('tripwallet_auth_user', JSON.stringify(result.user))
-        onSelectUser(result.user)
-        setMessage({ text: `Welcome back, ${result.user.name}!`, type: 'success' })
+        localStorage.setItem('tripwallet_auth_user', JSON.stringify(authUser))
+        onSelectUser(authUser)
+        setMessage({ text: `Welcome back, ${authUser.name}!`, type: 'success' })
         setTimeout(() => navigate('trip-dashboard'), 600)
       }
     } catch (err: any) {
@@ -462,7 +454,31 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
               </button>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-100 text-center">
+            {/* Quick Demo Sign In Buttons */}
+            <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
+              <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider text-center">
+                Quick Demo Accounts (1-Tap Sign In)
+              </p>
+              <div className="flex flex-wrap gap-1.5 justify-center">
+                {DEFAULT_USERS.slice(0, 4).map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => {
+                      setEmail(u.email)
+                      setPassword('TripWallet@2026')
+                      setMessage({ text: `Pre-filled credentials for ${u.name}. Click 'Sign In' or submit to log in.`, type: 'success' })
+                    }}
+                    className="px-2.5 py-1.5 bg-slate-50 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-xl text-xs font-bold text-slate-700 transition flex items-center gap-1 shadow-2xs"
+                  >
+                    <span>{u.avatar}</span>
+                    <span>{u.name.split(' ')[0]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-3 pt-2 text-center">
               <p className="text-[11px] text-slate-400">
                 🔒 Enterprise security with Supabase multi-user auth and real-time ledger encryption.
               </p>

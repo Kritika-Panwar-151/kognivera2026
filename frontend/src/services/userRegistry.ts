@@ -324,11 +324,26 @@ export function userExists(email: string): boolean {
 export const verifyUserCredentials = authenticateStoredUser
 
 export function authenticateStoredUser(
-  email: string,
+  emailOrName: string,
   password: string
 ): { success: boolean; user?: User; error?: string } {
   const users = getRegisteredUsers()
-  const matchedUser = users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase())
+  const query = emailOrName.trim().toLowerCase()
+
+  if (!query) {
+    return {
+      success: false,
+      error: 'Please enter your email address or username.',
+    }
+  }
+
+  const matchedUser = users.find(
+    (u) =>
+      u.email.toLowerCase() === query ||
+      u.name.toLowerCase() === query ||
+      u.name.toLowerCase().split(' ')[0] === query ||
+      u.id.toLowerCase() === query
+  )
 
   if (!matchedUser) {
     return {
@@ -340,7 +355,7 @@ export function authenticateStoredUser(
   const creds = getStoredCredentials()
   const storedPassword = creds[matchedUser.email.toLowerCase()]
 
-  if (storedPassword && storedPassword !== password) {
+  if (storedPassword && storedPassword !== password.trim()) {
     return {
       success: false,
       error: 'Incorrect password. Please enter the password you registered with.',
