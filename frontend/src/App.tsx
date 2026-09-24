@@ -84,12 +84,21 @@ export default function App() {
   // Safe trip updater ensuring user isolation is always preserved
   const updateTripsSafely = (freshTrips: Trip[], targetUser: User | null) => {
     const userTrips = deduplicateTrips(filterTripsForUser(freshTrips, targetUser))
-    setTrips(userTrips)
+    
+    // Preserve newly created local trips while they finish persisting to Supabase
+    setTrips((prevTrips) => {
+      const pendingLocalTrips = prevTrips.filter(
+        (pt) => pt.id.startsWith('trp_') && !userTrips.some((ut) => ut.id === pt.id)
+      )
+      return deduplicateTrips([...pendingLocalTrips, ...userTrips])
+    })
+
     setCurrentTrip((prev) => {
       if (prev) {
         const updated = userTrips.find((t) => t.id === prev.id)
         if (updated) return updated
-        return userTrips.length > 0 ? userTrips[0] : null
+        // If prev was just created locally and hasn't finished persisting to Supabase DB yet, KEEP prev!
+        return prev
       }
       return userTrips.length > 0 ? userTrips[0] : null
     })

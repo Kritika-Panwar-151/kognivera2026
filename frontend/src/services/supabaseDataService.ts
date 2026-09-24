@@ -164,7 +164,7 @@ export async function saveTripToSupabase(trip: Trip, ownerUserId: string = 'usr_
       trip_id: tripId,
       owner_user_id: ownerUserId,
       title: trip.name,
-      destination_city_id: 'cty_0b92e2e7', // Canonical City ID
+      destination_city_id: trip.destination || 'Destination',
       start_date: trip.startDate || '2026-09-12',
       end_date: trip.endDate || '2026-09-20',
       party_size: trip.partySize || 1,
