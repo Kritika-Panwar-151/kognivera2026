@@ -35,10 +35,19 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
   const [originCity, setOriginCity] = useState(currentUser?.homeCity || 'Bengaluru')
   const [destinationCountry, setDestinationCountry] = useState('Switzerland')
   const [destinationCity, setDestinationCity] = useState('Zurich')
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
-  const [endDate, setEndDate] = useState(
-    new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
-  )
+  const getLocalDateString = (offsetDays = 0) => {
+    const d = new Date()
+    if (offsetDays !== 0) {
+      d.setDate(d.getDate() + offsetDays)
+    }
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const [startDate, setStartDate] = useState(getLocalDateString(0))
+  const [endDate, setEndDate] = useState(getLocalDateString(7))
 
   // Sync with current user profile whenever loaded
   useEffect(() => {

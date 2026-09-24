@@ -536,16 +536,18 @@ export default function TripDashboard({
                 <span>⚙️</span>
                 <span>Trip Settings</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setIsPendingRequestsOpen(true)}
-                className="px-4 py-3 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-900 rounded-xl font-bold text-sm transition shadow-lg flex items-center gap-2"
-                title="View Pending Debts & Group Member Invites"
-              >
-                <span>⏳</span>
-                <span>Pending Requests</span>
-                <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsPendingRequestsOpen(true)}
+                  className="px-4 py-3 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-900 rounded-xl font-bold text-sm transition shadow-lg flex items-center gap-2"
+                  title="View Pending Debts & Group Member Invites"
+                >
+                  <span>⏳</span>
+                  <span>Pending Requests</span>
+                  <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+                </button>
+              )}
               <button
                 onClick={() => navigate('adaptive-itinerary')}
                 className="px-4 py-3 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white rounded-xl font-bold text-sm transition shadow-lg flex items-center gap-2 border border-white/25"
