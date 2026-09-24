@@ -59,8 +59,50 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   // Natural Language AI Parsing State
   const [nlInput, setNlInput] = useState('')
   const [isNlParsing, setIsNlParsing] = useState(false)
+  const [isListening, setIsListening] = useState(false)
   const [aiSummaryBadge, setAiSummaryBadge] = useState<string | null>(null)
   const [aiWarning, setAiWarning] = useState<string | null>(null)
+
+  const handleStartVoice = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.')
+      return
+    }
+
+    try {
+      const recognition = new SpeechRecognition()
+      recognition.lang = 'en-IN'
+      recognition.interimResults = false
+      recognition.maxAlternatives = 1
+
+      recognition.onstart = () => {
+        setIsListening(true)
+      }
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript
+        setNlInput(transcript)
+        setIsListening(false)
+        handleParseNl(transcript)
+      }
+
+      recognition.onerror = (event: any) => {
+        console.warn('Speech recognition error:', event.error)
+        setIsListening(false)
+      }
+
+      recognition.onend = () => {
+        setIsListening(false)
+      }
+
+      recognition.start()
+    } catch (err) {
+      console.warn('Speech recognition start failed:', err)
+      setIsListening(false)
+    }
+  }
 
   const handleParseNl = async (textToParse?: string) => {
     const text = textToParse || nlInput
@@ -264,6 +306,20 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
               </button>
             )}
           </div>
+
+          {/* Microphone Voice Button */}
+          <button
+            type="button"
+            onClick={handleStartVoice}
+            className={`p-2.5 rounded-2xl text-xs font-bold transition shadow-xs flex items-center justify-center shrink-0 ${
+              isListening
+                ? 'bg-rose-600 text-white animate-pulse ring-4 ring-rose-200'
+                : 'bg-white hover:bg-slate-100 text-slate-700 border border-indigo-200'
+            }`}
+            title={isListening ? 'Listening... Speak your expense now' : 'Click to Speak (Speech-to-Text)'}
+          >
+            <span>{isListening ? '🔴' : '🎙️'}</span>
+          </button>
 
           <button
             type="button"

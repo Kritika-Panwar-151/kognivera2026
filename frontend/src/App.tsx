@@ -490,7 +490,14 @@ export default function App() {
       case 'receipt-scanner':
         return <ReceiptScanner navigate={navigate} />
       case 'ocr-confirm':
-        return <OCRConfirm navigate={navigate} />
+        return (
+          <OCRConfirm
+            navigate={navigate}
+            onAddExpense={handleAddExpense}
+            trip={currentTrip}
+            currentUser={currentUser}
+          />
+        )
       case 'expense-history':
         return (
           <ExpenseHistory

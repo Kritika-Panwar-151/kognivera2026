@@ -123,8 +123,16 @@ export default function PendingRequestsModal({
     if (onSettleExpense) onSettleExpense(id)
   }
 
-  const handleRemind = (id: string) => {
-    setRemindedIds((prev) => new Set(prev).add(id))
+  const handleRemind = (debt: PendingDebtItem) => {
+    setRemindedIds((prev) => new Set(prev).add(debt.id))
+    const msg = `Hey ${debt.person}! Friendly reminder from TripWallet: your pending split share of ₹${debt.amount.toLocaleString()} for "${debt.reason}" is ready for settlement.`
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank')
+  }
+
+  const handlePayUpi = (debt: PendingDebtItem) => {
+    const upiUrl = `upi://pay?pa=tripwallet.companion@axisbank&pn=${encodeURIComponent(debt.person)}&am=${debt.amount}&cu=INR&tn=${encodeURIComponent('TripWallet: ' + debt.reason)}`
+    window.location.href = upiUrl
+    handleSettle(debt.id)
   }
 
   return (
@@ -236,18 +244,28 @@ export default function PendingRequestsModal({
                     </span>
 
                     <div className="flex items-center gap-1.5">
-                      {debt.direction === 'they_owe_you' && (
+                      {debt.direction === 'they_owe_you' ? (
                         <button
                           type="button"
-                          onClick={() => handleRemind(debt.id)}
+                          onClick={() => handleRemind(debt)}
                           disabled={remindedIds.has(debt.id)}
                           className={`px-2.5 py-1 text-xs font-bold rounded-lg transition ${
                             remindedIds.has(debt.id)
                               ? 'bg-slate-100 text-slate-400'
-                              : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
                           }`}
+                          title="Remind person via WhatsApp"
                         >
-                          {remindedIds.has(debt.id) ? '✓ Reminded' : '🔔 Remind'}
+                          {remindedIds.has(debt.id) ? '✓ Reminded' : '💬 WhatsApp Remind'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handlePayUpi(debt)}
+                          className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition shadow-2xs"
+                          title="Pay via UPI Deep Link (GPay / PhonePe / Paytm)"
+                        >
+                          ⚡ Pay via UPI
                         </button>
                       )}
                       <button

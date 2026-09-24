@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { getStoredFxRates, refreshLiveFxRates, type LiveFxState } from '../services/currencyService'
 
 interface Props {
   isOpen: boolean
@@ -6,18 +7,8 @@ interface Props {
   defaultHomeCurrency?: string
 }
 
-const supportedCurrencies = [
-  { code: 'EUR', name: 'Euro (€)', symbol: '€', rateToINR: 94.0 },
-  { code: 'USD', name: 'US Dollar ($)', symbol: '$', rateToINR: 86.5 },
-  { code: 'GBP', name: 'British Pound (£)', symbol: '£', rateToINR: 112.4 },
-  { code: 'SGD', name: 'Singapore Dollar (S$)', symbol: 'S$', rateToINR: 65.2 },
-  { code: 'AED', name: 'UAE Dirham (AED)', symbol: 'AED', rateToINR: 23.55 },
-  { code: 'THB', name: 'Thai Baht (฿)', symbol: '฿', rateToINR: 2.48 },
-  { code: 'JPY', name: 'Japanese Yen (¥)', symbol: '¥', rateToINR: 0.58 },
-  { code: 'INR', name: 'Indian Rupee (₹)', symbol: '₹', rateToINR: 1.0 },
-]
-
 export default function CurrencyConverterModal({ isOpen, onClose }: Props) {
+  const [fxState, setFxState] = useState<LiveFxState>(getStoredFxRates())
   const [amount, setAmount] = useState('50')
   const [fromCode, setFromCode] = useState('EUR')
   const [toCode, setToCode] = useState('INR')
@@ -27,6 +18,22 @@ export default function CurrencyConverterModal({ isOpen, onClose }: Props) {
     fromSymbol: string
     toSymbol: string
   } | null>(null)
+
+  useEffect(() => {
+    refreshLiveFxRates().then(setFxState)
+  }, [])
+
+  const supportedCurrencies = [
+    { code: 'EUR', name: 'Euro (€)', symbol: '€', rateToINR: fxState.rates.EUR || 94.0 },
+    { code: 'USD', name: 'US Dollar ($)', symbol: '$', rateToINR: fxState.rates.USD || 86.5 },
+    { code: 'GBP', name: 'British Pound (£)', symbol: '£', rateToINR: fxState.rates.GBP || 112.4 },
+    { code: 'SGD', name: 'Singapore Dollar (S$)', symbol: 'S$', rateToINR: fxState.rates.SGD || 65.2 },
+    { code: 'AED', name: 'UAE Dirham (AED)', symbol: 'AED', rateToINR: fxState.rates.AED || 23.55 },
+    { code: 'THB', name: 'Thai Baht (฿)', symbol: '฿', rateToINR: fxState.rates.THB || 2.48 },
+    { code: 'JPY', name: 'Japanese Yen (¥)', symbol: '¥', rateToINR: fxState.rates.JPY || 0.58 },
+    { code: 'CHF', name: 'Swiss Franc (CHF)', symbol: 'CHF', rateToINR: fxState.rates.CHF || 98.2 },
+    { code: 'INR', name: 'Indian Rupee (₹)', symbol: '₹', rateToINR: 1.0 },
+  ]
 
   if (!isOpen) return null
 

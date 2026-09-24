@@ -8,6 +8,7 @@ import { broadcastTripChange } from '../services/supabaseDataService'
 import { useCategoryCaps } from '../features/category-spending/useCategoryCaps'
 import CategoryBreachAlert from '../components/CategoryBreachAlert'
 import PendingRequestsModal from '../components/PendingRequestsModal'
+import CategoryCapAdjusterModal from '../components/CategoryCapAdjusterModal'
 
 interface Props {
   navigate: NavigateFn
@@ -130,6 +131,7 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
   // Dynamic Category Caps & Breach Alerts
   const categoryCapsHook = useCategoryCaps(trip, expenses)
   const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false)
+  const [isAdjustCapsOpen, setIsAdjustCapsOpen] = useState(false)
 
   // Edit Trip Name State
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -412,7 +414,7 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
         isDismissed={categoryCapsHook.isDismissed}
         onDismiss={categoryCapsHook.dismissAlert}
         currencySymbol={currencySymbol}
-        onManageCaps={() => setIsExpensesExpanded(true)}
+        onManageCaps={() => setIsAdjustCapsOpen(true)}
       />
 
       {/* =========================
@@ -664,6 +666,16 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setIsAdjustCapsOpen(true)
+                  }}
+                  className="px-2 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 text-[10px] font-bold rounded-lg border border-teal-200"
+                >
+                  ✏️ Adjust Caps
+                </button>
                 <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg">
                   {categoryCapsHook.categories.length} Categories
                 </span>
@@ -817,12 +829,23 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
                       {forecastReport.rescueRecommendation.actionDescription} (Save ~{currencySymbol}{forecastReport.rescueRecommendation.potentialSavings.toLocaleString()})
                     </p>
                   </div>
-                  <button
-                    onClick={() => navigate('adaptive-itinerary')}
-                    className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shrink-0 transition shadow-2xs self-end sm:self-auto"
-                  >
-                    Run Budget Rescue →
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => navigate('what-if')}
+                      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shrink-0 transition shadow-2xs flex items-center gap-1.5"
+                    >
+                      <span>🔮</span>
+                      <span>Simulate in What-If</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate('adaptive-itinerary')}
+                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shrink-0 transition shadow-2xs"
+                    >
+                      Adapt Schedule →
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1149,6 +1172,15 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
         trip={trip}
         expenses={expenses}
         currentUser={activeUser}
+      />
+
+      {/* =========================
+          CATEGORY CAPS ADJUSTER MODAL
+      ========================= */}
+      <CategoryCapAdjusterModal
+        isOpen={isAdjustCapsOpen}
+        onClose={() => setIsAdjustCapsOpen(false)}
+        trip={trip}
       />
     </div>
   )
