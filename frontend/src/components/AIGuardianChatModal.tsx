@@ -16,8 +16,10 @@ interface Message {
 }
 
 export default function AIGuardianChatModal({ isOpen, onClose, trip, expenses }: Props) {
-  const remaining = trip.budget - trip.spent
-  const pct = Math.round((trip.spent / trip.budget) * 100)
+  if (!isOpen || !trip) return null
+
+  const remaining = (trip.budget || 0) - (trip.spent || 0)
+  const pct = trip.budget > 0 ? Math.round(((trip.spent || 0) / trip.budget) * 100) : 0
   const daysTotal = 8
   const daysGone = 3
   const daysLeft = daysTotal - daysGone
@@ -27,12 +29,10 @@ export default function AIGuardianChatModal({ isOpen, onClose, trip, expenses }:
   const [messages, setMessages] = useState<Message[]>([
     {
       sender: 'ai',
-      text: `Hello! I'm your AI Travel Budget Guardian for "${trip.name}". You've used ${pct}% of your budget (₹${trip.spent.toLocaleString()} spent out of ₹${trip.budget.toLocaleString()}). You have ₹${remaining.toLocaleString()} left for the next ${daysLeft} days. Ask me anything!`,
+      text: `Hello! I'm your AI Travel Budget Guardian for "${trip.name || 'your trip'}". You've used ${pct}% of your budget (₹${(trip.spent || 0).toLocaleString()} spent out of ₹${(trip.budget || 0).toLocaleString()}). You have ₹${remaining.toLocaleString()} left for the next ${daysLeft} days. Ask me anything!`,
       time: 'Just now',
     },
   ])
-
-  if (!isOpen) return null
 
   const quickPrompts = [
     'How much can I spend today?',

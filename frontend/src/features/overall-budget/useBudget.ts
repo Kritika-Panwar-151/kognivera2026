@@ -60,7 +60,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
     })
   } else {
     // If no expenses logged for this trip, personal spend is 0 (or proportional if trip.spent exists)
-    personalSpent = spent > 0 ? Math.round(spent / Math.max(trip.members?.length || 1, 1)) : 0
+    personalSpent = spent > 0 ? Math.round(spent / Math.max(trip?.members?.length || 1, 1)) : 0
   }
 
   const personalRemaining = Math.max(0, personalBudget - personalSpent)

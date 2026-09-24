@@ -9,13 +9,13 @@ interface Props {
 }
 
 export default function EditTripModal({ trip, isOpen, onClose, onSave }: Props) {
-  if (!isOpen) return null
+  const [name, setName] = useState(trip?.name || '')
+  const [destination, setDestination] = useState(trip?.destination || '')
+  const [budget, setBudget] = useState(String(trip?.budget || 0))
+  const [startDate, setStartDate] = useState(trip?.startDate || '')
+  const [endDate, setEndDate] = useState(trip?.endDate || '')
 
-  const [name, setName] = useState(trip.name)
-  const [destination, setDestination] = useState(trip.destination)
-  const [budget, setBudget] = useState(String(trip.budget))
-  const [startDate, setStartDate] = useState(trip.startDate)
-  const [endDate, setEndDate] = useState(trip.endDate)
+  if (!isOpen || !trip) return null
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
