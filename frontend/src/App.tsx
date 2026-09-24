@@ -562,6 +562,11 @@ export default function App() {
             currentUser={currentUser}
             onUpdateMemberBudget={handleUpdateMemberBudget}
             onUpdateTrip={handleUpdateTripDetails}
+            onUpdateTripName={(tripId, newName) => {
+              if (currentTrip && currentTrip.id === tripId) {
+                handleUpdateTripDetails({ ...currentTrip, name: newName })
+              }
+            }}
             onDeleteExpense={handleDeleteExpense}
             onEditExpense={handleEditExpense}
           />

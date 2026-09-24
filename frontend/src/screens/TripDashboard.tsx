@@ -115,7 +115,15 @@ function DonutChart({ pct, isPersonal }: { pct: number; isPersonal?: boolean }) 
   )
 }
 
-export default function TripDashboard({ navigate, trip, expenses, currentUser, onUpdateMemberBudget }: Props) {
+export default function TripDashboard({
+  navigate,
+  trip,
+  expenses,
+  currentUser,
+  onUpdateMemberBudget,
+  onUpdateTrip,
+  onUpdateTripName,
+}: Props) {
   const activeUser = currentUser || {
     id: 'usr_you',
     name: 'You (Aisha)',
