@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Trip, CategoryCaps, User } from '../types'
-import { formatUserDualCurrency, convertCurrency } from '../services/currencyService'
+import { formatUserDualCurrency, convertCurrency, getCurrencySymbol } from '../services/currencyService'
 
 interface Props {
   trip: Trip
@@ -12,21 +12,13 @@ interface Props {
 
 export default function TripInviteModal({ trip, currentUser, isOpen, onClose, onAccept }: Props) {
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
-  const tripDestCurr = (trip.currency || 'JPY').toUpperCase()
+  const tripDestCurr = (trip?.currency || 'JPY').toUpperCase()
 
-  const getSymbol = (c: string) => {
-    if (c === 'EUR') return '€'
-    if (c === 'USD') return '$'
-    if (c === 'GBP') return '£'
-    if (c === 'JPY') return '¥'
-    if (c === 'SGD') return 'S$'
-    return '₹'
-  }
+  const homeSymbol = getCurrencySymbol(userHomeCurr)
+  const destSymbol = getCurrencySymbol(tripDestCurr)
 
-  const homeSymbol = getSymbol(userHomeCurr)
-
-  // Default preset based on currency
-  const defaultBudget = userHomeCurr === 'EUR' ? 250 : userHomeCurr === 'USD' ? 300 : 20000
+  const isHighVal = ['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'SGD'].includes(userHomeCurr)
+  const defaultBudget = isHighVal ? 250 : userHomeCurr === 'JPY' ? 35000 : 20000
   const [personalBudget, setPersonalBudget] = useState(defaultBudget)
   const [submitting, setSubmitting] = useState(false)
 
@@ -37,7 +29,7 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
   const [activities, setActivities] = useState(Math.round(defaultBudget * 0.1))
   const [misc, setMisc] = useState(Math.round(defaultBudget * 0.1))
 
-  if (!isOpen) return null
+  if (!isOpen || !trip) return null
 
   const handleBudgetChange = (amount: number) => {
     const val = Math.max(0, amount)
@@ -79,7 +71,11 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
     tripDestCurr
   )
 
-  const presets = userHomeCurr === 'EUR' ? [150, 250, 400, 600] : userHomeCurr === 'USD' ? [200, 300, 500, 750] : [15000, 20000, 30000, 50000]
+  const presets = isHighVal
+    ? [150, 250, 400, 600]
+    : userHomeCurr === 'JPY'
+    ? [20000, 35000, 50000, 80000]
+    : [15000, 20000, 30000, 50000]
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
@@ -124,7 +120,7 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
                 step="50"
                 value={personalBudget}
                 onChange={(e) => handleBudgetChange(Number(e.target.value))}
-                className="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-black text-lg focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition"
+                className="w-full pl-14 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-black text-lg focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition"
                 required
               />
             </div>
@@ -165,22 +161,22 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
                 <span className="text-slate-500 font-medium block">🏨 Stay (35%)</span>
                 <span className="font-black text-slate-900">{homeSymbol}{accommodation.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {getSymbol(tripDestCurr)}{convertCurrency(accommodation, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
+                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(accommodation, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
               </div>
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
                 <span className="text-slate-500 font-medium block">🍽️ Food (25%)</span>
                 <span className="font-black text-slate-900">{homeSymbol}{food.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {getSymbol(tripDestCurr)}{convertCurrency(food, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
+                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(food, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
               </div>
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
                 <span className="text-slate-500 font-medium block">🚕 Transport (20%)</span>
                 <span className="font-black text-slate-900">{homeSymbol}{transport.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {getSymbol(tripDestCurr)}{convertCurrency(transport, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
+                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(transport, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
               </div>
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
                 <span className="text-slate-500 font-medium block">🎟️ Activities (10%)</span>
                 <span className="font-black text-slate-900">{homeSymbol}{activities.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {getSymbol(tripDestCurr)}{convertCurrency(activities, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
+                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(activities, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
               </div>
             </div>
           </div>

@@ -115,6 +115,25 @@ export function convertCurrency(
 }
 
 /**
+ * Returns the proper currency symbol for a given currency code.
+ */
+export function getCurrencySymbol(curr: string): string {
+  const c = (curr || 'INR').toUpperCase()
+  if (c === 'EUR') return '€'
+  if (c === 'USD') return '$'
+  if (c === 'GBP') return '£'
+  if (c === 'JPY') return '¥'
+  if (c === 'SGD') return 'S$'
+  if (c === 'CHF') return 'CHF '
+  if (c === 'CAD') return 'CA$'
+  if (c === 'AUD') return 'A$'
+  if (c === 'THB') return '฿'
+  if (c === 'AED') return 'AED '
+  if (c === 'INR') return '₹'
+  return `${c} `
+}
+
+/**
  * Formats a financial amount in both the User's Home Currency (primary)
  * and the Trip Destination Currency (secondary subtext).
  */
@@ -132,22 +151,23 @@ export function formatUserDualCurrency(
   const primaryAmount = convertCurrency(amount, fromCurrency, userHomeCurrency)
   const secondaryAmount = convertCurrency(amount, fromCurrency, tripDestinationCurrency)
 
-  const getSymbol = (curr: string) => {
-    const c = curr.toUpperCase()
-    if (c === 'EUR') return '€'
-    if (c === 'USD') return '$'
-    if (c === 'GBP') return '£'
-    if (c === 'JPY') return '¥'
-    if (c === 'SGD') return 'S$'
-    return '₹'
-  }
+  const primarySymbol = getCurrencySymbol(userHomeCurrency)
+  const secondarySymbol = getCurrencySymbol(tripDestinationCurrency)
 
-  const primarySymbol = getSymbol(userHomeCurrency)
-  const secondarySymbol = getSymbol(tripDestinationCurrency)
+  const primaryCode = (userHomeCurrency || 'INR').toUpperCase()
+  const secondaryCode = (tripDestinationCurrency || 'JPY').toUpperCase()
+
+  const primaryText = primarySymbol.trim() === primaryCode
+    ? `${primarySymbol}${primaryAmount.toLocaleString('en-IN')}`
+    : `${primarySymbol}${primaryAmount.toLocaleString('en-IN')} ${primaryCode}`
+
+  const secondaryText = secondarySymbol.trim() === secondaryCode
+    ? `≈ ${secondarySymbol}${secondaryAmount.toLocaleString('en-IN')}`
+    : `≈ ${secondarySymbol}${secondaryAmount.toLocaleString('en-IN')} ${secondaryCode}`
 
   return {
-    primary: `${primarySymbol}${primaryAmount.toLocaleString('en-IN')} ${userHomeCurrency.toUpperCase()}`,
-    secondary: `≈ ${secondarySymbol}${secondaryAmount.toLocaleString('en-IN')} ${tripDestinationCurrency.toUpperCase()}`,
+    primary: primaryText,
+    secondary: secondaryText,
     primaryAmount,
     secondaryAmount,
   }
