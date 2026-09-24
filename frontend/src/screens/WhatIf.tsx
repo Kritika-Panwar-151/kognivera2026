@@ -1,8 +1,11 @@
-import { useState } from 'react'
-import type { NavigateFn } from '../types'
+import { useState, useEffect } from 'react'
+import type { NavigateFn, Expense, Trip, User } from '../types'
 
 interface Props {
   navigate: NavigateFn
+  trip?: Trip | null
+  currentUser?: User | null
+  onAddExpense?: (expense: Expense) => void
 }
 
 const categories = [
@@ -23,20 +26,38 @@ const FX_RATES: Record<string, number> = {
   INR: 1.0,
 }
 
-export default function WhatIf({ navigate }: Props) {
+export default function WhatIf({ navigate, trip, currentUser, onAddExpense }: Props) {
   const [amount, setAmount] = useState('80')
   const [currency, setCurrency] = useState('EUR (€)')
   const [category, setCategory] = useState('Activities')
   const [description, setDescription] = useState('Sunset boat tour in Rome')
   const [simulated, setSimulated] = useState(false)
 
+  // 1-Click Simulation Pre-Fill from AI Budget Rescue on Dashboard
+  useEffect(() => {
+    const prefillRaw = sessionStorage.getItem('whatif_prefill')
+    if (prefillRaw) {
+      try {
+        const data = JSON.parse(prefillRaw)
+        if (data.amount) setAmount(String(data.amount))
+        if (data.currency) setCurrency(data.currency)
+        if (data.category) setCategory(data.category)
+        if (data.description) setDescription(data.description)
+        setSimulated(true)
+        sessionStorage.removeItem('whatif_prefill')
+      } catch (e) {
+        console.warn('Failed to parse whatif_prefill:', e)
+      }
+    }
+  }, [])
+
   const currCode = currency.split(' ')[0]
   const rate = FX_RATES[currCode] || 1.0
   const numAmount = parseFloat(amount) || 0
   const convertedAmount = Math.round(numAmount * rate)
 
-  const tripBudget = 60000
-  const currentSpent = 26172
+  const tripBudget = trip?.budget || 60000
+  const currentSpent = trip?.spent || 26172
   const daysLeft = 5
 
   const beforeProjected = 64872
@@ -47,6 +68,27 @@ export default function WhatIf({ navigate }: Props) {
   // Recalculated safe daily limit if purchase is made
   const newRemaining = Math.max(0, tripBudget - currentSpent - convertedAmount)
   const newSafeDaily = Math.round(newRemaining / daysLeft)
+
+  const handleCommitToLedger = () => {
+    const expenseId = `exp_whatif_${Date.now()}`
+    const newExpense: Expense = {
+      id: expenseId,
+      merchant: description || `${category} (Simulated)`,
+      amount: numAmount,
+      currency: currCode,
+      convertedAmount: convertedAmount,
+      category: category,
+      date: new Date().toISOString().split('T')[0],
+      paidBy: currentUser?.name || 'Aisha Patel',
+      isShared: true,
+      personalSplitMembers: [currentUser?.name || 'Aisha Patel'],
+      source: 'what_if_simulator',
+    }
+    if (onAddExpense) {
+      onAddExpense(newExpense)
+    }
+    navigate('trip-dashboard')
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-xl mx-auto space-y-5">
@@ -218,12 +260,15 @@ export default function WhatIf({ navigate }: Props) {
           {/* Action buttons */}
           <div className="flex gap-2.5 pt-2">
             <button
-              onClick={() => navigate('trip-dashboard')}
-              className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs transition shadow-2xs"
+              type="button"
+              onClick={handleCommitToLedger}
+              className="flex-1 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold text-xs transition shadow-2xs flex items-center justify-center gap-1.5"
             >
-              Add to Expense Ledger
+              <span>+</span>
+              <span>Add to Expense Ledger</span>
             </button>
             <button
+              type="button"
               onClick={() => setSimulated(false)}
               className="px-4 py-3 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-semibold text-xs transition"
             >

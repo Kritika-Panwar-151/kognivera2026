@@ -507,9 +507,23 @@ export default function App() {
           />
         )
       case 'ai-guardian':
-        return <AIGuardian navigate={navigate} />
+        return (
+          <AIGuardian
+            navigate={navigate}
+            trip={currentTrip}
+            currentUser={currentUser}
+            onAddExpense={handleAddExpense}
+          />
+        )
       case 'what-if':
-        return <WhatIf navigate={navigate} />
+        return (
+          <WhatIf
+            navigate={navigate}
+            trip={currentTrip}
+            currentUser={currentUser}
+            onAddExpense={handleAddExpense}
+          />
+        )
       case 'group-settlement':
         return (
           <GroupSettlement

@@ -832,7 +832,20 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
                   <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                     <button
                       type="button"
-                      onClick={() => navigate('what-if')}
+                      onClick={() => {
+                        if (forecastReport?.rescueRecommendation) {
+                          sessionStorage.setItem(
+                            'whatif_prefill',
+                            JSON.stringify({
+                              amount: String(forecastReport.rescueRecommendation.potentialSavings || 4500),
+                              currency: 'INR (₹)',
+                              category: 'Food',
+                              description: `${forecastReport.rescueRecommendation.title} - ${forecastReport.rescueRecommendation.actionDescription}`,
+                            })
+                          )
+                        }
+                        navigate('what-if')
+                      }}
                       className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shrink-0 transition shadow-2xs flex items-center gap-1.5"
                     >
                       <span>🔮</span>

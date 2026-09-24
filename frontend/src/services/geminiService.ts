@@ -693,6 +693,16 @@ export interface GuardianCopilotQueryContext {
   currency?: string
 }
 
+export interface GuardianCopilotExpenseAction {
+  merchant: string
+  amount: number
+  currency: string
+  category: string
+  paidBy?: string
+  isShared?: boolean
+  splitMembers?: string[]
+}
+
 export interface GuardianCopilotResponse {
   answer: string
   detectedIntent: CanonicalIntent
@@ -707,6 +717,7 @@ export interface GuardianCopilotResponse {
     mapsUrl?: string
   }>
   metrics?: Array<{ label: string; value: string; sub?: string }>
+  detectedExpense?: GuardianCopilotExpenseAction
   isLiveGemini: boolean
   traceId: string
   sessionId: string
@@ -743,6 +754,7 @@ export async function queryGuardianCopilotWithLLM(
   let cards: GuardianCopilotResponse['itineraryCards'] = undefined
   let metrics: GuardianCopilotResponse['metrics'] = undefined
   let tags: GuardianCopilotResponse['tags'] = undefined
+  let detectedExpense: GuardianCopilotResponse['detectedExpense'] = undefined
 
   // 2. Try Gemini 1.5 Flash if available
   if (genAI && GEMINI_API_KEY && GEMINI_API_KEY !== 'your_gemini_api_key_here') {
@@ -779,6 +791,30 @@ USER MESSAGE: "${userText}"
       isLive = true
     } catch (err: any) {
       console.warn('Gemini Guardian Copilot fallback:', err.message)
+    }
+  }
+
+  // If intent is ADD_EXPENSE or contains expense triggers, prepare structured detectedExpense
+  if (matchResult.intent === 'ADD_EXPENSE' || /\b(?:add|\+|spent|kharch|speso|pagado)\b/i.test(userText)) {
+    const numMatch = userText.match(/\d+(?:[.,]\d+)?/)
+    const amountVal = numMatch ? parseFloat(numMatch[0].replace(',', '')) : 5000
+    let merchantTitle = 'Expense'
+    if (/dinner|cena|khana|restaurant|trattoria/i.test(userText)) merchantTitle = 'Dinner & Dining'
+    else if (/lunch|pranzo/i.test(userText)) merchantTitle = 'Lunch'
+    else if (/coffee|cappuccino|cafe/i.test(userText)) merchantTitle = 'Cafe & Coffee'
+    else if (/taxi|cab|train|metro|bus|volo/i.test(userText)) merchantTitle = 'Transit / Commute'
+    else if (/hotel|stay|albergo/i.test(userText)) merchantTitle = 'Accommodation'
+    else if (/ticket|entry|museum|tour|colosseo|vaticano/i.test(userText)) merchantTitle = 'Activity / Entry'
+    else merchantTitle = `${detectedCategory} Outlay`
+
+    detectedExpense = {
+      merchant: merchantTitle,
+      amount: amountVal,
+      currency: detectedCurrency || currency,
+      category: detectedCategory,
+      paidBy: userName,
+      isShared: true,
+      splitMembers: [userName],
     }
   }
 
@@ -887,6 +923,7 @@ USER MESSAGE: "${userText}"
     tags,
     itineraryCards: cards,
     metrics,
+    detectedExpense,
     isLiveGemini: isLive,
     traceId,
     sessionId,

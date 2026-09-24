@@ -1,9 +1,25 @@
 import { useState, useRef, useEffect } from 'react'
-import type { NavigateFn } from '../types'
+import type { NavigateFn, Expense, Trip, User } from '../types'
 import { queryGuardianCopilotWithLLM } from '../services/geminiService'
 
 interface Props {
   navigate: NavigateFn
+  trip?: Trip | null
+  currentUser?: User | null
+  onAddExpense?: (expense: Expense) => void
+}
+
+export interface ActionCardData {
+  merchant: string
+  amount: number
+  currency: string
+  convertedAmount: number
+  category: string
+  paidBy: string
+  isShared: boolean
+  splitMembers: string[]
+  committed?: boolean
+  committedExpenseId?: string
 }
 
 interface ChatMessage {
@@ -14,6 +30,7 @@ interface ChatMessage {
   tags?: { label: string; color: string }[]
   itineraryCards?: { time: string; title: string; type: string; cost: string; note: string; mapsUrl?: string }[]
   metrics?: { label: string; value: string; sub?: string }[]
+  expenseAction?: ActionCardData
 }
 
 const suggestedPrompts = [
@@ -55,16 +72,22 @@ const ITINERARY_DATA = [
   },
 ]
 
-export default function AIGuardian({ navigate }: Props) {
+export default function AIGuardian({ navigate, trip, currentUser, onAddExpense }: Props) {
+  const currentTripBudget = trip?.budget || 60000
+  const currentTripSpent = trip?.spent || 26172
+  const currentTripRemaining = Math.max(0, currentTripBudget - currentTripSpent)
+  const currentSafeDaily = Math.round(currentTripRemaining / 5)
+  const activeTravelerName = currentUser?.name || 'Aisha Patel'
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'msg_welcome',
       sender: 'assistant',
-      text: "👋 Hi Aisha! I'm your **AI Travel Guardian & Copilot**. I have full real-time access to your complete itinerary, all trip budgets, category spending caps, and your total monthly finances across all trips.\n\nAsk me anything! From *\"What is my plan today?\"* to *\"How much have I spent this month?\"* or *\"Can I afford this?\"*.",
+      text: `👋 Hi ${activeTravelerName.split(' ')[0]}! I'm your **AI Travel Guardian & Copilot**. I have full real-time access to your complete itinerary, all trip budgets, category spending caps, and your total monthly finances across all trips.\n\nAsk me anything! From *"What is my plan today?"* to *"How much have I spent this month?"* or *"Add 5000 to expense"* / *"5000 kharche me jodo"*.`,
       timestamp: 'Just now',
       tags: [
         { label: 'Active Grounding', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-        { label: 'Europe + Goa + Personal', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+        { label: `${trip?.name || 'Europe Adventure'}`, color: 'bg-teal-50 text-teal-700 border-teal-200' },
       ],
     },
   ])
@@ -77,9 +100,84 @@ export default function AIGuardian({ navigate }: Props) {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
+  const handleCommitExpense = (msgId: string, action: ActionCardData) => {
+    const expenseId = `exp_chat_${Date.now()}`
+    const newExpense: Expense = {
+      id: expenseId,
+      merchant: action.merchant,
+      amount: action.amount,
+      currency: action.currency,
+      convertedAmount: action.convertedAmount,
+      category: action.category,
+      date: new Date().toISOString().split('T')[0],
+      paidBy: action.paidBy,
+      isShared: action.isShared,
+      personalSplitMembers: action.splitMembers,
+      source: 'ai_guardian',
+    }
+
+    if (onAddExpense) {
+      onAddExpense(newExpense)
+    }
+
+    // Mark action card as committed in the chat UI
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId && m.expenseAction
+          ? {
+              ...m,
+              expenseAction: { ...m.expenseAction, committed: true, committedExpenseId: expenseId },
+            }
+          : m
+      )
+    )
+
+    // Append confirmation bubble
+    const confirmMsg: ChatMessage = {
+      id: `msg_conf_${Date.now()}`,
+      sender: 'assistant',
+      text: `🎉 **Expense successfully committed to ledger!**\n\n• **Item:** ${action.merchant} (${action.category})\n• **Amount:** ${action.currency === 'EUR' ? '€' : action.currency === 'USD' ? '$' : '₹'}${action.amount.toLocaleString()} ${action.currency !== 'INR' ? `(≈ ₹${action.convertedAmount.toLocaleString()} INR)` : ''}\n• **Payer:** ${action.paidBy}\n• **Status:** Persisted in database and updated on all trip members' devices.`,
+      timestamp: 'Just now',
+      tags: [{ label: 'Committed to Ledger', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' }],
+    }
+    setMessages((prev) => [...prev, confirmMsg])
+  }
+
   // Intelligent Response Generator grounded in PS-08 data
   const generateAIResponse = (query: string): ChatMessage => {
     const q = query.toLowerCase()
+
+    // 0. EXPENSE ADDITION QUERIES (Hindi, Italian, English)
+    if (q.includes('jodo') || q.includes('add') || q.includes('spesa') || q.includes('kharche') || q.includes('expense')) {
+      const numMatch = query.match(/\d+(?:[.,]\d+)?/)
+      const amountVal = numMatch ? parseFloat(numMatch[0].replace(',', '')) : 5000
+      const isEur = q.includes('€') || q.includes('eur')
+      const curr = isEur ? 'EUR' : 'INR'
+      const rate = isEur ? 94 : 1
+      const conv = Math.round(amountVal * rate)
+      const isFood = q.includes('dinner') || q.includes('cena') || q.includes('lunch') || q.includes('food') || q.includes('trattoria')
+      const cat = isFood ? 'Food' : q.includes('hotel') ? 'Accommodation' : q.includes('taxi') ? 'Transport' : 'Food'
+      const merchant = isFood ? 'Dinner at Trattoria' : 'Travel Expense'
+      const pName = activeTravelerName
+
+      return {
+        id: `msg_${Date.now()}`,
+        sender: 'assistant',
+        text: `I've prepared this expense entry for **${curr === 'EUR' ? '€' : '₹'}${amountVal.toLocaleString()}** (${cat}). Review and tap commit below to record it directly into your live ledger:`,
+        timestamp: 'Just now',
+        tags: [{ label: 'Ready to Commit', color: 'bg-amber-50 text-amber-800 border-amber-200' }],
+        expenseAction: {
+          merchant,
+          amount: amountVal,
+          currency: curr,
+          convertedAmount: conv,
+          category: cat,
+          paidBy: pName,
+          isShared: true,
+          splitMembers: [pName],
+        },
+      }
+    }
 
     // 1. ITINERARY & SCHEDULE QUERIES
     if (q.includes('itinerary') || q.includes('plan') || q.includes('schedule') || q.includes('today') || q.includes('tomorrow') || q.includes('activity')) {
@@ -117,11 +215,11 @@ export default function AIGuardian({ navigate }: Props) {
       return {
         id: `msg_${Date.now()}`,
         sender: 'assistant',
-        text: "✅ **Yes, you can comfortably afford a ₹3,000 dinner tonight!**\n\n**Guardian Financial Math:**\n• **Safe Daily Spend Limit:** **₹6,765 / day**\n• **Today's Spend So Far:** ₹3,948 (Lunch + Colosseum)\n• **Post-Dinner Projection:** Today's total would be ₹6,948—only ₹183 above your average daily target, but well within your **₹33,828 total remaining reserve**.\n\n**Category Check:** Food cap is ₹15,000 with ₹7,800 remaining. Enjoy your dinner!",
+        text: `✅ **Yes, you can comfortably afford a ₹3,000 dinner tonight!**\n\n**Guardian Financial Math:**\n• **Safe Daily Spend Limit:** **₹${currentSafeDaily.toLocaleString()} / day**\n• **Today's Spend So Far:** ₹3,948 (Lunch + Colosseum)\n• **Post-Dinner Projection:** Today's total would be ₹6,948—well within your **₹${currentTripRemaining.toLocaleString()} total remaining reserve**.\n\n**Category Check:** Food cap is ₹15,000 with ₹7,800 remaining. Enjoy your dinner!`,
         timestamp: 'Just now',
         tags: [
           { label: 'Affordability: Approved', color: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-          { label: 'Safe Daily: ₹6,765', color: 'bg-teal-50 text-teal-800 border-teal-200' },
+          { label: `Safe Daily: ₹${currentSafeDaily.toLocaleString()}`, color: 'bg-teal-50 text-teal-800 border-teal-200' },
         ],
       }
     }
@@ -131,13 +229,13 @@ export default function AIGuardian({ navigate }: Props) {
       return {
         id: `msg_${Date.now()}`,
         sender: 'assistant',
-        text: "Here is your **Category Budget Breakdown** for *Europe Adventure*:\n\n🏨 **Accommodation:** ₹8,500 spent of ₹21,000 cap (**₹12,500 remaining**)\n🍽️ **Food & Dining:** ₹7,200 spent of ₹15,000 cap (**₹7,800 remaining**)\n🚗 **Transport:** ₹5,100 spent of ₹12,000 cap (**₹6,900 remaining**)\n⭐ **Activities:** ₹3,290 spent of ₹6,000 cap (**₹2,710 remaining**)\n📦 **Misc & Souvenirs:** ₹2,082 spent of ₹6,000 cap (**₹3,918 remaining**)\n\n**Summary:** You have **₹33,828 INR remaining** across 5 more days (Safe daily pace: **₹6,765 / day**).",
+        text: `Here is your **Category Budget Breakdown** for *${trip?.name || 'Europe Adventure'}*:\n\n🏨 **Accommodation:** ₹8,500 spent of ₹21,000 cap (**₹12,500 remaining**)\n🍽️ **Food & Dining:** ₹7,200 spent of ₹15,000 cap (**₹7,800 remaining**)\n🚗 **Transport:** ₹5,100 spent of ₹12,000 cap (**₹6,900 remaining**)\n⭐ **Activities:** ₹3,290 spent of ₹6,000 cap (**₹2,710 remaining**)\n📦 **Misc & Souvenirs:** ₹2,082 spent of ₹6,000 cap (**₹3,918 remaining**)\n\n**Summary:** You have **₹${currentTripRemaining.toLocaleString()} INR remaining** across 5 more days (Safe daily pace: **₹${currentSafeDaily.toLocaleString()} / day**).`,
         timestamp: 'Just now',
         metrics: [
-          { label: 'Total Trip Budget', value: '₹60,000', sub: 'Europe Adventure' },
-          { label: 'Total Spent', value: '₹26,172', sub: '44% utilized' },
-          { label: 'Remaining Fund', value: '₹33,828', sub: '5 days left' },
-          { label: 'Safe Daily Pace', value: '₹6,765/day', sub: 'comfortable runway' },
+          { label: 'Total Trip Budget', value: `₹${currentTripBudget.toLocaleString()}`, sub: trip?.name || 'Europe Adventure' },
+          { label: 'Total Spent', value: `₹${currentTripSpent.toLocaleString()}`, sub: `${Math.round((currentTripSpent / currentTripBudget) * 100)}% utilized` },
+          { label: 'Remaining Fund', value: `₹${currentTripRemaining.toLocaleString()}`, sub: '5 days left' },
+          { label: 'Safe Daily Pace', value: `₹${currentSafeDaily.toLocaleString()}/day`, sub: 'comfortable runway' },
         ],
       }
     }
@@ -147,7 +245,7 @@ export default function AIGuardian({ navigate }: Props) {
       return {
         id: `msg_${Date.now()}`,
         sender: 'assistant',
-        text: "🇮🇳 **नमस्ते आयशा! यह रहा आपका पूरा बजट और खर्चा विवरण:**\n\n• **यूरोप ट्रिप कुल बजट:** ₹60,000\n• **अब तक का कुल खर्च:** **₹26,172**\n• **बची हुई राशि (Remaining):** **₹33,828 INR**\n• **ट्रिप में बाकी दिन:** 5 दिन\n• **दैनिक सुरक्षित सीमा (Safe Daily Spend):** **₹6,765 प्रति दिन**\n\n**सितंबर का कुल खर्च (सभी ट्रिप्स मिलाकर):** **₹37,792 INR**\n\nआप बिल्कुल सुरक्षित बजट में चल रही हैं! अगर कोई नया खर्च करना हो, तो मुझसे बेझिझक पूछ सकती हैं।",
+        text: `🇮🇳 **नमस्ते ${activeTravelerName.split(' ')[0]}! यह रहा आपका पूरा बजट और खर्चा विवरण:**\n\n• **${trip?.name || 'यूरोप ट्रिप'} कुल बजट:** ₹${currentTripBudget.toLocaleString('en-IN')}\n• **अब तक का कुल खर्च:** **₹${currentTripSpent.toLocaleString('en-IN')}**\n• **बची हुई राशि (Remaining):** **₹${currentTripRemaining.toLocaleString('en-IN')} INR**\n• **ट्रिप में बाकी दिन:** 5 दिन\n• **दैनिक सुरक्षित सीमा (Safe Daily Spend):** **₹${currentSafeDaily.toLocaleString('en-IN')} प्रति दिन**\n\n**सितंबर का कुल खर्च (सभी ट्रिप्स मिलाकर):** **₹37,792 INR**\n\nआप बिल्कुल सुरक्षित बजट में चल रही हैं! अगर कोई नया खर्च करना हो, तो मुझसे बेझिझक पूछ सकती हैं।`,
         timestamp: 'Just now',
         tags: [{ label: 'Hindi Localized', color: 'bg-orange-50 text-orange-800 border-orange-200' }],
       }
@@ -168,7 +266,7 @@ export default function AIGuardian({ navigate }: Props) {
     return {
       id: `msg_${Date.now()}`,
       sender: 'assistant',
-      text: `Regarding "${query}":\n\nBased on your active **Europe Adventure** data, your remaining fund is **₹33,828** (5 days left, safe daily allowance **₹6,765/day**). Your total monthly spending across all trips in September is **₹37,792**.\n\nYou can also ask me about:\n• *Day-by-day itinerary & timings*\n• *Category budget limits (Food, Stay, Travel)*\n• *Affording specific purchases*\n• *Hindi budget questions*`,
+      text: `Regarding "${query}":\n\nBased on your active **${trip?.name || 'Europe Adventure'}** data, your remaining fund is **₹${currentTripRemaining.toLocaleString()}** (5 days left, safe daily allowance **₹${currentSafeDaily.toLocaleString()}/day**). Your total monthly spending across all trips in September is **₹37,792**.\n\nYou can also ask me about:\n• *Day-by-day itinerary & timings*\n• *Category budget limits (Food, Stay, Travel)*\n• *Affording specific purchases*\n• *Hindi budget questions*`,
       timestamp: 'Just now',
     }
   }
@@ -195,20 +293,37 @@ export default function AIGuardian({ navigate }: Props) {
       const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 
       const res = await queryGuardianCopilotWithLLM(text, {
-        userId: 'usr_000000000001',
-        displayName: 'Aisha Patel',
-        tripTitle: 'Europe Adventure',
-        destinationCity: 'Rome',
+        userId: currentUser?.id || 'usr_000000000001',
+        displayName: activeTravelerName,
+        tripTitle: trip?.name || 'Europe Adventure',
+        destinationCity: trip?.destination || 'Rome',
         currentLocalTime: timeStr,
         currentTimeSlot: slot,
         currentDayNumber: 4,
         totalDays: 8,
         daysRemaining: 4,
-        totalTripBudget: 60000,
-        totalSpentSoFar: 26172,
-        safeDailyAllowance: 6765,
-        currency: 'INR',
+        totalTripBudget: currentTripBudget,
+        totalSpentSoFar: currentTripSpent,
+        safeDailyAllowance: currentSafeDaily,
+        currency: trip?.currency || 'INR',
       })
+
+      let actionData: ActionCardData | undefined = undefined
+      if (res.detectedExpense) {
+        const curr = res.detectedExpense.currency || 'INR'
+        const rate = curr === 'EUR' ? 94 : curr === 'USD' ? 86.5 : curr === 'GBP' ? 112.4 : 1
+        const conv = Math.round(res.detectedExpense.amount * rate)
+        actionData = {
+          merchant: res.detectedExpense.merchant,
+          amount: res.detectedExpense.amount,
+          currency: curr,
+          convertedAmount: conv,
+          category: res.detectedExpense.category,
+          paidBy: res.detectedExpense.paidBy || activeTravelerName,
+          isShared: res.detectedExpense.isShared ?? true,
+          splitMembers: res.detectedExpense.splitMembers || [activeTravelerName],
+        }
+      }
 
       const reply: ChatMessage = {
         id: `bot_${Date.now()}`,
@@ -218,6 +333,7 @@ export default function AIGuardian({ navigate }: Props) {
         tags: res.tags,
         itineraryCards: res.itineraryCards,
         metrics: res.metrics,
+        expenseAction: actionData,
       }
       setMessages((prev) => [...prev, reply])
     } catch {
@@ -255,12 +371,12 @@ export default function AIGuardian({ navigate }: Props) {
         <div className="p-3 bg-white border border-teal-100 rounded-2xl shadow-xs flex items-center gap-3">
           <div className="text-right">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Safe Daily Limit</span>
-            <span className="text-sm font-extrabold text-teal-800">₹6,765 / day</span>
+            <span className="text-sm font-extrabold text-teal-800">₹{currentSafeDaily.toLocaleString()} / day</span>
           </div>
           <div className="w-px h-8 bg-slate-100" />
           <div className="text-right">
-            <span className="text-[10px] text-slate-400 font-bold uppercase block">Sept Total Spend</span>
-            <span className="text-sm font-extrabold text-indigo-900">₹37,792</span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase block">Trip Total Spend</span>
+            <span className="text-sm font-extrabold text-indigo-900">₹{currentTripSpent.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -415,6 +531,81 @@ export default function AIGuardian({ navigate }: Props) {
                           {m.sub && <p className="text-[10px] text-slate-400">{m.sub}</p>}
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Interactive Expense Action Card */}
+                  {msg.expenseAction && (
+                    <div className="bg-white border-2 border-teal-500/30 rounded-2xl p-3.5 shadow-sm space-y-3 mt-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-2xl">
+                            {msg.expenseAction.category === 'Food'
+                              ? '🍽️'
+                              : msg.expenseAction.category === 'Transport'
+                              ? '🚗'
+                              : msg.expenseAction.category === 'Accommodation'
+                              ? '🏨'
+                              : msg.expenseAction.category === 'Activities'
+                              ? '⭐'
+                              : '📦'}
+                          </span>
+                          <div>
+                            <h4 className="font-extrabold text-slate-900 text-xs">
+                              {msg.expenseAction.merchant}
+                            </h4>
+                            <span className="text-[10px] text-slate-400 font-semibold uppercase">
+                              {msg.expenseAction.category}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-extrabold text-teal-900 block">
+                            {msg.expenseAction.currency === 'EUR'
+                              ? '€'
+                              : msg.expenseAction.currency === 'USD'
+                              ? '$'
+                              : '₹'}
+                            {msg.expenseAction.amount.toLocaleString()}
+                          </span>
+                          {msg.expenseAction.currency !== 'INR' && (
+                            <span className="text-[10px] font-bold text-amber-700 block">
+                              ≈ ₹{msg.expenseAction.convertedAmount.toLocaleString()} INR
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 bg-slate-50 rounded-xl p-2 flex items-center justify-between border border-slate-100">
+                        <span>👤 Paid by <strong>{msg.expenseAction.paidBy}</strong></span>
+                        <span>👥 {msg.expenseAction.isShared ? 'Shared Group Expense' : 'Personal Expense'}</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCommitExpense(msg.id, msg.expenseAction!)}
+                        disabled={msg.expenseAction.committed}
+                        className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs ${
+                          msg.expenseAction.committed
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default'
+                            : 'bg-teal-600 hover:bg-teal-700 text-white active:scale-[0.99]'
+                        }`}
+                      >
+                        {msg.expenseAction.committed ? (
+                          <>
+                            <span>✅</span>
+                            <span>Committed to Ledger ({msg.expenseAction.committedExpenseId?.slice(0, 14)}...)</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>⚡</span>
+                            <span>
+                              + Commit {msg.expenseAction.currency === 'EUR' ? '€' : '₹'}
+                              {msg.expenseAction.amount.toLocaleString()} Expense to Ledger
+                            </span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   )}
 
