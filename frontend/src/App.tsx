@@ -277,13 +277,13 @@ export default function App() {
           // Strict user-filtered trips
           updateTripsSafely(loadedTrips, currentUser)
 
-          const homeCurr = (currentUser.homeCurrency || 'INR').toUpperCase()
           const normalized = (loadedExpenses || []).map((e) => {
             const origCurr = (e.currency || 'INR').toUpperCase()
-            const freshConv = convertCurrency(e.amount || 0, origCurr, homeCurr)
+            const destCurr = getTripDestinationCurrency(currentTrip)
+            const destConv = convertCurrency(e.amount || 0, origCurr, destCurr)
             return {
               ...e,
-              convertedAmount: freshConv > 0 ? freshConv : (e.convertedAmount || e.amount || 0),
+              convertedAmount: e.convertedAmount && e.convertedAmount > 0 ? e.convertedAmount : (destConv > 0 ? destConv : (e.amount || 0)),
             }
           })
 

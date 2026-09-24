@@ -114,13 +114,29 @@ export function resolveMemberName(idOrName: string, registeredUsers?: User[], cu
   if (currentUserId && (clean === currentUserId || clean === 'usr_you')) return 'You'
 
   const users = registeredUsers && registeredUsers.length > 0 ? registeredUsers : getRegisteredUsers()
-  const found = users.find((u) => u.id === clean || (u as any).user_id === clean || u.name.toLowerCase() === clean.toLowerCase())
+  const found = users.find(
+    (u) =>
+      u.id === clean ||
+      (u as any).user_id === clean ||
+      u.name.toLowerCase() === clean.toLowerCase() ||
+      u.email.toLowerCase() === clean.toLowerCase()
+  )
   if (found) return found.name
 
   if (clean === 'usr_you' || clean.toLowerCase() === 'you') return 'You'
-  if (clean === 'usr_ravi') return 'Ravi Sharma'
-  if (clean === 'usr_asha') return 'Asha Patel'
-  if (clean === 'usr_aisha') return 'Aisha Rossi'
+
+  // Standard user ID mappings
+  if (clean === 'usr_000000000001' || clean === 'usr_aisha') return 'Aisha Rossi'
+  if (clean === 'usr_000000000002' || clean === 'usr_ravi') return 'Ravi Sharma'
+  if (clean === 'usr_000000000003' || clean === 'usr_pooja' || clean === 'usr_asha') return 'Asha Patel'
+  if (clean === 'usr_000000000004' || clean === 'usr_david') return 'David Chen'
+  if (clean === 'usr_000000000005' || clean === 'usr_elena') return 'Elena Rostova'
+
+  // Format "usr_19", "User19", "usr_000000000019"
+  if (clean.toLowerCase().startsWith('usr_') || clean.toLowerCase().startsWith('user')) {
+    const rawNumber = clean.replace(/^(usr_|user_?)/i, '').replace(/^0+/g, '')
+    if (rawNumber) return `User ${rawNumber}`
+  }
 
   // Format UUID gracefully
   if (clean.length > 20 && clean.includes('-')) {
