@@ -244,6 +244,16 @@ export default function App() {
     }
   }
 
+  // Safe expense merger ensuring DB sync never clears local expenses when DB returns empty array
+  const mergeExpensesSafely = (freshExpenses: Expense[]) => {
+    if (!freshExpenses || !Array.isArray(freshExpenses) || freshExpenses.length === 0) return
+    setExpenses((prev) => {
+      const dbIds = new Set(freshExpenses.map((e) => e.id))
+      const localOnly = prev.filter((e) => !dbIds.has(e.id))
+      return [...freshExpenses, ...localOnly]
+    })
+  }
+
   // Load Trips & Expenses based on logged-in user
   useEffect(() => {
     async function loadData() {
@@ -292,9 +302,7 @@ export default function App() {
           })
 
           if (normalized.length > 0) {
-            setExpenses(normalized)
-          } else {
-            setExpenses([])
+            mergeExpensesSafely(normalized)
           }
         } else {
           // If no user is logged in, keep state completely clean
@@ -394,11 +402,7 @@ export default function App() {
             fetchTripsFromSupabase(),
           ])
           if (freshExpenses && freshExpenses.length > 0) {
-            setExpenses((prev) => {
-              const dbIds = new Set(freshExpenses.map((e) => e.id))
-              const localOnly = prev.filter((e) => !dbIds.has(e.id))
-              return [...freshExpenses, ...localOnly]
-            })
+            mergeExpensesSafely(freshExpenses)
           }
           if (freshTrips) {
             updateTripsSafely(freshTrips, currentUser)
@@ -437,7 +441,9 @@ export default function App() {
         if (freshTrips) {
           updateTripsSafely(freshTrips, currentUser)
         }
-        if (freshExpenses) setExpenses(freshExpenses)
+        if (freshExpenses && freshExpenses.length > 0) {
+          mergeExpensesSafely(freshExpenses)
+        }
         checkInvites()
       })
       .subscribe()
@@ -449,11 +455,11 @@ export default function App() {
           fetchTripsFromSupabase(),
           fetchExpensesFromSupabase(),
         ])
-        if (freshTrips) {
+        if (freshTrips && freshTrips.length > 0) {
           updateTripsSafely(freshTrips, currentUser)
         }
-        if (freshExpenses) {
-          setExpenses(freshExpenses)
+        if (freshExpenses && freshExpenses.length > 0) {
+          mergeExpensesSafely(freshExpenses)
         }
         checkInvites()
       } catch (e) {
