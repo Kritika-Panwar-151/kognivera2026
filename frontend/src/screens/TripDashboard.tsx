@@ -144,6 +144,7 @@ export default function TripDashboard({
   const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false)
   const [isAdjustCapsOpen, setIsAdjustCapsOpen] = useState(false)
   const [isEditTripOpen, setIsEditTripOpen] = useState(false)
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
 
   // Edit Trip Name State
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -319,18 +320,126 @@ export default function TripDashboard({
     }
   })
 
+  const isAdmin = !trip.ownerId || trip.ownerId === activeUser.id || (activeUser.id === 'usr_you' && trip.ownerId === 'usr_you')
+
   const openBudgetEditor = () => {
     setEditedBudgetInput(personalBudget.toString())
     setIsEditBudgetOpen(true)
   }
 
-  const handleSavePersonalBudget = (e: React.FormEvent) => {
+  const handleSavePersonalBudget = async (e: React.FormEvent) => {
     e.preventDefault()
     const newAmount = parseFloat(editedBudgetInput)
-    if (!isNaN(newAmount) && newAmount >= 0 && onUpdateMemberBudget) {
+    if (isNaN(newAmount) || newAmount <= 0 || !trip) return
+
+    // Auto-update category breakdown caps based on user's new budget (35% stay, 25% food, 20% transport, 10% activities, 10% misc)
+    const updatedCategoryCaps = {
+      accommodation: Math.round(newAmount * 0.35),
+      food: Math.round(newAmount * 0.25),
+      transport: Math.round(newAmount * 0.20),
+      activities: Math.round(newAmount * 0.10),
+      misc: Math.round(newAmount * 0.10),
+    }
+
+    const updatedMemberBudgets = {
+      ...(trip.memberBudgets || {}),
+      [activeUser.id]: newAmount,
+    }
+    const newTotalTripBudget = Object.values(updatedMemberBudgets).reduce((sum, val) => sum + val, 0)
+
+    const updatedTrip: Trip = {
+      ...trip,
+      personalBudget: newAmount,
+      memberBudgets: updatedMemberBudgets,
+      budget: newTotalTripBudget,
+      categoryCaps: updatedCategoryCaps,
+    }
+
+    if (onUpdateMemberBudget) {
       onUpdateMemberBudget(trip.id, activeUser.id, newAmount)
     }
+    if (onUpdateTrip) {
+      onUpdateTrip(updatedTrip)
+    }
+
     setIsEditBudgetOpen(false)
+
+    if (isSupabaseConfigured) {
+      await supabase.from('trips').update({
+        budget: newTotalTripBudget,
+        category_caps: updatedCategoryCaps,
+      }).eq('id', trip.id)
+      broadcastTripChange({ type: 'trip_update', tripId: trip.id, budget: newTotalTripBudget })
+    }
+  }
+
+  const handleAddMember = async (userId: string) => {
+    if (!trip) return
+    const currentMembers = trip.members || []
+    if (currentMembers.includes(userId)) return
+
+    const updatedMembers = [...currentMembers, userId]
+    const defaultAddBudget = Math.round((trip.budget || 20000) / Math.max(currentMembers.length, 1))
+    const updatedMemberBudgets = {
+      ...(trip.memberBudgets || {}),
+      [userId]: defaultAddBudget,
+    }
+    const newTotalBudget = Object.values(updatedMemberBudgets).reduce((a, b) => a + b, 0)
+    const updatedMemberDetails = [
+      ...(trip.memberDetails || []),
+      { userId, status: 'accepted' as const, personalBudget: defaultAddBudget },
+    ]
+
+    const updatedTrip: Trip = {
+      ...trip,
+      members: updatedMembers,
+      memberBudgets: updatedMemberBudgets,
+      budget: newTotalBudget,
+      memberDetails: updatedMemberDetails,
+    }
+
+    if (onUpdateTrip) {
+      onUpdateTrip(updatedTrip)
+    }
+
+    if (isSupabaseConfigured) {
+      await supabase.from('trips').update({
+        members: updatedMembers,
+        budget: newTotalBudget,
+      }).eq('id', trip.id)
+      broadcastTripChange({ type: 'trip_update', tripId: trip.id, members: updatedMembers, budget: newTotalBudget })
+    }
+    setIsAddMemberOpen(false)
+  }
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!trip || !isAdmin) return
+    const updatedMembers = (trip.members || []).filter((m) => m !== userId)
+    const updatedMemberBudgets = { ...(trip.memberBudgets || {}) }
+    delete updatedMemberBudgets[userId]
+
+    const newTotalBudget = Object.values(updatedMemberBudgets).reduce((a, b) => a + b, 0)
+    const updatedMemberDetails = (trip.memberDetails || []).filter((d) => d.userId !== userId)
+
+    const updatedTrip: Trip = {
+      ...trip,
+      members: updatedMembers,
+      memberBudgets: updatedMemberBudgets,
+      budget: newTotalBudget,
+      memberDetails: updatedMemberDetails,
+    }
+
+    if (onUpdateTrip) {
+      onUpdateTrip(updatedTrip)
+    }
+
+    if (isSupabaseConfigured) {
+      await supabase.from('trips').update({
+        members: updatedMembers,
+        budget: newTotalBudget,
+      }).eq('id', trip.id)
+      broadcastTripChange({ type: 'trip_update', tripId: trip.id, members: updatedMembers, budget: newTotalBudget })
+    }
   }
 
   return (
@@ -515,6 +624,11 @@ export default function TripDashboard({
                   <span className="text-xs font-bold text-slate-900 leading-tight">
                     {member.name} {member.isMe ? '(You)' : ''}
                   </span>
+                  {(member.id === trip.ownerId || (!trip.ownerId && member.id === 'usr_you')) && (
+                    <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
+                      👑 Admin
+                    </span>
+                  )}
                   {member.isMe && (
                     <span className="text-[9px] font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">
                       Active
@@ -527,22 +641,56 @@ export default function TripDashboard({
                   )}
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
-                  <span className={`text-[10px] font-bold ${member.isPending ? 'text-amber-700' : 'text-teal-700'}`}>
-                    {member.isPending ? 'Contribution: ⏳ Pending' : `Budget: ${currencySymbol}${member.budget.toLocaleString()}`}
-                  </span>
+                  {member.isMe ? (
+                    <span className="text-[10px] font-bold text-teal-700">
+                      Budget: {currencySymbol}{member.budget.toLocaleString()}
+                    </span>
+                  ) : member.isPending ? (
+                    <span className="text-[10px] font-bold text-amber-700">
+                      Contribution: ⏳ Pending
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-emerald-700">
+                      ✓ Joined Group
+                    </span>
+                  )}
                   {member.isMe && (
                     <button
                       type="button"
                       onClick={openBudgetEditor}
-                      className="text-[9px] text-indigo-700 hover:underline font-bold"
+                      className="text-[9px] text-indigo-700 hover:underline font-bold ml-1"
                     >
                       (Edit)
                     </button>
                   )}
                 </div>
               </div>
+
+              {/* Admin can remove non-admin members */}
+              {isAdmin && !member.isMe && (
+                <button
+                  type="button"
+                  onClick={() => handleRemoveMember(member.id)}
+                  className="ml-1 text-slate-400 hover:text-rose-600 text-xs font-bold p-1 rounded hover:bg-rose-50 transition"
+                  title="Remove Member"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           ))}
+
+          {/* Add Member Button (Admin only) */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsAddMemberOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-2xl border border-dashed border-teal-300 bg-teal-50/50 hover:bg-teal-100/70 text-teal-800 text-xs font-bold transition shadow-2xs"
+            >
+              <span>➕</span>
+              <span>Add Member</span>
+            </button>
+          )}
 
           {/* Children Pill (if any) */}
           {(trip.children || 0) > 0 && (
@@ -1270,6 +1418,69 @@ export default function TripDashboard({
             setIsEditTripOpen(false)
           }}
         />
+      )}
+
+      {/* =========================
+          ADD MEMBER MODAL (ADMIN ONLY)
+      ========================= */}
+      {isAddMemberOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-teal-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">👥</span>
+                <h3 className="text-lg font-black text-slate-900">Add Group Member</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddMemberOpen(false)}
+                className="text-slate-400 hover:text-slate-700 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">
+              Select a registered user to invite them to <strong>{trip.name}</strong> as Admin.
+            </p>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto mb-5">
+              {registeredUsers
+                .filter((u) => !(trip.members || []).includes(u.id))
+                .map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 bg-slate-50 hover:bg-teal-50/50 hover:border-teal-200 transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{user.avatar}</span>
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 block">{user.name}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">{user.homeCurrency}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleAddMember(user.id)}
+                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-xs transition"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                ))}
+              {registeredUsers.filter((u) => !(trip.members || []).includes(u.id)).length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-4">All registered users are already members of this trip!</p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsAddMemberOpen(false)}
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition text-center"
+            >
+              Done
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

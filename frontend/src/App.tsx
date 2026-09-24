@@ -522,11 +522,21 @@ export default function App() {
         [userId]: newBudget,
       }
       const newTotal = Object.values(updatedBudgets).reduce((sum, b) => sum + b, 0)
+      const isCurrentUser = currentUser && userId === currentUser.id
+      const effectivePersonal = isCurrentUser ? newBudget : t.personalBudget || newBudget
+      const updatedCaps = {
+        accommodation: Math.round(effectivePersonal * 0.35),
+        food: Math.round(effectivePersonal * 0.25),
+        transport: Math.round(effectivePersonal * 0.20),
+        activities: Math.round(effectivePersonal * 0.10),
+        misc: Math.round(effectivePersonal * 0.10),
+      }
       return {
         ...t,
         budget: newTotal > 0 ? newTotal : t.budget,
         memberBudgets: updatedBudgets,
-        personalBudget: currentUser && userId === currentUser.id ? newBudget : t.personalBudget,
+        personalBudget: isCurrentUser ? newBudget : t.personalBudget,
+        categoryCaps: updatedCaps,
       }
     }
 
