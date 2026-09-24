@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { NavigateFn, Expense, Trip, User } from '../types'
 import { queryGuardianCopilotWithLLM } from '../services/geminiService'
+import { formatUserDualCurrency, getTripDestinationCurrency } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -73,11 +74,17 @@ const ITINERARY_DATA = [
 ]
 
 export default function AIGuardian({ navigate, trip, currentUser, onAddExpense }: Props) {
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const tripDestCurr = getTripDestinationCurrency(trip)
+
   const currentTripBudget = trip?.budget || 60000
   const currentTripSpent = trip?.spent || 26172
   const currentTripRemaining = Math.max(0, currentTripBudget - currentTripSpent)
   const currentSafeDaily = Math.round(currentTripRemaining / 5)
   const activeTravelerName = currentUser?.name || 'Aisha Patel'
+
+  const safeDailyDual = formatUserDualCurrency(currentSafeDaily, userHomeCurr, userHomeCurr, tripDestCurr)
+  const totalSpentDual = formatUserDualCurrency(currentTripSpent, userHomeCurr, userHomeCurr, tripDestCurr)
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -371,12 +378,18 @@ export default function AIGuardian({ navigate, trip, currentUser, onAddExpense }
         <div className="p-3 bg-white border border-teal-100 rounded-2xl shadow-xs flex items-center gap-3">
           <div className="text-right">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Safe Daily Limit</span>
-            <span className="text-sm font-extrabold text-teal-800">₹{currentSafeDaily.toLocaleString()} / day</span>
+            <span className="text-sm font-extrabold text-teal-800">{safeDailyDual.primary} / day</span>
+            {safeDailyDual.secondary && (
+              <span className="text-[10px] font-bold text-teal-600 block">{safeDailyDual.secondary}</span>
+            )}
           </div>
           <div className="w-px h-8 bg-slate-100" />
           <div className="text-right">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Trip Total Spend</span>
-            <span className="text-sm font-extrabold text-indigo-900">₹{currentTripSpent.toLocaleString()}</span>
+            <span className="text-sm font-extrabold text-indigo-900">{totalSpentDual.primary}</span>
+            {totalSpentDual.secondary && (
+              <span className="text-[10px] font-bold text-slate-500 block">{totalSpentDual.secondary}</span>
+            )}
           </div>
         </div>
       </div>
