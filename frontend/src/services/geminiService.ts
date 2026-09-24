@@ -591,21 +591,75 @@ export async function forecastSpendRunwayWithLLM({
   currentUser?: any
 }): Promise<SpendForecastReport> {
   const tripBudget = trip.budget || 60000
-  const totalDays = 8
-  const daysGone = 3
-  const daysLeft = Math.max(totalDays - daysGone, 1)
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const homeSymbol = getCurrencySymbol(userHomeCurr)
+
+  // Calculate actual trip duration
+  let totalDays = 7
+  let daysGone = 1
+  let daysLeft = 7
+  if (trip?.startDate && trip?.endDate) {
+    const parseLocalDate = (str: string) => {
+      const p = str.split('-')
+      if (p.length === 3) return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]))
+      return new Date(str)
+    }
+    const start = parseLocalDate(trip.startDate)
+    const end = parseLocalDate(trip.endDate)
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+      totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1)
+      const now = new Date()
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      if (todayMidnight < start) {
+        daysGone = 0
+      } else if (todayMidnight > end) {
+        daysGone = totalDays
+      } else {
+        const goneMs = todayMidnight.getTime() - start.getTime()
+        daysGone = Math.min(totalDays, Math.max(1, Math.floor(goneMs / (1000 * 60 * 60 * 24)) + 1))
+      }
+      daysLeft = Math.max(1, totalDays - daysGone)
+    }
+  }
 
   // Filter expenses belonging strictly to this trip
   const tripExpenses = expenses.filter((e) => e.tripId === trip.id)
   const spentSoFar = tripExpenses.reduce((sum, e) => sum + (e.convertedAmount || 0), 0)
 
+  const activeUserName = currentUser?.name || 'You'
+  const personalBudget = trip.memberBudgets?.[currentUser?.id] || trip.personalBudget || Math.round(tripBudget / 2)
+
+  // If 0 expenses logged yet, return a clean Day 1 onboarding report
+  if (spentSoFar === 0) {
+    const safeDaily = Math.round(tripBudget / Math.max(1, daysLeft))
+    return {
+      predictedFinalSpend: 0,
+      projectedOverrunOrSavings: 0,
+      riskLevel: 'safe',
+      burnRateAssessment: `🎉 Trip active! No expenses logged yet. Your group safe daily pace is ${homeSymbol}${safeDaily.toLocaleString()}/day across ${daysLeft} days.`,
+      categoryLeakage: [
+        { category: 'Food', status: 'on_track', insight: 'No dining expenses logged yet' },
+        { category: 'Transport', status: 'on_track', insight: 'No transit expenses logged yet' },
+      ],
+      personalInsight: {
+        userName: activeUserName,
+        spent: 0,
+        budget: personalBudget,
+        burnStatus: 'safe',
+        advice: `Your full personal budget of ${homeSymbol}${personalBudget.toLocaleString()} is available for spending.`,
+      },
+      rescueRecommendation: {
+        title: 'Optimal Runway',
+        actionDescription: `Keep daily expenses under ${homeSymbol}${safeDaily.toLocaleString()}/day to stay on budget.`,
+        potentialSavings: 0,
+      },
+    }
+  }
+
   // Sum planned future itinerary costs
   const futureItineraryCost = itinerary
     .filter((i) => i.dayIndex > daysGone)
     .reduce((sum, i) => sum + (Number(i.cost) || 0), 0)
-
-  const activeUserName = currentUser?.name || 'You'
-  const personalBudget = trip.memberBudgets?.[currentUser?.id] || trip.personalBudget || Math.round(tripBudget / 2)
 
   // 1. Try Gemini LLM for predictive intelligence
   if (genAI) {

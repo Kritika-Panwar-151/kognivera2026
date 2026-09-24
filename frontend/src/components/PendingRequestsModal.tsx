@@ -39,39 +39,8 @@ export default function PendingRequestsModal({
   const currentUserName = currentUser?.name || 'You (Aisha)'
   const currencySymbol = trip?.currency === 'EUR' ? '€' : trip?.currency === 'USD' ? '$' : '₹'
 
-  // 1. Pending Debts / Split Claims
-  const pendingDebts: PendingDebtItem[] = [
-    {
-      id: 'd1',
-      person: 'Asha Patel',
-      avatar: '👩🏻',
-      direction: 'they_owe_you',
-      amount: 1000,
-      currency: 'INR',
-      reason: 'Equal split for Hotel Roma & dinner',
-      isSettled: false,
-    },
-    {
-      id: 'd2',
-      person: 'Ravi Sharma',
-      avatar: '👨🏽',
-      direction: 'they_owe_you',
-      amount: 1000,
-      currency: 'INR',
-      reason: 'Colosseum tickets & guided tour share',
-      isSettled: false,
-    },
-    {
-      id: 'd3',
-      person: 'David Chen',
-      avatar: '👨🏻',
-      direction: 'you_owe_them',
-      amount: 500,
-      currency: 'INR',
-      reason: 'Airport train transfer & snacks',
-      isSettled: false,
-    },
-  ]
+  // 1. Pending Debts / Split Claims (derived strictly from real logged expenses)
+  const pendingDebts: PendingDebtItem[] = []
 
   // Add any dynamic unsettled expenses
   expenses.forEach((exp) => {
@@ -112,11 +81,20 @@ export default function PendingRequestsModal({
     .filter((d) => d.direction === 'you_owe_them')
     .reduce((s, d) => s + d.amount, 0)
 
-  // 2. Pending Trip Invites
-  const pendingInvites = [
-    { id: 'inv_1', name: 'Asha Patel', email: 'asha.patel@example.invalid', avatar: '👩🏻', role: 'Member', date: 'Invited 2h ago' },
-    { id: 'inv_2', name: 'Ravi Sharma', email: 'ravi.sharma@example.invalid', avatar: '👨🏽', role: 'Member', date: 'Invited 3h ago' },
-  ]
+  // 2. Pending Trip Invites (derived strictly from real trip member details with pending status)
+  const isHost = !trip?.ownerId || trip.ownerId === currentUser?.id || currentUser?.id === 'usr_you'
+  const pendingInvites = isHost
+    ? (trip?.memberDetails || [])
+        .filter((d) => d.status === 'pending')
+        .map((d) => ({
+          id: d.userId,
+          name: d.userId === 'usr_asha' ? 'Asha Patel' : d.userId === 'usr_ravi' ? 'Ravi Sharma' : d.userId,
+          email: `${d.userId}@example.invalid`,
+          avatar: d.userId === 'usr_asha' ? '👩🏻' : d.userId === 'usr_ravi' ? '👨🏽' : '👤',
+          role: 'Member',
+          date: 'Invite Sent',
+        }))
+    : []
 
   const handleSettle = (id: string) => {
     setSettledIds((prev) => new Set(prev).add(id))
