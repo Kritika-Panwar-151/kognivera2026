@@ -206,13 +206,10 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     return list
   }, [expenses, currentUser, trip])
 
-  const [debts, setDebts] = useState<DebtItem[]>(computedDebts)
+  // Persistent Set of settled debt IDs to guarantee settled cards vanish immediately and never reappear upon re-render
+  const [locallySettledIds, setLocallySettledIds] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    setDebts(computedDebts)
-  }, [computedDebts])
-
-  // Realtime subscription: Sync live when settlement status changes
+  // Realtime subscription: Sync live when settlement status changes on any device
   useEffect(() => {
     if (!isSupabaseConfigured) return
 
@@ -220,10 +217,8 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       .channel('realtime_settlement_channel')
       .on('broadcast', { event: 'settle_toggle' }, (payload: any) => {
         if (payload?.payload?.id) {
-          const { id, isSettled } = payload.payload
-          setDebts((prev) =>
-            prev.map((d) => (d.id === id ? { ...d, isSettled } : d))
-          )
+          const { id } = payload.payload
+          setLocallySettledIds((prev) => new Set(prev).add(id))
         }
       })
       .subscribe()
@@ -233,43 +228,50 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     }
   }, [])
 
-  // Toggle settled status for a aggregated person debt item
-  const toggleSettle = async (id: string) => {
-    let nextStatus = false
-    let targetItem: DebtItem | undefined
+  // Derived debts merging computed debts with local settlement overrides
+  const richDebts = useMemo(() => {
+    return computedDebts.map((d) => {
+      if (locallySettledIds.has(d.id) || (d.expenseIds && d.expenseIds.every((eid) => locallySettledIds.has(eid)))) {
+        return { ...d, isSettled: true }
+      }
+      return d
+    })
+  }, [computedDebts, locallySettledIds])
 
-    setDebts((prev) =>
-      prev.map((d) => {
-        if (d.id === id) {
-          nextStatus = !d.isSettled
-          targetItem = { ...d, isSettled: nextStatus }
-          return targetItem
-        }
-        return d
-      })
-    )
+  // Toggle settled status for an aggregated person debt item
+  const toggleSettle = async (id: string) => {
+    const targetItem = richDebts.find((d) => d.id === id)
+
+    setLocallySettledIds((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      if (targetItem?.expenseIds) {
+        targetItem.expenseIds.forEach((eid) => next.add(eid))
+      }
+      return next
+    })
 
     if (isSupabaseConfigured) {
       const channel = supabase.channel('realtime_settlement_channel')
       channel.send({
         type: 'broadcast',
         event: 'settle_toggle',
-        payload: { id, isSettled: nextStatus },
+        payload: { id, isSettled: true },
       })
 
       // Toggle all underlying expense IDs in Supabase database
       if (targetItem && targetItem.expenseIds && targetItem.expenseIds.length > 0) {
         targetItem.expenseIds.forEach((expId) => {
-          toggleSettleExpenseInSupabase(expId, nextStatus)
+          toggleSettleExpenseInSupabase(expId, true)
         })
       }
     }
   }
 
   // Live calculations: separate active pending debts from settled completed transactions
-  const activeTheyOweYouList = debts.filter((d) => d.direction === 'they_owe_you' && !d.isSettled)
-  const activeYouOweList = debts.filter((d) => d.direction === 'you_owe_them' && !d.isSettled)
-  const completedSettlementsList = debts.filter((d) => d.isSettled)
+  const activeTheyOweYouList = richDebts.filter((d) => d.direction === 'they_owe_you' && !d.isSettled)
+  const activeYouOweList = richDebts.filter((d) => d.direction === 'you_owe_them' && !d.isSettled)
+  const completedSettlementsList = richDebts.filter((d) => d.isSettled)
 
   const totalOwedToYou = activeTheyOweYouList.reduce((sum, d) => sum + d.amount, 0)
   const totalYouOwe = activeYouOweList.reduce((sum, d) => sum + d.amount, 0)
