@@ -562,7 +562,96 @@ export async function toggleSettleExpenseInSupabase(
   }
 }
 
-// 8. Broadcast general trip changes live over global WebSockets
+// 8. Invite / Add a member to a trip in Supabase
+export async function inviteMemberToTripInSupabase(
+  tripId: string,
+  invitedUserId: string,
+  hostUserId: string,
+  status: 'pending' | 'active' = 'pending',
+  personalBudget: number = 0
+): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured) return { success: true }
+  try {
+    const targetTripId = tripId === 'europe' ? 'trp_000000000001' : tripId
+    const now = new Date().toISOString()
+    const memberId = `tmb_${Date.now()}_${invitedUserId.replace(/[^a-zA-Z0-9]/g, '').slice(-4)}`
+
+    const { error } = await supabase.from('trip_members').upsert(
+      {
+        member_id: memberId,
+        trip_id: targetTripId,
+        user_id: invitedUserId,
+        role: 'editor',
+        status: status,
+        invited_by_user_id: hostUserId,
+        personal_budget: personalBudget,
+        category_caps: {},
+        created_at: now,
+        updated_at: now,
+      },
+      { onConflict: 'trip_id,user_id' }
+    )
+
+    if (error) {
+      console.error('Failed to insert trip_member in Supabase:', error.message)
+      return { success: false, error: error.message }
+    }
+    return { success: true }
+  } catch (err: any) {
+    console.error('inviteMemberToTripInSupabase error:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+// 9. Remove a member from a trip in Supabase
+export async function removeMemberFromTripInSupabase(
+  tripId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured) return { success: true }
+  try {
+    const targetTripId = tripId === 'europe' ? 'trp_000000000001' : tripId
+    const { error } = await supabase
+      .from('trip_members')
+      .delete()
+      .eq('trip_id', targetTripId)
+      .eq('user_id', userId)
+
+    if (error) {
+      console.error('Failed to remove member from trip_members in Supabase:', error.message)
+      return { success: false, error: error.message }
+    }
+
+    // Recalculate group budget from remaining active members
+    const { data: allActiveMembers } = await supabase
+      .from('trip_members')
+      .select('personal_budget')
+      .eq('trip_id', targetTripId)
+      .eq('status', 'active')
+
+    const newGroupBudget = (allActiveMembers || []).reduce(
+      (sum, m) => sum + Number(m.personal_budget || 0),
+      0
+    )
+
+    if (newGroupBudget > 0) {
+      await supabase
+        .from('budgets')
+        .update({
+          total_amount: newGroupBudget,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('trip_id', targetTripId)
+    }
+
+    return { success: true }
+  } catch (err: any) {
+    console.error('removeMemberFromTripInSupabase error:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+// 10. Broadcast general trip changes live over global WebSockets
 export function broadcastTripChange(payload: Record<string, any>): void {
   if (!isSupabaseConfigured) return
   try {

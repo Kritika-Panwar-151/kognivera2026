@@ -4,7 +4,7 @@ import { useBudget } from '../features/overall-budget/useBudget'
 import { getRegisteredUsers } from '../services/userRegistry'
 import { resolveCityName, forecastSpendRunwayWithLLM, type SpendForecastReport } from '../services/geminiService'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
-import { broadcastTripChange } from '../services/supabaseDataService'
+import { broadcastTripChange, inviteMemberToTripInSupabase, removeMemberFromTripInSupabase } from '../services/supabaseDataService'
 import { useCategoryCaps } from '../features/category-spending/useCategoryCaps'
 import CategoryBreachAlert from '../components/CategoryBreachAlert'
 import PendingRequestsModal from '../components/PendingRequestsModal'
@@ -384,23 +384,22 @@ export default function TripDashboard({
     if (currentMembers.includes(userId)) return
 
     const updatedMembers = [...currentMembers, userId]
-    const defaultAddBudget = Math.round((trip.budget || 20000) / Math.max(currentMembers.length, 1))
     const updatedMemberBudgets = {
       ...(trip.memberBudgets || {}),
-      [userId]: defaultAddBudget,
+      [userId]: 0,
     }
     const newTotalBudget = Object.values(updatedMemberBudgets).reduce((a, b) => a + b, 0)
     const updatedMemberDetails = [
       ...(trip.memberDetails || []),
-      { userId, status: 'accepted' as const, personalBudget: defaultAddBudget },
+      { userId, role: 'editor' as const, status: 'pending' as const, personalBudget: 0, invitedByUserId: activeUser.id },
     ]
 
     const updatedTrip: Trip = {
       ...trip,
       members: updatedMembers,
       memberBudgets: updatedMemberBudgets,
-      budget: newTotalBudget,
       memberDetails: updatedMemberDetails,
+      isGroupTrip: true,
     }
 
     if (onUpdateTrip) {
@@ -408,11 +407,8 @@ export default function TripDashboard({
     }
 
     if (isSupabaseConfigured) {
-      await supabase.from('trips').update({
-        members: updatedMembers,
-        budget: newTotalBudget,
-      }).eq('id', trip.id)
-      broadcastTripChange({ type: 'trip_update', tripId: trip.id, members: updatedMembers, budget: newTotalBudget })
+      await inviteMemberToTripInSupabase(trip.id, userId, activeUser.id, 'pending', 0)
+      broadcastTripChange({ type: 'trip_update', tripId: trip.id, members: updatedMembers })
     }
     setIsAddMemberOpen(false)
   }
@@ -439,10 +435,7 @@ export default function TripDashboard({
     }
 
     if (isSupabaseConfigured) {
-      await supabase.from('trips').update({
-        members: updatedMembers,
-        budget: newTotalBudget,
-      }).eq('id', trip.id)
+      await removeMemberFromTripInSupabase(trip.id, userId)
       broadcastTripChange({ type: 'trip_update', tripId: trip.id, members: updatedMembers, budget: newTotalBudget })
     }
   }
