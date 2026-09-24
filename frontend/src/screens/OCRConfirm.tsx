@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { NavigateFn, Expense, Trip, User } from '../types'
 import type { ReceiptOCRResult } from '../services/geminiService'
 import { saveExpenseToSupabase } from '../services/supabaseDataService'
+import { getRegisteredUsers } from '../services/userRegistry'
 
 interface Props {
   navigate: NavigateFn
@@ -23,8 +24,20 @@ const FX_RATES: Record<string, number> = {
 }
 
 export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }: Props) {
+  const registered = getRegisteredUsers()
   const currentUserName = currentUser?.name || 'You (Aisha)'
   const tripCurrency = trip?.currency || 'INR'
+
+  const tripMemberNames: string[] = (trip?.members || ['usr_you', 'usr_ravi', 'usr_asha']).map(
+    (id) => {
+      if (id === currentUser?.id) return currentUserName
+      const found = registered.find((u) => u.id === id)
+      return found ? found.name : id
+    }
+  )
+  if (!tripMemberNames.includes(currentUserName)) {
+    tripMemberNames.unshift(currentUserName)
+  }
 
   // Load last scanned receipt from localStorage
   const [scannedData, setScannedData] = useState<ReceiptOCRResult | null>(null)
@@ -34,10 +47,15 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
     merchant: 'Restaurant Milano',
     amount: '42.00',
     currency: 'EUR',
-    date: '2026-09-15',
+    date: new Date().toISOString().split('T')[0],
     category: 'Food',
-    isShared: true,
   })
+
+  // Member selection for split
+  const [selectedMembers, setSelectedMembers] = useState<string[]>(tripMemberNames)
+  const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal')
+  const [customBreakdown, setCustomBreakdown] = useState<Record<string, string>>({})
+  const [paidBy, setPaidBy] = useState(currentUserName)
 
   useEffect(() => {
     try {
@@ -52,9 +70,8 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
             merchant: res.merchant || 'Restaurant Milano',
             amount: String(res.amount || '42.00'),
             currency: res.currency || 'EUR',
-            date: res.date || '2026-09-15',
+            date: res.date || new Date().toISOString().split('T')[0],
             category: res.category || 'Food',
-            isShared: true,
           })
         }
       }
@@ -70,9 +87,71 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
   const rate = FX_RATES[fields.currency] || 1.0
   const converted = Math.round(numAmount * rate)
 
+  const activeMembersCount = Math.max(selectedMembers.length, 1)
+  const equalSharePerPerson = (converted / activeMembersCount).toFixed(2)
+
+  const totalAllocatedCustom = selectedMembers.reduce(
+    (sum, m) => sum + (parseFloat(customBreakdown[m]) || 0),
+    0
+  )
+  const customRemaining = Math.round((converted - totalAllocatedCustom) * 100) / 100
+
+  const toggleMemberSelection = (memberName: string) => {
+    setSelectedMembers((prev) => {
+      if (prev.includes(memberName)) {
+        return prev.length > 1 ? prev.filter((m) => m !== memberName) : prev
+      } else {
+        return [...prev, memberName]
+      }
+    })
+  }
+
+  const handleSelectAllMembers = () => {
+    setSelectedMembers([...tripMemberNames])
+  }
+
+  const handleSelectOnlyMe = () => {
+    setSelectedMembers([currentUserName])
+  }
+
+  const handleSetCustomAmount = (member: string, val: string) => {
+    setCustomBreakdown((prev) => ({
+      ...prev,
+      [member]: val,
+    }))
+  }
+
+  const handleDistributeEvenly = () => {
+    const count = selectedMembers.length || 1
+    const share = (converted / count).toFixed(2)
+    const newMap: Record<string, string> = {}
+    selectedMembers.forEach((m) => {
+      newMap[m] = share
+    })
+    setCustomBreakdown(newMap)
+  }
+
+  const getMemberAvatar = (name: string) => {
+    const lower = name.toLowerCase()
+    if (lower.includes('you') || lower.includes('aisha')) return '👩🏽'
+    if (lower.includes('ravi')) return '👨🏽'
+    if (lower.includes('asha')) return '👩🏻'
+    if (lower.includes('david')) return '👨🏻'
+    return '👤'
+  }
+
   const handleSaveToLedger = async () => {
-    const isShared = fields.isShared
-    const tripMembers = trip?.members || [currentUser?.id || 'usr_you', 'usr_ravi', 'usr_asha']
+    const isShared = selectedMembers.length > 1
+
+    let splitBreakdown: Record<string, number> | undefined = undefined
+    if (splitMode === 'custom') {
+      splitBreakdown = {}
+      selectedMembers.forEach((m) => {
+        splitBreakdown![m] =
+          parseFloat(customBreakdown[m]) ||
+          Math.round((converted / selectedMembers.length) * 100) / 100
+      })
+    }
 
     const newExp: Expense = {
       id: `exp_ocr_${Date.now().toString(36)}`,
@@ -83,10 +162,11 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
       convertedAmount: converted,
       category: fields.category,
       date: new Date(fields.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-      paidBy: currentUserName,
+      paidBy,
       isShared,
-      splitBetween: isShared ? tripMembers : [currentUserName],
-      splitType: 'equal',
+      splitBetween: selectedMembers,
+      splitType: splitMode,
+      splitBreakdown,
       notes: scannedData?.isLiveGeminiVision
         ? `Scanned via Gemini 1.5 Flash Vision (${scannedData.lineItems?.length || 0} items extracted)`
         : 'Scanned via Vision OCR Verification',
@@ -97,7 +177,7 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
     }
 
     try {
-      await saveExpenseToSupabase(newExp)
+      await saveExpenseToSupabase(newExp, currentUser?.id)
     } catch (e) {
       console.warn('Supabase expense save notice:', e)
     }
@@ -122,9 +202,11 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
           <span>⚡</span>
           <span>Gemini Vision OCR Verification</span>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Review Extracted Expense</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+          Review Extracted Expense
+        </h1>
         <p className="text-slate-500 text-xs md:text-sm mt-0.5">
-          Receipt scanned & parsed via Gemini 1.5 Flash Vision. Verify before committing to your ledger.
+          Verify extracted fields and select which trip members share this expense.
         </p>
       </div>
 
@@ -141,7 +223,9 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
           </div>
           <span className="text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/80 px-2.5 py-0.5 rounded-full flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            {scannedData?.confidence ? `${Math.round(scannedData.confidence * 100)}% AI Confidence` : '96% AI Confidence'}
+            {scannedData?.confidence
+              ? `${Math.round(scannedData.confidence * 100)}% AI Confidence`
+              : '96% AI Confidence'}
           </span>
         </div>
 
@@ -207,33 +291,6 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
           <span className="text-[11px] font-bold text-teal-800 bg-teal-50 px-2.5 py-0.5 rounded-full">
             All Fields Editable
           </span>
-        </div>
-
-        {/* Classification: Shared vs Personal */}
-        <div>
-          <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-            Expense Allocation
-          </label>
-          <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl text-xs">
-            <button
-              type="button"
-              onClick={() => setFields((f) => ({ ...f, isShared: true }))}
-              className={`py-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5 ${
-                fields.isShared ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <span>👥 Shared Trip Budget</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFields((f) => ({ ...f, isShared: false }))}
-              className={`py-2 rounded-lg font-bold transition flex items-center justify-center gap-1.5 ${
-                !fields.isShared ? 'bg-white text-indigo-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              <span>👤 Personal Expense</span>
-            </button>
-          </div>
         </div>
 
         {/* Merchant Field */}
@@ -325,14 +382,222 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
           </span>
         </div>
 
+        {/* PAID BY */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1">Who Paid for this?</label>
+          <select
+            value={paidBy}
+            onChange={(e) => setPaidBy(e.target.value)}
+            className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+          >
+            {tripMemberNames.map((m) => (
+              <option key={m} value={m}>
+                {m} {m === currentUserName ? '(Current User)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* =========================================================================
+            SPLIT BILL & MEMBER MULTI-SELECTION SECTION
+        ========================================================================= */}
+        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3.5">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <span className="text-xs font-extrabold text-slate-900 uppercase tracking-wide block">
+                Split Bill With Members ({selectedMembers.length}/{tripMemberNames.length})
+              </span>
+              <p className="text-[11px] text-slate-500">
+                Choose who shares this expense. Cost is automatically divided in Group Settlement.
+              </p>
+            </div>
+
+            {/* Quick 1-Tap Select Buttons */}
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleSelectAllMembers}
+                className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg transition shadow-2xs"
+              >
+                👥 All ({tripMemberNames.length})
+              </button>
+              <button
+                type="button"
+                onClick={handleSelectOnlyMe}
+                className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg transition shadow-2xs"
+              >
+                👤 Only Me
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive Member Checkbox Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {tripMemberNames.map((member) => {
+              const isSelected = selectedMembers.includes(member)
+              const avatar = getMemberAvatar(member)
+
+              return (
+                <div
+                  key={member}
+                  onClick={() => toggleMemberSelection(member)}
+                  className={`cursor-pointer p-2.5 rounded-xl border transition flex items-center justify-between ${
+                    isSelected
+                      ? 'border-teal-500 bg-white shadow-2xs ring-1 ring-teal-200'
+                      : 'border-slate-200 bg-white/50 text-slate-400 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-lg">{avatar}</span>
+                    <div className="truncate">
+                      <p
+                        className={`text-xs font-bold truncate ${
+                          isSelected ? 'text-slate-900' : 'text-slate-400'
+                        }`}
+                      >
+                        {member}
+                      </p>
+                      {member === paidBy && (
+                        <span className="text-[9px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.2 rounded-full">
+                          Payer
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    className={`w-5 h-5 rounded-md flex items-center justify-center font-bold text-xs transition ${
+                      isSelected
+                        ? 'bg-teal-600 text-white'
+                        : 'border border-slate-300 bg-slate-100 text-transparent'
+                    }`}
+                  >
+                    ✓
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Cost Allocation Mode Switcher (Equal vs Custom) */}
+          <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-600">Split Method:</span>
+            <div className="flex bg-slate-200 p-0.5 rounded-xl text-xs">
+              <button
+                type="button"
+                onClick={() => setSplitMode('equal')}
+                className={`px-3 py-1 font-bold rounded-lg transition ${
+                  splitMode === 'equal'
+                    ? 'bg-white text-teal-800 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ⚖️ Equal Split
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSplitMode('custom')
+                  if (Object.keys(customBreakdown).length === 0) {
+                    handleDistributeEvenly()
+                  }
+                }}
+                className={`px-3 py-1 font-bold rounded-lg transition ${
+                  splitMode === 'custom'
+                    ? 'bg-white text-indigo-700 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ✏️ Custom Split
+              </button>
+            </div>
+          </div>
+
+          {/* Equal Split Live Preview */}
+          {splitMode === 'equal' ? (
+            <div className="p-3 bg-white rounded-xl border border-teal-200 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-base">⚖️</span>
+                <span className="text-slate-700 font-medium">
+                  Divided equally across <strong>{selectedMembers.length} member{selectedMembers.length > 1 ? 's' : ''}</strong>
+                </span>
+              </div>
+              <span className="text-xs font-black text-teal-900 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
+                ₹{equalSharePerPerson} / person
+              </span>
+            </div>
+          ) : (
+            /* Custom Split Inputs */
+            <div className="space-y-2 bg-white p-3 rounded-xl border border-indigo-200">
+              <div className="flex items-center justify-between text-xs pb-1.5 border-b border-slate-100">
+                <span className="font-bold text-indigo-950">Custom Member Shares (₹ INR)</span>
+                <button
+                  type="button"
+                  onClick={handleDistributeEvenly}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                >
+                  Reset Evenly
+                </button>
+              </div>
+
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {selectedMembers.map((m) => {
+                  const val =
+                    customBreakdown[m] !== undefined
+                      ? customBreakdown[m]
+                      : (converted / selectedMembers.length).toFixed(2)
+
+                  return (
+                    <div
+                      key={m}
+                      className="flex items-center justify-between gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200"
+                    >
+                      <span className="text-xs font-bold text-slate-800 truncate">{m}</span>
+                      <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1 w-28 shadow-2xs">
+                        <span className="text-[11px] font-bold text-slate-400 mr-1">₹</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={val}
+                          onChange={(e) => handleSetCustomAmount(m, e.target.value)}
+                          className="w-full text-xs font-black text-slate-900 outline-none text-right"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Checksum & Balance Status */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">
+                  Allocated: <strong>₹{totalAllocatedCustom.toFixed(2)}</strong> / ₹{converted.toFixed(2)}
+                </span>
+                <span
+                  className={`font-black text-xs px-2 py-0.5 rounded-md ${
+                    Math.abs(customRemaining) < 0.01
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {Math.abs(customRemaining) < 0.01
+                    ? '✓ Balanced'
+                    : `Remaining: ₹${customRemaining.toFixed(2)}`}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Action Buttons */}
         <div className="pt-2 flex items-center gap-2.5">
           <button
             type="button"
             onClick={handleSaveToLedger}
-            className="flex-1 py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl shadow-sm transition text-xs flex items-center justify-center gap-1.5"
+            className="flex-1 py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-extrabold rounded-2xl shadow-sm transition text-xs flex items-center justify-center gap-1.5"
           >
-            <span>✓ Confirm & Save to Ledger</span>
+            <span>✓ Confirm & Save to Ledger (₹{converted.toLocaleString()})</span>
           </button>
           <button
             type="button"
