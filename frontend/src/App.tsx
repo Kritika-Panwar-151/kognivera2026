@@ -33,7 +33,7 @@ import {
 import { enqueueOfflineAction } from './services/offlineQueueService'
 import type { CategoryCaps } from './types'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { syncActiveCurrencies, getTripDestinationCurrency, convertCurrency } from './services/currencyService'
+import { syncActiveCurrencies, getTripDestinationCurrency, convertCurrency, isTripMatch } from './services/currencyService'
 
 const DEFAULT_DEMO_TRIPS: Trip[] = [
   {
