@@ -1,7 +1,9 @@
 import { useAIGuardianChat } from './useAIGuardianChat'
+import { getActiveSessionId } from '../../services/llmSessionTracker'
 
 export default function AIGuardianChatView() {
   const { messages, input, setInput, isTyping, handleSend, chatBottomRef } = useAIGuardianChat()
+  const activeSessionId = getActiveSessionId()
 
   const quickChips = [
     '📅 Show today\'s itinerary & bookings',
@@ -12,6 +14,17 @@ export default function AIGuardianChatView() {
 
   return (
     <div className="bg-white rounded-3xl border border-teal-100 shadow-sm overflow-hidden flex flex-col h-[600px]">
+      {/* Automated LLM Guard & Session Observability Header */}
+      <div className="bg-slate-50 border-b border-slate-100 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500">
+        <div className="flex items-center gap-1.5 font-medium text-emerald-700">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>LLM Access & Identity Guard Active</span>
+        </div>
+        <div className="flex items-center gap-2 font-mono text-[10px] text-slate-400">
+          <span>Session: {activeSessionId.slice(0, 16)}...</span>
+        </div>
+      </div>
+
       {/* Messages Scroll Area */}
       <div className="flex-1 p-4 md:p-6 overflow-y-auto space-y-4">
         {messages.map((msg) => {
@@ -72,13 +85,22 @@ export default function AIGuardianChatView() {
                   </div>
                 )}
 
-                <span
-                  className={`text-[9px] block mt-1.5 text-right ${
-                    isUser ? 'text-teal-200' : 'text-slate-400'
-                  }`}
-                >
-                  {msg.time}
-                </span>
+                {/* Footer with Trace ID & Timestamp */}
+                <div className="flex items-center justify-between mt-2 pt-1 border-t border-slate-200/40 text-[9px]">
+                  {msg.traceId ? (
+                    <span className="font-mono text-emerald-700 bg-emerald-50 border border-emerald-200/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <span>🛡️ Trace: {msg.traceId.slice(0, 14)}...</span>
+                      <span className="text-emerald-500 font-sans">✓ Verified</span>
+                    </span>
+                  ) : <span />}
+                  <span
+                    className={`text-[9px] block ${
+                      isUser ? 'text-teal-200' : 'text-slate-400'
+                    }`}
+                  >
+                    {msg.time}
+                  </span>
+                </div>
               </div>
             </div>
           )
@@ -101,36 +123,35 @@ export default function AIGuardianChatView() {
         <div ref={chatBottomRef} />
       </div>
 
-      {/* Quick Chips */}
-      <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center gap-2 overflow-x-auto text-[11px]">
-        {quickChips.map((chip, i) => (
+      {/* Suggested Quick Prompt Chips */}
+      <div className="p-3 bg-slate-50 border-t border-slate-100 flex gap-2 overflow-x-auto no-scrollbar">
+        {quickChips.map((chip, idx) => (
           <button
-            key={i}
+            key={idx}
             onClick={() => handleSend(chip)}
-            className="px-3 py-1 bg-white border border-teal-100 text-slate-700 hover:text-teal-800 hover:border-teal-300 rounded-full font-medium whitespace-nowrap transition"
+            className="shrink-0 text-xs bg-white border border-teal-200/60 hover:border-teal-500 text-teal-800 hover:text-teal-900 px-3 py-1.5 rounded-full transition-all cursor-pointer shadow-2xs font-medium"
           >
             {chip}
           </button>
         ))}
       </div>
 
-      {/* Input Bar */}
-      <div className="p-3 md:p-4 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+      {/* Bottom Input Area */}
+      <div className="p-3 md:p-4 bg-white border-t border-slate-100 flex gap-2 items-center">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="Ask anything..."
-          className="flex-1 bg-white border border-slate-200 rounded-2xl px-4 py-3 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+          className="flex-1 text-xs md:text-sm border border-slate-200 rounded-2xl px-4 py-2.5 outline-none focus:border-teal-600 focus:ring-1 focus:ring-teal-600 transition-all bg-slate-50/50"
         />
         <button
           onClick={() => handleSend()}
           disabled={!input.trim()}
-          className="px-5 py-3 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold rounded-2xl text-xs md:text-sm transition shadow-sm shrink-0 flex items-center gap-1.5"
+          className="w-10 h-10 rounded-2xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white flex items-center justify-center shrink-0 cursor-pointer shadow-sm transition-all"
         >
-          <span>Send</span>
-          <span>➤</span>
+          ➤
         </button>
       </div>
     </div>

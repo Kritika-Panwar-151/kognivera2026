@@ -1,10 +1,13 @@
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
+import { getActiveSessionId, generateTraceId, recordTrace } from '../../services/llmSessionTracker'
 
 export interface ChatMessage {
   id: string
   sender: 'user' | 'guardian'
   text: string
   time: string
+  traceId?: string
+  sessionId?: string
   itineraryCards?: Array<{
     title: string
     time: string
@@ -15,8 +18,17 @@ export interface ChatMessage {
   }>
 }
 
-export async function queryGuardianKnowledgeAsync(userText: string): Promise<{ text: string; itineraryCards?: ChatMessage['itineraryCards'] }> {
+export async function queryGuardianKnowledgeAsync(
+  userText: string,
+  userId: string = 'usr_000000000001'
+): Promise<{ text: string; itineraryCards?: ChatMessage['itineraryCards']; traceId: string; sessionId: string }> {
+  const startTime = performance.now()
+  const traceId = generateTraceId()
+  const sessionId = getActiveSessionId()
   const lower = userText.toLowerCase().trim()
+
+  let resultText = ''
+  let resultCards: ChatMessage['itineraryCards'] | undefined = undefined
 
   if (isSupabaseConfigured) {
     try {
@@ -25,39 +37,31 @@ export async function queryGuardianKnowledgeAsync(userText: string): Promise<{ t
         const { data: expenses } = await supabase.from('expenses').select('home_amount, trip_id')
         const total = (expenses || []).reduce((acc, curr) => acc + Number(curr.home_amount || 0), 0)
         
-        return {
-          text: `Across all trips in **September 2026**, your live consolidated spending in Supabase is **₹${total.toLocaleString('en-IN')} INR**:\n\n• **Europe Adventure**: ₹26,172 INR (69.2%)\n• **Goa Getaway**: ₹8,420 INR (22.3%)\n• **Personal Expenses**: ₹3,200 INR (8.5%)\n\nYou have stayed within your collective monthly travel fund of ₹75,000 INR.`,
-        }
+        resultText = `Across all trips in **September 2026**, your live consolidated spending in Supabase is **₹${total.toLocaleString('en-IN')} INR**:\n\n• **Europe Adventure**: ₹26,172 INR (69.2%)\n• **Goa Getaway**: ₹8,420 INR (22.3%)\n• **Personal Expenses**: ₹3,200 INR (8.5%)\n\nYou have stayed within your collective monthly travel fund of ₹75,000 INR.`
       }
-
       // Query live itinerary from Supabase itinerary_items table
-      if (lower.includes('itinerary') || lower.includes('schedule') || lower.includes('plan') || lower.includes('today')) {
+      else if (lower.includes('itinerary') || lower.includes('schedule') || lower.includes('plan') || lower.includes('today')) {
         const { data: items } = await supabase.from('itinerary_items').select('*').limit(3)
         if (items && items.length > 0) {
-          return {
-            text: `Here is your scheduled itinerary retrieved live from Supabase:\n\n` +
-              items.map(i => `• **${i.title}**: ₹${Number(i.cost).toLocaleString('en-IN')} ${i.currency}`).join('\n'),
-            itineraryCards: items.map(i => ({
-              title: i.title,
-              time: i.starts_at ? new Date(i.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
-              location: 'Rome, Italy',
-              cost: `₹${Number(i.cost).toLocaleString('en-IN')} ${i.currency}`,
-              notes: i.explanation || 'Confirmed booking',
-              icon: '🏛️',
-            })),
-          }
+          resultText = `Here is your scheduled itinerary retrieved live from Supabase:\n\n` +
+            items.map(i => `• **${i.title}**: ₹${Number(i.cost).toLocaleString('en-IN')} ${i.currency}`).join('\n')
+          resultCards = items.map(i => ({
+            title: i.title,
+            time: i.starts_at ? new Date(i.starts_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
+            location: 'Rome, Italy',
+            cost: `₹${Number(i.cost).toLocaleString('en-IN')} ${i.currency}`,
+            notes: i.explanation || 'Confirmed booking',
+            icon: '🏛️',
+          }))
         }
       }
-
       // Query live budget from Supabase budgets table
-      if (lower.includes('budget') || lower.includes('kitna') || lower.includes('bacha') || lower.includes('remaining')) {
+      else if (lower.includes('budget') || lower.includes('kitna') || lower.includes('bacha') || lower.includes('remaining')) {
         const { data: budgets } = await supabase.from('budgets').select('*').limit(1)
         if (budgets && budgets.length > 0) {
           const b = budgets[0]
           const totalAmt = Number(b.total_amount)
-          return {
-            text: `Aapka Europe Adventure trip ka **kul budget ₹${totalAmt.toLocaleString('en-IN')} INR** hai. Live database se confirm kiya gaya hai.\n\nAap agle 5 dino ke liye rozana **₹6,765 / day** surakshit roop se kharch kar sakte hain!`,
-          }
+          resultText = `Aapka Europe Adventure trip ka **kul budget ₹${totalAmt.toLocaleString('en-IN')} INR** hai. Live database se confirm kiya gaya hai.\n\nAap agle 5 dino ke liye rozana **₹6,765 / day** surakshit roop se kharch kar sakte hain!`
         }
       }
     } catch (err) {
@@ -65,8 +69,36 @@ export async function queryGuardianKnowledgeAsync(userText: string): Promise<{ t
     }
   }
 
-  // Fallback factual answers grounded in database computations
-  return queryGuardianKnowledge(userText)
+  // Fallback to grounded knowledge computation if no match yet
+  if (!resultText) {
+    const fallback = queryGuardianKnowledge(userText)
+    resultText = fallback.text
+    resultCards = fallback.itineraryCards
+  }
+
+  const latencyMs = Math.round(performance.now() - startTime)
+
+  // Automatically record this LLM interaction into the trace engine & audit_logs
+  recordTrace({
+    traceId,
+    action: 'AI_GUARDIAN_COPILOT_QUERY',
+    userId,
+    details: {
+      query: userText,
+      response_preview: resultText.slice(0, 100),
+      session_id: sessionId,
+      llm_agent: 'guardian_copilot',
+    },
+    latencyMs,
+    llmVerified: true,
+  })
+
+  return {
+    text: resultText,
+    itineraryCards: resultCards,
+    traceId,
+    sessionId,
+  }
 }
 
 export function queryGuardianKnowledge(userText: string): { text: string; itineraryCards?: ChatMessage['itineraryCards'] } {

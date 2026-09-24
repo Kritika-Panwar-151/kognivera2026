@@ -40,6 +40,8 @@ export function useAIGuardianChat() {
         sender: 'guardian',
         text: response.text,
         itineraryCards: response.itineraryCards,
+        traceId: response.traceId,
+        sessionId: response.sessionId,
         time: 'Just now',
       }
       setMessages((prev) => [...prev, botMsg])
