@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { toggleSettleExpenseInSupabase } from '../services/supabaseDataService'
 import PendingRequestsModal from '../components/PendingRequestsModal'
 import { resolveMemberName } from '../services/userRegistry'
+import { getCurrencySymbol } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -24,6 +25,9 @@ interface DebtItem {
 }
 
 export default function GroupSettlement({ navigate, trip, expenses, currentUser }: Props) {
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const homeSymbol = getCurrencySymbol(userHomeCurr)
+
   // Compute debts strictly from real trip expenses
   const computedDebts = useMemo(() => {
     const list: DebtItem[] = []
@@ -230,7 +234,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             You Are Owed
           </span>
           <span className="text-base md:text-lg font-extrabold text-emerald-800 mt-0.5 block">
-            +₹{totalOwedToYou.toLocaleString()}
+            +{homeSymbol}{totalOwedToYou.toLocaleString()}
           </span>
           <span className="text-[10px] text-slate-400 block mt-0.5">to receive</span>
         </div>
@@ -241,7 +245,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             You Owe
           </span>
           <span className="text-base md:text-lg font-extrabold text-rose-800 mt-0.5 block">
-            -₹{totalYouOwe.toLocaleString()}
+            -{homeSymbol}{totalYouOwe.toLocaleString()}
           </span>
           <span className="text-[10px] text-slate-400 block mt-0.5">to pay</span>
         </div>
@@ -256,7 +260,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
               netBalance >= 0 ? 'text-teal-900' : 'text-rose-700'
             }`}
           >
-            {netBalance >= 0 ? '+' : '-'}₹{Math.abs(netBalance).toLocaleString()}
+            {netBalance >= 0 ? '+' : '-'}{homeSymbol}{Math.abs(netBalance).toLocaleString()}
           </span>
           <span className="text-[10px] text-slate-400 block mt-0.5">after math</span>
         </div>
@@ -272,7 +276,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             <h2 className="text-sm font-bold text-slate-900">People Who Owe You</h2>
           </div>
           <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-            +₹{totalOwedToYou.toLocaleString()} pending
+            +{homeSymbol}{totalOwedToYou.toLocaleString()} pending
           </span>
         </div>
 
@@ -302,7 +306,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-slate-900 text-sm truncate">{item.person}</p>
                       <span className="text-xs font-extrabold text-emerald-800">
-                        owes you ₹{item.amount.toLocaleString()}
+                        owes you {homeSymbol}{item.amount.toLocaleString()}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 truncate">{item.reason}</p>
@@ -336,7 +340,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             <h2 className="text-sm font-bold text-slate-900">People You Owe</h2>
           </div>
           <span className="text-xs font-bold text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full">
-            -₹{totalYouOwe.toLocaleString()} pending
+            -{homeSymbol}{totalYouOwe.toLocaleString()} pending
           </span>
         </div>
 
@@ -366,7 +370,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-slate-900 text-sm truncate">{item.person}</p>
                       <span className="text-xs font-extrabold text-rose-800">
-                        you owe ₹{item.amount.toLocaleString()}
+                        you owe {homeSymbol}{item.amount.toLocaleString()}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 truncate">{item.reason}</p>

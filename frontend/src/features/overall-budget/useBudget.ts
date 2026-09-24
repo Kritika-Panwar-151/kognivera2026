@@ -1,22 +1,58 @@
 import type { Trip, User, Expense } from '../common/types'
-import { isUserMatch } from '../../services/userRegistry'
+import { isUserMatch, getRegisteredUsers } from '../../services/userRegistry'
+import { convertCurrency, getTripDestinationCurrency } from '../../services/currencyService'
 
 export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Expense[]) {
+  const destCurr = getTripDestinationCurrency(trip)
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const registeredUsers = getRegisteredUsers()
+
   // Filter expenses strictly belonging to this trip
   const tripExpenses = trip?.id
     ? (expenses || []).filter(
         (e) => e.tripId === trip.id || (!e.tripId && (trip.id === 'europe' || trip.id === 'trp_europe'))
       )
     : []
-  const tripExpenseSum = tripExpenses.reduce((sum, e) => sum + (e.convertedAmount || e.amount || 0), 0)
 
-  // Group Budget Metrics
-  const budget = trip?.budget || 0
-  const spent = tripExpenses.length > 0 ? tripExpenseSum : (trip?.spent || 0)
+  // 1. Calculate Group Budget in Destination Currency (B_dest)
+  // Convert each member's personal budget from their Home Currency to Trip Destination Currency
+  let groupBudgetDest = 0
+  const activeMembers = (trip?.memberDetails || []).filter((m) => m.status === 'active' || !m.status)
+
+  if (activeMembers.length > 0 && activeMembers.some((m) => (m.personalBudget || 0) > 0)) {
+    activeMembers.forEach((m) => {
+      const mUser = registeredUsers.find((u) => u.id === m.userId || u.name === m.userId)
+      const mHomeCurr = (mUser?.homeCurrency || 'INR').toUpperCase()
+      const mHomeBudget = m.personalBudget || 0
+      groupBudgetDest += convertCurrency(mHomeBudget, mHomeCurr, destCurr)
+    })
+  } else if (trip?.memberBudgets && Object.keys(trip.memberBudgets).length > 0) {
+    Object.entries(trip.memberBudgets).forEach(([mId, mHomeBudget]) => {
+      const mUser = registeredUsers.find((u) => u.id === mId || u.name === mId)
+      const mHomeCurr = (mUser?.homeCurrency || 'INR').toUpperCase()
+      groupBudgetDest += convertCurrency(mHomeBudget || 0, mHomeCurr, destCurr)
+    })
+  } else {
+    // Fallback: trip.budget converted to destCurr
+    groupBudgetDest = convertCurrency(trip?.budget || 0, trip?.currency || destCurr, destCurr)
+  }
+
+  // Convert Group Budget in Destination Currency (B_dest) to viewing user's Home Currency
+  const budget = convertCurrency(groupBudgetDest, destCurr, userHomeCurr)
+
+  // 2. Calculate Group Spent in Destination Currency (S_dest)
+  let totalSpentDest = 0
+  tripExpenses.forEach((e) => {
+    const eAmountDest = convertCurrency(e.amount, e.currency || destCurr, destCurr)
+    totalSpentDest += eAmountDest
+  })
+
+  // Convert Group Spent in Destination Currency (S_dest) to viewing user's Home Currency
+  const spent = convertCurrency(totalSpentDest, destCurr, userHomeCurr)
   const remaining = Math.max(0, budget - spent)
   const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0
 
-  // Dynamic calculation of days from startDate & endDate (no hardcoded demo numbers)
+  // Dynamic calculation of days from startDate & endDate
   let daysTotal = 1
   let daysGone = 0
   let daysLeft = 1
@@ -37,13 +73,10 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
       const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate())
 
       if (todayMidnight < start) {
-        // Trip has not started yet
         daysGone = 0
       } else if (todayMidnight > end) {
-        // Trip finished
         daysGone = daysTotal
       } else {
-        // Trip in progress
         const goneMs = todayMidnight.getTime() - start.getTime()
         daysGone = Math.min(daysTotal, Math.max(1, Math.floor(goneMs / (1000 * 60 * 60 * 24)) + 1))
       }
@@ -56,14 +89,16 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
   const projectedTotal = spent + dailyAvg * daysLeft
   const isOverBudgetProjected = projectedTotal > budget
 
-  // Personal Budget Metrics for Logged-In User
+  // 3. Personal Budget Metrics for Logged-In User
   const userId = currentUser?.id || 'usr_you'
+  const foundMember = trip?.memberDetails?.find((m) => isUserMatch(m.userId, currentUser))
   const personalBudget =
+    foundMember?.personalBudget ??
     trip?.memberBudgets?.[userId] ??
     trip?.personalBudget ??
     Math.round(budget / Math.max(trip?.members?.length || 1, 1))
 
-  // Calculate personal spend from trip expenses
+  // Calculate personal spend for currentUser using 2-Tier expense split logic
   let personalSpent = 0
 
   if (tripExpenses.length > 0) {
@@ -71,18 +106,22 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
       const isPaidByMe = isUserMatch(e.paidBy, currentUser)
       const isSplitWithMe =
         e.splitBetween && e.splitBetween.some((m) => isUserMatch(m, currentUser))
+      const eAmountDest = convertCurrency(e.amount, e.currency || destCurr, destCurr)
 
       if (e.isShared && isSplitWithMe) {
         const shareCount = e.splitBetween ? e.splitBetween.length : (trip?.members?.length || 1)
-        personalSpent += Math.round((e.convertedAmount || 0) / shareCount)
+        const shareDest = eAmountDest / shareCount
+        const shareHome = convertCurrency(shareDest, destCurr, userHomeCurr)
+        personalSpent += shareHome
       } else if (!e.isShared && isPaidByMe) {
-        personalSpent += (e.convertedAmount || 0)
+        const shareHome = convertCurrency(eAmountDest, destCurr, userHomeCurr)
+        personalSpent += shareHome
       } else if (isPaidByMe) {
-        personalSpent += (e.convertedAmount || 0)
+        const shareHome = convertCurrency(eAmountDest, destCurr, userHomeCurr)
+        personalSpent += shareHome
       }
     })
   } else {
-    // If no expenses logged for this trip, personal spend is 0 (or proportional if trip.spent exists)
     personalSpent = spent > 0 ? Math.round(spent / Math.max(trip?.members?.length || 1, 1)) : 0
   }
 
@@ -94,7 +133,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
   const personalSafeDaily = Math.max(1, daysLeft) > 0 ? Math.round(personalRemaining / Math.max(1, daysLeft)) : personalRemaining
 
   return {
-    // Group Level
+    // Group Level (in viewing user's Home Currency)
     budget,
     spent,
     remaining,
@@ -107,7 +146,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
     projectedTotal,
     isOverBudgetProjected,
 
-    // Personal Level (for current user)
+    // Personal Level (in viewing user's Home Currency)
     personalBudget,
     personalSpent,
     personalRemaining,
