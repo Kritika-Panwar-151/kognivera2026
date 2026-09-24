@@ -5,13 +5,14 @@ interface Props {
   isOpen: boolean
   onClose: () => void
   defaultHomeCurrency?: string
+  defaultTripCurrency?: string
 }
 
-export default function CurrencyConverterModal({ isOpen, onClose }: Props) {
+export default function CurrencyConverterModal({ isOpen, onClose, defaultHomeCurrency = 'INR', defaultTripCurrency = 'EUR' }: Props) {
   const [fxState, setFxState] = useState<LiveFxState>(getStoredFxRates())
   const [amount, setAmount] = useState('50')
-  const [fromCode, setFromCode] = useState('EUR')
-  const [toCode, setToCode] = useState('INR')
+  const [fromCode, setFromCode] = useState(defaultTripCurrency.toUpperCase())
+  const [toCode, setToCode] = useState(defaultHomeCurrency.toUpperCase())
   const [result, setResult] = useState<{
     calculatedAmount: string
     rateString: string
@@ -22,6 +23,13 @@ export default function CurrencyConverterModal({ isOpen, onClose }: Props) {
   useEffect(() => {
     refreshLiveFxRates().then(setFxState)
   }, [])
+
+  useEffect(() => {
+    if (isOpen) {
+      if (defaultTripCurrency) setFromCode(defaultTripCurrency.toUpperCase())
+      if (defaultHomeCurrency) setToCode(defaultHomeCurrency.toUpperCase())
+    }
+  }, [isOpen, defaultTripCurrency, defaultHomeCurrency])
 
   const supportedCurrencies = [
     { code: 'EUR', name: 'Euro (€)', symbol: '€', rateToINR: fxState.rates.EUR || 94.0 },

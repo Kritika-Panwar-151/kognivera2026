@@ -203,11 +203,11 @@ export function formatUserDualCurrency(
  * checking trip.currency, destinationCountry, or destination string.
  */
 export function getTripDestinationCurrency(trip?: { currency?: string; destinationCountry?: string; destination?: string; name?: string } | null): string {
-  if (!trip) return 'USD'
+  if (!trip) return 'EUR'
   const searchStr = `${trip.destinationCountry || ''} ${trip.destination || ''} ${trip.name || ''}`.toLowerCase()
-  if (searchStr.includes('switzerland') || searchStr.includes('zurich') || searchStr.includes('geneva')) return 'CHF'
+  if (searchStr.includes('switzerland') || searchStr.includes('zurich') || searchStr.includes('geneva') || searchStr.includes('swiss')) return 'CHF'
   if (searchStr.includes('japan') || searchStr.includes('tokyo') || searchStr.includes('kyoto') || searchStr.includes('osaka')) return 'JPY'
-  if (searchStr.includes('france') || searchStr.includes('paris') || searchStr.includes('germany') || searchStr.includes('italy') || searchStr.includes('rome') || searchStr.includes('spain')) return 'EUR'
+  if (searchStr.includes('france') || searchStr.includes('paris') || searchStr.includes('germany') || searchStr.includes('italy') || searchStr.includes('rome') || searchStr.includes('spain') || searchStr.includes('europe')) return 'EUR'
   if (searchStr.includes('uk') || searchStr.includes('london') || searchStr.includes('england') || searchStr.includes('britain')) return 'GBP'
   if (searchStr.includes('usa') || searchStr.includes('states') || searchStr.includes('york') || searchStr.includes('america')) return 'USD'
   if (searchStr.includes('india') || searchStr.includes('delhi') || searchStr.includes('mumbai') || searchStr.includes('goa')) return 'INR'
@@ -218,5 +218,79 @@ export function getTripDestinationCurrency(trip?: { currency?: string; destinati
   if (searchStr.includes('canada') || searchStr.includes('toronto')) return 'CAD'
 
   if (trip.currency && trip.currency.trim()) return trip.currency.toUpperCase()
-  return 'USD'
+  return 'EUR'
+}
+
+export interface SyncedCurrencyState {
+  homeCurrency: string
+  homeCurrencySymbol: string
+  activeCurrency: string
+  activeCurrencySymbol: string
+  activeTripId: string | null
+  activeTripName: string | null
+}
+
+/**
+ * Stores and syncs active destination currency + symbol and home currency + symbol globally.
+ */
+export function syncActiveCurrencies(
+  trip?: { id?: string; currency?: string; destinationCountry?: string; destination?: string; name?: string } | null,
+  currentUser?: { homeCurrency?: string } | null
+): SyncedCurrencyState {
+  const homeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const homeSym = getCurrencySymbol(homeCurr).trim()
+  const activeCurr = getTripDestinationCurrency(trip)
+  const activeSym = getCurrencySymbol(activeCurr).trim()
+
+  const state: SyncedCurrencyState = {
+    homeCurrency: homeCurr,
+    homeCurrencySymbol: homeSym,
+    activeCurrency: activeCurr,
+    activeCurrencySymbol: activeSym,
+    activeTripId: trip?.id || null,
+    activeTripName: trip?.name || null,
+  }
+
+  try {
+    localStorage.setItem('tripwallet_home_currency', homeCurr)
+    localStorage.setItem('tripwallet_home_currency_symbol', homeSym)
+    localStorage.setItem('tripwallet_active_currency', activeCurr)
+    localStorage.setItem('tripwallet_active_currency_symbol', activeSym)
+    if (trip?.id) localStorage.setItem('tripwallet_active_trip_id', trip.id)
+  } catch (e) {
+    console.warn('Failed to store active currencies in localStorage:', e)
+  }
+
+  return state
+}
+
+/**
+ * Reads stored synced currencies from localStorage.
+ */
+export function getStoredSyncedCurrencies(): SyncedCurrencyState {
+  try {
+    const homeCurrency = localStorage.getItem('tripwallet_home_currency') || 'INR'
+    const homeCurrencySymbol = localStorage.getItem('tripwallet_home_currency_symbol') || getCurrencySymbol(homeCurrency).trim()
+    const activeCurrency = localStorage.getItem('tripwallet_active_currency') || 'EUR'
+    const activeCurrencySymbol = localStorage.getItem('tripwallet_active_currency_symbol') || getCurrencySymbol(activeCurrency).trim()
+    const activeTripId = localStorage.getItem('tripwallet_active_trip_id')
+
+    return {
+      homeCurrency,
+      homeCurrencySymbol,
+      activeCurrency,
+      activeCurrencySymbol,
+      activeTripId,
+      activeTripName: null,
+    }
+  } catch {
+    return {
+      homeCurrency: 'INR',
+      homeCurrencySymbol: '₹',
+      activeCurrency: 'EUR',
+      activeCurrencySymbol: '€',
+      activeTripId: null,
+      activeTripName: null,
+    }
+  }
 }

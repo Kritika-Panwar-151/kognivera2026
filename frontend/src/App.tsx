@@ -33,6 +33,7 @@ import {
 import { enqueueOfflineAction } from './services/offlineQueueService'
 import type { CategoryCaps } from './types'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
+import { syncActiveCurrencies, getTripDestinationCurrency } from './services/currencyService'
 
 export default function App() {
   // Read persisted user session from localStorage
@@ -55,9 +56,13 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [isConverterOpen, setIsConverterOpen] = useState(false)
   const [, setLoadingData] = useState(true)
-  const [pendingInviteTrips, setPendingInviteTrips] = useState<Trip[]>([])
-  const [selectedInviteTrip, setSelectedInviteTrip] = useState<Trip | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
+
+  // Globally sync active destination currency + symbol and home currency + symbol
+  useEffect(() => {
+    const active = currentTrip || (trips.length > 0 ? trips[0] : null)
+    syncActiveCurrencies(active, currentUser)
+  }, [currentTrip, currentUser, trips])
 
   // Helper to filter trips strictly belonging to the logged-in user
   const filterTripsForUser = (allTrips: Trip[], user: User | null): Trip[] => {
@@ -758,6 +763,8 @@ export default function App() {
       <CurrencyConverterModal
         isOpen={isConverterOpen}
         onClose={() => setIsConverterOpen(false)}
+        defaultHomeCurrency={currentUser?.homeCurrency || 'INR'}
+        defaultTripCurrency={getTripDestinationCurrency(currentTrip || (trips.length > 0 ? trips[0] : null))}
       />
 
       {/* Trip Invite Modal */}

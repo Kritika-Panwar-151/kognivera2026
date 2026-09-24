@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { NavigateFn, User, Trip, Screen } from '../types'
+import { getTripDestinationCurrency, getCurrencySymbol } from '../services/currencyService'
 
 interface Props {
   currentUser?: User | null
@@ -29,6 +30,11 @@ export default function TopBar({
   onOpenInviteModal,
 }: Props) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+
+  const homeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const homeSym = getCurrencySymbol(homeCurr).trim()
+  const activeCurr = getTripDestinationCurrency(currentTrip)
+  const activeSym = getCurrencySymbol(activeCurr).trim()
 
   // Hide TopBar completely on login screen for full immersion
   if (currentScreen === 'login') return null
@@ -162,14 +168,17 @@ export default function TopBar({
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
         </button>
 
-        {/* Global Currency Converter Button */}
+        {/* Global Synced Dual Currency Pill & Converter Button */}
         <button
+          type="button"
           onClick={onOpenConverter}
-          className="px-2.5 py-1.5 bg-teal-50 hover:bg-teal-100/80 border border-teal-200/70 text-teal-800 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-2xs"
-          title="Quick FX Calculator"
+          className="px-2.5 py-1.5 bg-gradient-to-r from-teal-50 to-emerald-50 hover:from-teal-100 hover:to-emerald-100 border border-teal-200/80 text-teal-900 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
+          title={`Active Destination: ${activeCurr} (${activeSym}) · Home Currency: ${homeCurr} (${homeSym}) — Tap for FX Converter`}
         >
-          <span>💱</span>
-          <span className="text-[11px]">FX</span>
+          <span className="text-xs">💱</span>
+          <span className="text-[11px] font-black text-teal-800 tracking-tight">
+            {activeCurr} ({activeSym}) · {homeCurr} ({homeSym})
+          </span>
         </button>
 
         {/* User Profile & Sign Out */}
