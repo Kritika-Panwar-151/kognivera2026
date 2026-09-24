@@ -26,7 +26,7 @@ import {
   initialExpensesFallback,
 } from './services/supabaseDataService'
 import type { CategoryCaps } from './types'
-import { supabase } from './lib/supabase'
+import { supabase, isSupabaseConfigured } from './lib/supabase'
 
 export default function App() {
   // Read persisted user session from localStorage
@@ -84,13 +84,16 @@ export default function App() {
             console.warn('Pending invites check error:', e)
           }
 
-          // Filter trips that belong to or include the current user
-          const userTrips = loadedTrips.filter(
-            (t) =>
-              t.members?.includes(currentUser.id) ||
-              currentUser.id === 'usr_aisha' ||
-              currentUser.id === 'usr_you'
-          )
+          // Filter trips where current user is the owner or an active joined member
+          const userTrips = loadedTrips.filter((t) => {
+            if (t.ownerId === currentUser.id) return true
+            if (currentUser.id === 'usr_aisha' || currentUser.id === 'usr_you') return true
+            const detail = t.memberDetails?.find((d) => d.userId === currentUser.id)
+            if (detail) {
+              return detail.status === 'active'
+            }
+            return t.members?.includes(currentUser.id)
+          })
 
           if (userTrips.length > 0) {
             setTrips(userTrips)
@@ -118,6 +121,82 @@ export default function App() {
     }
     loadData()
   }, [currentUser])
+
+  // Realtime multi-device subscription: Pop up invites immediately & live update group budget
+  useEffect(() => {
+    if (!currentUser || !isSupabaseConfigured) return
+
+    const checkInvites = async () => {
+      try {
+        const pendingList = await fetchPendingTripInvites(currentUser.id)
+        if (pendingList && pendingList.length > 0) {
+          const pTrip = pendingList[0].trips
+          if (pTrip) {
+            setPendingInviteTrip({
+              id: pTrip.trip_id,
+              name: pTrip.title,
+              destination: pTrip.destination_city_id || 'Destination',
+              startDate: pTrip.start_date,
+              endDate: pTrip.end_date,
+              currency: pTrip.home_currency || 'INR',
+              budget: Number(pTrip.budget || 0),
+              spent: 0,
+              partySize: pTrip.party_size || 1,
+            })
+          }
+        } else {
+          setPendingInviteTrip(null)
+        }
+      } catch (e) {
+        console.warn('Realtime pending invites check error:', e)
+      }
+    }
+
+    // When someone invites this user on another laptop, pop up invite banner instantly
+    const inviteChannel = supabase
+      .channel(`realtime_invites_${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'trip_members',
+          filter: `user_id=eq.${currentUser.id}`,
+        },
+        () => {
+          checkInvites()
+        }
+      )
+      .subscribe()
+
+    // When any member accepts and group budget updates, update all screens live
+    const budgetChannel = supabase
+      .channel('realtime_budgets_channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'budgets',
+        },
+        async () => {
+          const freshTrips = await fetchTripsFromSupabase()
+          if (freshTrips && freshTrips.length > 0) {
+            setTrips(freshTrips)
+            if (currentTrip) {
+              const updated = freshTrips.find((t) => t.id === currentTrip.id)
+              if (updated) setCurrentTrip(updated)
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(inviteChannel)
+      supabase.removeChannel(budgetChannel)
+    }
+  }, [currentUser, currentTrip?.id])
 
   const handleAcceptInvite = async (tripId: string, personalBudget: number, categoryCaps: CategoryCaps) => {
     if (!currentUser) return

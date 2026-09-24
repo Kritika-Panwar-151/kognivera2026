@@ -200,9 +200,11 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
   const registeredUsers = getRegisteredUsers()
   const partyMembers = (trip.members || ['usr_you', 'usr_ravi', 'usr_asha']).map((memberId) => {
     const found = registeredUsers.find((u) => u.id === memberId)
+    const detail = trip.memberDetails?.find((d) => d.userId === memberId)
+    const isPending = detail ? detail.status === 'pending' : false
     const personalAllocation =
       trip.memberBudgets?.[memberId] ??
-      (memberId === activeUser.id ? personalBudget : Math.round(budget / Math.max(trip.members?.length || 1, 1)))
+      (memberId === activeUser.id ? personalBudget : isPending ? 0 : Math.round(budget / Math.max(trip.members?.length || 1, 1)))
 
     return {
       id: memberId,
@@ -210,6 +212,7 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
       avatar: found ? found.avatar : '👤',
       isMe: memberId === activeUser.id,
       budget: personalAllocation,
+      isPending,
     }
   })
 
@@ -330,14 +333,19 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
                     {member.name} {member.isMe ? '(You)' : ''}
                   </span>
                   {member.isMe && (
-                    <span className="text-[9px] font-bold bg-indigo-100 text-indigo-800 px-1 py-0.2 rounded">
+                    <span className="text-[9px] font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">
                       Active
+                    </span>
+                  )}
+                  {member.isPending && (
+                    <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
+                      ⏳ Pending
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
-                  <span className="text-[10px] font-bold text-teal-700">
-                    Budget: {currencySymbol}{member.budget.toLocaleString()}
+                  <span className={`text-[10px] font-bold ${member.isPending ? 'text-amber-700' : 'text-teal-700'}`}>
+                    {member.isPending ? 'Contribution: ⏳ Pending' : `Budget: ${currencySymbol}${member.budget.toLocaleString()}`}
                   </span>
                   {member.isMe && (
                     <button

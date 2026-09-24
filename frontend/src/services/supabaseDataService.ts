@@ -300,7 +300,7 @@ export async function saveTripToSupabase(trip: Trip, ownerUserId: string = 'usr_
 
     if (tripErr) console.error('Supabase trip insert error:', tripErr.message)
 
-    // 2. Insert Admin as active Owner in trip_members
+    // 2. Insert Host as active Owner in trip_members with their personal budget
     const hostBudget = trip.personalBudget || trip.memberBudgets?.[ownerUserId] || trip.budget || 25000
     const { error: hostMemberErr } = await supabase.from('trip_members').upsert({
       member_id: `tmb_${Date.now()}_host`,
@@ -316,10 +316,10 @@ export async function saveTripToSupabase(trip: Trip, ownerUserId: string = 'usr_
 
     if (hostMemberErr) console.error('Host trip_member insert error:', hostMemberErr.message)
 
-    // 3. Insert each invited member into trip_members with status: 'pending'
+    // 3. Insert each invited member into trip_members with status: 'pending' and personal_budget: 0
+    // (Invited friends will set their own personal budget upon accepting the invite)
     const otherMembers = (trip.members || []).filter((mId) => mId !== ownerUserId)
     for (const mId of otherMembers) {
-      const memberInitialBudget = trip.memberBudgets?.[mId] || 0
       const { error: mErr } = await supabase.from('trip_members').upsert({
         member_id: `tmb_${Date.now()}_${mId.replace(/[^a-zA-Z0-9]/g, '').slice(-4)}`,
         trip_id: tripId,
@@ -327,7 +327,7 @@ export async function saveTripToSupabase(trip: Trip, ownerUserId: string = 'usr_
         role: 'editor',
         status: 'pending',
         invited_by_user_id: ownerUserId,
-        personal_budget: memberInitialBudget,
+        personal_budget: 0,
         category_caps: {},
         created_at: now,
         updated_at: now,
@@ -335,17 +335,17 @@ export async function saveTripToSupabase(trip: Trip, ownerUserId: string = 'usr_
       if (mErr) console.error(`Invited member ${mId} insert error:`, mErr.message)
     }
 
-    // 4. Insert into budgets with initial aggregated budget
+    // 4. Insert into budgets with initial group fund equal to the Host's personal budget
     const { error: budErr } = await supabase.from('budgets').insert({
       budget_id: `bud_${Date.now()}`,
       trip_id: tripId,
-      total_amount: trip.budget || hostBudget,
+      total_amount: hostBudget,
       currency: trip.currency || 'INR',
-      accommodation_cap: trip.categoryCaps?.accommodation || Math.round(trip.budget * 0.35),
-      food_cap: trip.categoryCaps?.food || Math.round(trip.budget * 0.25),
-      transport_cap: trip.categoryCaps?.transport || Math.round(trip.budget * 0.2),
-      activities_cap: trip.categoryCaps?.activities || Math.round(trip.budget * 0.1),
-      misc_cap: trip.categoryCaps?.misc || Math.round(trip.budget * 0.1),
+      accommodation_cap: trip.categoryCaps?.accommodation || Math.round(hostBudget * 0.35),
+      food_cap: trip.categoryCaps?.food || Math.round(hostBudget * 0.25),
+      transport_cap: trip.categoryCaps?.transport || Math.round(hostBudget * 0.2),
+      activities_cap: trip.categoryCaps?.activities || Math.round(hostBudget * 0.1),
+      misc_cap: trip.categoryCaps?.misc || Math.round(hostBudget * 0.1),
       alert_threshold_pct: 80,
       created_at: now,
       updated_at: now,
@@ -454,7 +454,23 @@ export async function fetchPendingTripInvites(userId: string): Promise<any[]> {
       .eq('user_id', userId)
       .eq('status', 'pending')
 
-    if (error || !pendingMemberships) return []
+    if (error || !pendingMemberships || pendingMemberships.length === 0) return []
+
+    // Fetch corresponding group budgets for these pending trips
+    const tripIds = pendingMemberships.map((p) => p.trip_id)
+    const { data: budgets } = await supabase
+      .from('budgets')
+      .select('trip_id, total_amount')
+      .in('trip_id', tripIds)
+
+    const budgetMap = new Map((budgets || []).map((b) => [b.trip_id, Number(b.total_amount || 0)]))
+
+    pendingMemberships.forEach((p) => {
+      if (p.trips) {
+        p.trips.budget = budgetMap.get(p.trip_id) || 0
+      }
+    })
+
     return pendingMemberships
   } catch (err) {
     console.error('Error fetching pending trip invites:', err)

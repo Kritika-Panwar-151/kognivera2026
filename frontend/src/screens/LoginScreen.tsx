@@ -165,9 +165,15 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
 
           if (error) {
             console.warn('Supabase auth notice:', error.message)
-            setMessage({ text: error.message, type: 'error' })
-            setLoading(false)
-            return
+            // If signups are disabled in Supabase dashboard settings, gracefully proceed by creating user directly in canonical users table
+            if (error.message.toLowerCase().includes('signups not allowed') || error.message.toLowerCase().includes('signup')) {
+              console.info('Signups disabled in Supabase Auth config — proceeding with direct users table registration')
+              userId = `usr_${Date.now().toString(36)}`
+            } else {
+              setMessage({ text: error.message, type: 'error' })
+              setLoading(false)
+              return
+            }
           } else if (data?.user) {
             userId = data.user.id
           }

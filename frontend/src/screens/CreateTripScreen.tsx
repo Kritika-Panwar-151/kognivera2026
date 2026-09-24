@@ -1,11 +1,15 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { NavigateFn, Trip, User } from '../types'
 import {
   CANONICAL_COUNTRIES,
   CANONICAL_CITIES,
   getCurrencyForCountry,
 } from '../data/canonicalReferences'
-import { searchUsers, getRegisteredUsers } from '../services/userRegistry'
+import {
+  getRegisteredUsers,
+  subscribeToLiveUsers,
+  fetchUsersFromSupabase,
+} from '../services/userRegistry'
 
 interface Props {
   navigate: NavigateFn
@@ -40,33 +44,46 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
   const [adults, setAdults] = useState('3')
   const [children, setChildren] = useState('0')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedMembers, setSelectedMembers] = useState<User[]>([
-    hostUser,
-    ...getRegisteredUsers().filter((u) => u.id === 'usr_ravi' || u.id === 'usr_asha').slice(0, 2),
-  ])
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
+  const [allRegisteredUsers, setAllRegisteredUsers] = useState<User[]>(getRegisteredUsers())
 
-  // 3. Member-specific personal budgets (Host + each invited member)
-  const [memberBudgets, setMemberBudgets] = useState<Record<string, number>>({
-    [hostUser.id]: 35000,
-    usr_ravi: 35000,
-    usr_asha: 30000,
-  })
+  // Realtime multi-device subscription: updates automatically when anyone registers anywhere
+  useEffect(() => {
+    const unsubscribe = subscribeToLiveUsers((users) => {
+      setAllRegisteredUsers(users)
+    })
+    return () => unsubscribe()
+  }, [])
 
-  // Dynamic search results
+  const [selectedMembers, setSelectedMembers] = useState<User[]>([hostUser])
+  const [hostPersonalBudget, setHostPersonalBudget] = useState<number>(35000)
+
+  // Dynamic search results across all live registered users
   const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return []
-    const results = searchUsers(searchQuery)
-    // Filter out already selected members
-    return results.filter((u) => !selectedMembers.some((m) => m.id === u.id))
-  }, [searchQuery, selectedMembers])
+    const q = searchQuery.trim().toLowerCase()
+    const available = allRegisteredUsers.filter((u) => !selectedMembers.some((m) => m.id === u.id))
+    if (!q) {
+      // If search box is focused, show live registered users as immediate suggestions
+      return isSearchFocused ? available.slice(0, 8) : []
+    }
+    return available.filter(
+      (u) =>
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.email && u.email.toLowerCase().includes(q)) ||
+        (u.homeCountry && u.homeCountry.toLowerCase().includes(q)) ||
+        (u.homeCity && u.homeCity.toLowerCase().includes(q))
+    )
+  }, [searchQuery, selectedMembers, allRegisteredUsers, isSearchFocused])
 
-  // Total Group Budget is the exact sum of all members' individual personal budgets
-  const totalGroupBudget = useMemo(() => {
-    return selectedMembers.reduce((sum, member) => {
-      const b = memberBudgets[member.id] || 0
-      return sum + b
-    }, 0)
-  }, [selectedMembers, memberBudgets])
+  // Invited friends (excluding the host)
+  const invitedMembers = useMemo(
+    () => selectedMembers.filter((m) => m.id !== hostUser.id),
+    [selectedMembers, hostUser.id]
+  )
+
+  // Total Group Budget initially equals the Host's personal budget
+  // (Friends will add their own personal balance when accepting the invite)
+  const totalGroupBudget = hostPersonalBudget
 
   const totalParty = (parseInt(adults) || 1) + (parseInt(children) || 0)
 
@@ -91,10 +108,6 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
   const handleAddMember = (user: User) => {
     if (!selectedMembers.some((m) => m.id === user.id)) {
       setSelectedMembers((prev) => [...prev, user])
-      setMemberBudgets((prev) => ({
-        ...prev,
-        [user.id]: prev[user.id] || 25000, // default budget for newly invited member
-      }))
       setSearchQuery('')
     }
   }
@@ -102,18 +115,6 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
   const handleRemoveMember = (userId: string) => {
     if (userId === hostUser.id) return // Host cannot be removed
     setSelectedMembers((prev) => prev.filter((m) => m.id !== userId))
-    setMemberBudgets((prev) => {
-      const copy = { ...prev }
-      delete copy[userId]
-      return copy
-    })
-  }
-
-  const handleBudgetChange = (userId: string, amount: number) => {
-    setMemberBudgets((prev) => ({
-      ...prev,
-      [userId]: Math.max(0, amount),
-    }))
   }
 
   const handleCreate = () => {
@@ -127,7 +128,7 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
       startDate,
       endDate,
       currency: autoCurrency,
-      budget: totalGroupBudget,
+      budget: hostPersonalBudget,
       spent: 0,
       ownerId: hostUser.id,
       adults: parseInt(adults) || 1,
@@ -139,14 +140,16 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
       originCity: originString,
       destinationCountry,
       destinationCity,
-      memberBudgets,
-      personalBudget: memberBudgets[hostUser.id] || 0,
+      memberBudgets: {
+        [hostUser.id]: hostPersonalBudget,
+      },
+      personalBudget: hostPersonalBudget,
       categoryCaps: {
-        accommodation: Math.round(totalGroupBudget * 0.35),
-        food: Math.round(totalGroupBudget * 0.25),
-        transport: Math.round(totalGroupBudget * 0.20),
-        activities: Math.round(totalGroupBudget * 0.10),
-        misc: Math.round(totalGroupBudget * 0.10),
+        accommodation: Math.round(hostPersonalBudget * 0.35),
+        food: Math.round(hostPersonalBudget * 0.25),
+        transport: Math.round(hostPersonalBudget * 0.20),
+        activities: Math.round(hostPersonalBudget * 0.10),
+        misc: Math.round(hostPersonalBudget * 0.10),
       },
     }
 
@@ -291,6 +294,20 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
                 />
               </div>
             </div>
+
+            {/* Human-Readable Date Confirmation Badge */}
+            {startDate && endDate && (
+              <div className="py-2 px-3 bg-teal-50 border border-teal-200/60 rounded-xl flex items-center justify-between text-xs text-teal-900 font-medium">
+                <span>
+                  📅 <strong>{new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                  {' → '}
+                  <strong>{new Date(endDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                </span>
+                <span className="text-[10px] bg-teal-200/60 text-teal-900 px-2 py-0.5 rounded font-bold">
+                  {Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)))} Days Trip
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -334,13 +351,23 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
 
           {/* Search & Invite People */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              🔍 Search & Invite Friends to Trip
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                🔍 Search & Invite Friends to Trip
+              </label>
+              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Live Network Sync
+              </span>
+            </div>
             <div className="relative mb-2">
               <input
                 type="text"
                 value={searchQuery}
+                onFocus={() => {
+                  setIsSearchFocused(true)
+                  fetchUsersFromSupabase()
+                }}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name, email, or country (e.g. Ravi, Elena, Pooja)..."
                 className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none"
@@ -359,9 +386,18 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
             {/* Search Results Dropdown */}
             {searchResults.length > 0 && (
               <div className="bg-white border border-teal-200 rounded-2xl shadow-lg p-2 mb-3 max-h-48 overflow-y-auto space-y-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">
-                  Matching People
-                </p>
+                <div className="flex items-center justify-between px-2 py-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {searchQuery ? 'Matching People' : '⚡ Registered Travelers Across Devices'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsSearchFocused(false)}
+                    className="text-[10px] text-slate-400 hover:text-slate-600 font-bold"
+                  >
+                    Close
+                  </button>
+                </div>
                 {searchResults.map((user) => (
                   <div
                     key={user.id}
@@ -388,90 +424,138 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
           </div>
         </div>
 
-        {/* ================= SECTION 3: PERSONAL BUDGETS & TOTAL GROUP BUDGET ================= */}
+        {/* ================= SECTION 3: PERSONAL BUDGET & INVITED FRIENDS ================= */}
         <div className="pt-4 border-t border-slate-100 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                3. Member Personal Budgets & Group Fund
+                3. Your Personal Budget & Invited Members
               </h2>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Set each person's personal budget. The total group budget is the sum of all members.
+                Enter your personal budget limit. Invited friends will enter their own personal budget when they join.
               </p>
             </div>
             <span className="text-xs font-extrabold text-teal-800 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
-              Total: {autoCurrency} {totalGroupBudget.toLocaleString()}
+              Initial Group Fund: {autoCurrency} {totalGroupBudget.toLocaleString()}
             </span>
           </div>
 
-          {/* Member Budget Input List */}
-          <div className="space-y-3">
-            {selectedMembers.map((member) => {
-              const isHost = member.id === hostUser.id
-              const currentBudget = memberBudgets[member.id] || 0
-
-              return (
-                <div
-                  key={member.id}
-                  className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-xl shadow-xs">
-                      {member.avatar || '👤'}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-slate-800">{member.name}</span>
-                        {isHost ? (
-                          <span className="text-[9px] font-bold bg-teal-100 text-teal-800 px-1.5 py-0.5 rounded">
-                            Host (You)
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-bold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
-                            Invited Member
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-slate-400">{member.email}</span>
-                    </div>
+          {/* 1. Host Personal Budget Input Card */}
+          <div className="bg-slate-50/90 rounded-2xl border border-teal-200/80 p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-teal-600 text-white flex items-center justify-center text-xl shadow-xs">
+                  {hostUser.avatar || '👤'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-900">{hostUser.name}</span>
+                    <span className="text-[9px] font-bold bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full border border-teal-200">
+                      Host (You)
+                    </span>
                   </div>
+                  <p className="text-[11px] text-slate-500">Your personal budget contribution for this trip</p>
+                </div>
+              </div>
 
-                  {/* Personal Budget Input for this user */}
-                  <div className="flex items-center gap-2 self-end sm:self-auto">
-                    <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-2xs focus-within:border-teal-500 focus-within:ring-2 focus-within:ring-teal-200">
-                      <span className="text-xs font-bold text-slate-400 mr-1.5">{autoCurrency}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="500"
-                        value={currentBudget}
-                        onChange={(e) => handleBudgetChange(member.id, parseFloat(e.target.value) || 0)}
-                        className="w-28 text-sm font-extrabold text-slate-900 outline-none text-right"
-                      />
+              {/* Personal Budget Input for Host */}
+              <div className="flex items-center bg-white border-2 border-teal-600/40 rounded-xl px-3 py-2 shadow-2xs focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-100 self-start sm:self-auto">
+                <span className="text-xs font-bold text-teal-700 mr-2">{autoCurrency}</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="500"
+                  value={hostPersonalBudget}
+                  onChange={(e) => setHostPersonalBudget(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-32 text-sm font-black text-slate-900 outline-none text-right"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Quick Presets for Host */}
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 flex-wrap">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Presets:</span>
+              {[15000, 25000, 35000, 50000, 75000].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setHostPersonalBudget(preset)}
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition ${
+                    hostPersonalBudget === preset
+                      ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-teal-300'
+                  }`}
+                >
+                  {autoCurrency} {(preset / 1000).toFixed(0)}k
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. Invited Friends (Awaiting Acceptance) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Invited Friends ({invitedMembers.length})
+              </span>
+              <span className="text-[10px] text-slate-400">
+                Personal budgets will be set individually by each friend upon joining
+              </span>
+            </div>
+
+            {invitedMembers.length === 0 ? (
+              <div className="p-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50/50 text-center text-xs text-slate-500">
+                No friends invited yet. Use the search bar in Section 2 above to search and invite friends live across devices.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {invitedMembers.map((member) => (
+                  <div
+                    key={member.id}
+                    className="p-3 rounded-2xl border border-slate-200 bg-white flex items-center justify-between gap-3 shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-lg">
+                        {member.avatar || '👤'}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800">{member.name}</span>
+                          <span className="text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            ⏳ Pending Invite
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">{member.email}</span>
+                      </div>
                     </div>
 
-                    {!isHost && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-semibold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                        Will set own balance on join
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleRemoveMember(member.id)}
-                        className="w-8 h-8 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 flex items-center justify-center text-xs font-bold transition"
-                        title="Remove Member"
+                        className="w-7 h-7 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 flex items-center justify-center text-xs font-bold transition"
+                        title="Cancel Invite"
                       >
                         ✕
                       </button>
-                    )}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* DYNAMIC GROUP BUDGET SUMMATION BANNER */}
+          {/* 3. DYNAMIC GROUP BUDGET SUMMATION BANNER */}
           <div className="bg-linear-to-r from-teal-700 to-[#123B3A] text-white rounded-2xl p-4 shadow-sm space-y-2">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[10px] uppercase tracking-wider text-teal-200 font-bold block">
-                  Calculated Collective Trip Fund
+                  Collective Trip Fund
                 </span>
                 <span className="text-2xl font-black">
                   {autoCurrency} {totalGroupBudget.toLocaleString()}
@@ -479,18 +563,23 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
               </div>
               <div className="text-right">
                 <span className="text-[10px] bg-teal-600/80 px-2 py-0.5 rounded-full font-bold">
-                  {selectedMembers.length} Contributing Members
+                  1 Active Member {invitedMembers.length > 0 ? `· ${invitedMembers.length} Pending` : ''}
                 </span>
                 <p className="text-[10px] text-teal-200 mt-1">
-                  Avg: {autoCurrency} {Math.round(totalGroupBudget / Math.max(selectedMembers.length, 1)).toLocaleString()} / person
+                  Host: {autoCurrency} {hostPersonalBudget.toLocaleString()}
                 </p>
               </div>
             </div>
 
-            {/* Formula display */}
-            <p className="text-[11px] text-teal-100/90 pt-1 border-t border-teal-600/60 font-mono">
-              Formula: Σ (Member Personal Budgets) = Group Budget
-            </p>
+            {/* Dynamic Formula Display */}
+            <div className="pt-2 border-t border-teal-600/60 text-[11px] text-teal-100/90 space-y-0.5">
+              <p className="font-mono">
+                Formula: Σ (Active Member Budgets) = Group Budget
+              </p>
+              <p className="text-[10px] text-teal-200/80">
+                ✨ Group budget automatically expands as invited friends accept on their devices and contribute their personal balances.
+              </p>
+            </div>
           </div>
 
           {/* Category Caps Breakdown Preview */}
