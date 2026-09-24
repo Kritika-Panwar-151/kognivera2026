@@ -119,9 +119,17 @@ export function resolveMemberName(idOrName: string, registeredUsers?: User[], cu
       u.id === clean ||
       (u as any).user_id === clean ||
       u.name.toLowerCase() === clean.toLowerCase() ||
-      u.email.toLowerCase() === clean.toLowerCase()
+      u.email.toLowerCase() === clean.toLowerCase() ||
+      isUserMatch(clean, u)
   )
-  if (found) return found.name
+  if (found) {
+    // Return clean display name (formatting "User19" as "User 19" if unformatted)
+    if (found.name.toLowerCase().startsWith('user') && !found.name.includes(' ')) {
+      const num = found.name.replace(/^user/i, '')
+      if (num) return `User ${num}`
+    }
+    return found.name
+  }
 
   if (clean === 'usr_you' || clean.toLowerCase() === 'you') return 'You'
 
@@ -132,7 +140,7 @@ export function resolveMemberName(idOrName: string, registeredUsers?: User[], cu
   if (clean === 'usr_000000000004' || clean === 'usr_david') return 'David Chen'
   if (clean === 'usr_000000000005' || clean === 'usr_elena') return 'Elena Rostova'
 
-  // Format "usr_19", "User19", "usr_000000000019"
+  // Format "usr_19", "User19", "usr_000000000019" -> "User 19"
   if (clean.toLowerCase().startsWith('usr_') || clean.toLowerCase().startsWith('user')) {
     const rawNumber = clean.replace(/^(usr_|user_?)/i, '').replace(/^0+/g, '')
     if (rawNumber) return `User ${rawNumber}`
@@ -150,12 +158,21 @@ export function resolveMemberName(idOrName: string, registeredUsers?: User[], cu
  */
 export function isUserMatch(memberIdOrName: string | undefined, user: User | null): boolean {
   if (!memberIdOrName || !user) return false
-  const target = memberIdOrName.toLowerCase().trim()
-  const uid = user.id.toLowerCase().trim()
-  const uname = (user.name || '').toLowerCase().trim()
+  const target = memberIdOrName.toLowerCase().replace(/\s+/g, '').trim()
+  const uid = user.id.toLowerCase().replace(/\s+/g, '').trim()
+  const uname = (user.name || '').toLowerCase().replace(/\s+/g, '').trim()
 
   if (target === uid || target === uname) return true
   if (target === 'usr_you' || target === 'you') return true
+
+  // Compare numerical suffixes e.g. usr_000000000019 -> 19 vs User19 -> 19
+  const targetNum = target.replace(/^(usr_|user_?)/i, '').replace(/^0+/g, '')
+  const uidNum = uid.replace(/^(usr_|user_?)/i, '').replace(/^0+/g, '')
+  const unameNum = uname.replace(/^(usr_|user_?)/i, '').replace(/^0+/g, '')
+
+  if (targetNum && (targetNum === uidNum || targetNum === unameNum)) return true
+  if (uid.includes(target) || target.includes(uid) || uname.includes(target) || target.includes(uname)) return true
+
   return false
 }
 

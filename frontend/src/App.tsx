@@ -389,7 +389,13 @@ export default function App() {
             fetchExpensesFromSupabase(),
             fetchTripsFromSupabase(),
           ])
-          if (freshExpenses) setExpenses(freshExpenses)
+          if (freshExpenses && freshExpenses.length > 0) {
+            setExpenses((prev) => {
+              const dbIds = new Set(freshExpenses.map((e) => e.id))
+              const localOnly = prev.filter((e) => !dbIds.has(e.id))
+              return [...freshExpenses, ...localOnly]
+            })
+          }
           if (freshTrips) {
             updateTripsSafely(freshTrips, currentUser)
           }
