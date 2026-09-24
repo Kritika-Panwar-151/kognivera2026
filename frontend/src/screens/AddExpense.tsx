@@ -6,6 +6,7 @@ import {
   type ReceiptOCRResult,
 } from '../services/geminiService'
 import { getRegisteredUsers } from '../services/userRegistry'
+import { formatUserDualCurrency } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -54,9 +55,10 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   // Dual Entry Mode: 'manual' vs 'ocr'
   const [entryMode, setEntryMode] = useState<'ocr' | 'manual'>('manual')
 
-  // Expense Form State
-  const [amount, setAmount] = useState('1200')
-  const [currency, setCurrency] = useState('INR (₹)')
+  const defaultUserCurrency = currentUser?.homeCurrency
+    ? `${currentUser.homeCurrency.toUpperCase()} (${currentUser.homeCurrency.toUpperCase() === 'EUR' ? '€' : currentUser.homeCurrency.toUpperCase() === 'USD' ? '$' : currentUser.homeCurrency.toUpperCase() === 'GBP' ? '£' : '₹'})`
+    : 'INR (₹)'
+  const [currency, setCurrency] = useState(defaultUserCurrency)
   const [category, setCategory] = useState('Food')
   const [merchant, setMerchant] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -694,14 +696,31 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
             />
           </div>
 
-          {currCode !== 'INR' && (
-            <div className="mt-2 flex items-center justify-between text-xs text-teal-800 bg-teal-50/70 border border-teal-200/50 rounded-xl px-3 py-1.5">
-              <span>
-                {currCode} {numAmount} → <strong>₹{convertedAmount.toLocaleString()} INR</strong>
-              </span>
-              <span className="text-[10px] text-teal-600 font-mono">1 {currCode} = ₹{rate}</span>
-            </div>
-          )}
+          {(() => {
+            const userHomeCurr = currentUser?.homeCurrency || 'INR'
+            const tripDestCurr = trip?.currency || 'JPY'
+            const dualFX = formatUserDualCurrency(numAmount, currCode, userHomeCurr, tripDestCurr)
+            return (
+              <div className="mt-2 p-3 bg-teal-50/90 border border-teal-200/80 rounded-2xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-[10px] text-teal-600 font-bold uppercase tracking-wider block">
+                    User Home Currency ({userHomeCurr})
+                  </span>
+                  <span className="font-black text-sm text-teal-950">
+                    {dualFX.primary}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-teal-600 font-bold uppercase tracking-wider block">
+                    Trip Destination ({tripDestCurr})
+                  </span>
+                  <span className="text-xs font-bold text-teal-800 bg-white px-2 py-0.5 rounded-lg border border-teal-200 shadow-2xs">
+                    {dualFX.secondary}
+                  </span>
+                </div>
+              </div>
+            )
+          })()}
         </div>
 
         {/* MERCHANT / DESCRIPTION */}
