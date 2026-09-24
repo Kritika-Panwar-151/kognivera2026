@@ -349,28 +349,29 @@ export default function ExpenseHistory({
                   </div>
                 </div>
 
-                {/* Progress Bar Summary with Dual Currency Labels */}
-                <div className="mt-4 bg-white p-3 rounded-2xl border border-teal-100 flex items-center justify-between gap-3 text-xs">
-                  <div className="flex-1 space-y-1">
-                    <div className="flex justify-between items-center font-medium text-slate-600">
-                      <span>
-                        Spent: <strong className="text-slate-900">{spentDual.primary} {userHomeCurr}</strong>{' '}
-                        {tripDestCurr !== userHomeCurr && (
-                          <span className="text-[10px] text-teal-700 font-mono">({spentDual.secondary})</span>
-                        )}{' '}
-                        of <strong>{budgetDual.primary} {userHomeCurr}</strong>{' '}
-                        {tripDestCurr !== userHomeCurr && (
-                          <span className="text-[10px] text-teal-700 font-mono">({budgetDual.secondary})</span>
-                        )}
-                      </span>
-                      <span className="font-extrabold text-teal-800 shrink-0">{pct}% Used</span>
+                {/* Progress Bar Summary with Clean Dual Currency Labels */}
+                <div className="mt-4 bg-white p-3.5 rounded-2xl border border-teal-100 flex flex-col gap-2 text-xs">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="text-sm font-black text-slate-900">
+                        Spent: <span className="text-teal-800 font-black">{spentDual.primary}</span>{' '}
+                        <span className="text-xs text-slate-500 font-semibold">of {budgetDual.primary} ({userHomeCurr})</span>
+                      </div>
+                      {tripDestCurr !== userHomeCurr && (
+                        <div className="text-[11px] font-bold text-teal-700 font-mono mt-0.5">
+                          {spentDual.secondary} <span className="text-[10px] text-teal-600 font-normal">of {budgetDual.secondary.replace('≈ ', '')} ({tripDestCurr})</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                      <div
-                        className={`h-1.5 rounded-full ${pct > 80 ? 'bg-rose-500' : 'bg-teal-600'}`}
-                        style={{ width: `${Math.min(pct, 100)}%` }}
-                      />
-                    </div>
+                    <span className="font-extrabold text-teal-800 bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-xl text-xs shrink-0">
+                      {pct}% Used
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                    <div
+                      className={`h-2 rounded-full ${pct > 80 ? 'bg-rose-500' : 'bg-teal-600'}`}
+                      style={{ width: `${Math.min(pct, 100)}%` }}
+                    />
                   </div>
                 </div>
               </div>
