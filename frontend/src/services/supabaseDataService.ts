@@ -410,7 +410,6 @@ export async function saveExpenseToSupabase(expense: Expense, payerUserId: strin
       incurred_at: now,
       entry_method: 'manual',
       is_settled: false,
-      is_shared: isSharedVal,
       split_between: splitBetweenArr,
       status: 'active',
       created_at: now,
@@ -457,7 +456,6 @@ export async function updateExpenseInSupabase(
     if (updates.convertedAmount !== undefined) payload.home_amount = updates.convertedAmount
     if (updates.category !== undefined) payload.category = updates.category.toLowerCase()
     if (updates.date !== undefined) payload.incurred_at = updates.date
-    if (updates.isShared !== undefined) payload.is_shared = updates.isShared
     if (updates.splitBetween !== undefined) payload.split_between = updates.splitBetween
 
     const { error } = await supabase.from('expenses').update(payload).eq('expense_id', expenseId)

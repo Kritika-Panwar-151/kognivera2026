@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { NavigateFn, Expense, Trip, User } from '../types'
 import EditExpenseModal from '../components/EditExpenseModal'
-import { resolveMemberName } from '../services/userRegistry'
+import { resolveMemberName, isUserMatch } from '../services/userRegistry'
 import { formatUserDualCurrency, getTripDestinationCurrency, getCurrencySymbol, isTripMatch, convertCurrency } from '../services/currencyService'
 
 interface Props {
