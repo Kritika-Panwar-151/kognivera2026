@@ -1,7 +1,8 @@
 import type { NavigateFn, Trip, Expense, User } from '../types'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useBudget } from '../features/overall-budget/useBudget'
 import { getRegisteredUsers } from '../services/userRegistry'
+import { resolveCityName, forecastSpendRunwayWithLLM, type SpendForecastReport } from '../services/geminiService'
 
 interface Props {
   navigate: NavigateFn
@@ -119,6 +120,26 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
   const [budgetViewMode, setBudgetViewMode] = useState<'group' | 'personal'>('group')
   const [isEditBudgetOpen, setIsEditBudgetOpen] = useState(false)
   const [editedBudgetInput, setEditedBudgetInput] = useState('')
+
+  // LLM Spend Runway Forecasting State
+  const [forecastReport, setForecastReport] = useState<SpendForecastReport | null>(null)
+
+  useEffect(() => {
+    let isSubscribed = true
+    if (trip) {
+      forecastSpendRunwayWithLLM({
+        trip,
+        expenses: expenses || [],
+        itinerary: [],
+        currentUser: activeUser,
+      }).then((report) => {
+        if (isSubscribed) setForecastReport(report)
+      })
+    }
+    return () => {
+      isSubscribed = false
+    }
+  }, [trip, expenses, activeUser])
 
   // Accordion state for expenses expansion card below travel budget
   const [isExpensesExpanded, setIsExpensesExpanded] = useState(false)
@@ -262,7 +283,7 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <p className="text-teal-200 text-xs font-semibold mb-1">
-                {trip.destination} · {trip.startDate} – {trip.endDate}
+                {resolveCityName(trip.destination, trip.name)} · {trip.startDate} – {trip.endDate}
               </p>
               <h1 className="text-3xl md:text-5xl font-bold tracking-tight">{trip.name}</h1>
               <p className="text-white/80 mt-1.5 text-xs md:text-sm">
@@ -607,15 +628,87 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
               </div>
             </div>
 
-            {/* Health Status & Runway Insight */}
-            <div className="p-4 bg-white/90 rounded-2xl border border-amber-100 mb-4 shadow-2xs">
-              <p className="text-xs md:text-sm text-slate-800 leading-relaxed">
-                Group spending rate is <strong>{currencySymbol}{dailyAvg.toLocaleString()}/day</strong>. Your calculated safe daily limit is <strong>{currencySymbol}{safeDaily.toLocaleString()}/day</strong> across the remaining {daysLeft} days.
+            {/* LLM Predictive Spend Intelligence & Runway Insight */}
+            <div className="p-4 bg-white/95 rounded-2xl border border-amber-100 mb-4 shadow-2xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                  <span>🧠</span> Gemini Spend Intelligence Forecast
+                </span>
+                {forecastReport && (
+                  <span
+                    className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                      forecastReport.riskLevel === 'critical'
+                        ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                        : forecastReport.riskLevel === 'warning'
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                        : 'bg-emerald-100 text-emerald-800'
+                    }`}
+                  >
+                    {forecastReport.riskLevel === 'critical'
+                      ? '🚨 Overrun Risk'
+                      : forecastReport.riskLevel === 'warning'
+                      ? '⚠️ Caution Pace'
+                      : '✓ On Track'}
+                  </span>
+                )}
+              </div>
+
+              <p className="text-xs md:text-sm text-slate-800 leading-relaxed font-medium">
+                {forecastReport?.burnRateAssessment || (
+                  <>
+                    Group spending rate is <strong>{currencySymbol}{dailyAvg.toLocaleString()}/day</strong>. Your calculated safe daily limit is <strong>{currencySymbol}{safeDaily.toLocaleString()}/day</strong> across the remaining {daysLeft} days.
+                  </>
+                )}
               </p>
-              {projectedOver > 0 && (
-                <p className="text-xs text-rose-600 font-semibold mt-1.5 flex items-center gap-1">
-                  <span>⚠️ Pace Warning:</span> Continuing at this pace will exceed your trip budget by {currencySymbol}{projectedOver.toLocaleString()}.
-                </p>
+
+              {/* Category Leakage Pills */}
+              {forecastReport?.categoryLeakage && forecastReport.categoryLeakage.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] text-slate-400 font-semibold">Category Health:</span>
+                  {forecastReport.categoryLeakage.map((c, i) => (
+                    <span
+                      key={i}
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                        c.status === 'exceeded'
+                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                          : c.status === 'approaching_limit'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                          : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      }`}
+                      title={c.insight}
+                    >
+                      {c.category}: {c.status === 'exceeded' ? '🚨 Over Cap' : c.status === 'approaching_limit' ? '⚠️ Near Cap' : '✓ Good'}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Personal User Runway Advice */}
+              {forecastReport?.personalInsight && (
+                <div className="p-2.5 rounded-xl bg-indigo-50/80 border border-indigo-100 text-[11px] text-indigo-950 font-medium flex items-center gap-1.5">
+                  <span>👤</span>
+                  <span><strong>{forecastReport.personalInsight.userName}:</strong> {forecastReport.personalInsight.advice}</span>
+                </div>
+              )}
+
+              {/* 1-Click AI Budget Rescue Banner */}
+              {forecastReport?.rescueRecommendation && (
+                <div className="p-3 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/5 border border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mt-2">
+                  <div>
+                    <p className="text-xs font-bold text-amber-950 flex items-center gap-1">
+                      <span>⚡</span> {forecastReport.rescueRecommendation.title}
+                    </p>
+                    <p className="text-[11px] text-amber-900 mt-0.5">
+                      {forecastReport.rescueRecommendation.actionDescription} (Save ~{currencySymbol}{forecastReport.rescueRecommendation.potentialSavings.toLocaleString()})
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => navigate('adaptive-itinerary')}
+                    className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shrink-0 transition shadow-2xs self-end sm:self-auto"
+                  >
+                    Run Budget Rescue →
+                  </button>
+                </div>
               )}
             </div>
 

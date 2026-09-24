@@ -483,6 +483,8 @@ export default function App() {
           <AddExpense
             navigate={navigate}
             onAddExpense={handleAddExpense}
+            trip={currentTrip}
+            currentUser={currentUser}
           />
         )
       case 'receipt-scanner':

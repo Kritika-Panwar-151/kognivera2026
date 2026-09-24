@@ -1,14 +1,17 @@
 import { useState } from 'react'
-import type { NavigateFn, Expense } from '../types'
+import type { NavigateFn, Expense, Trip, User } from '../types'
+import { parseNaturalLanguageExpenseWithLLM } from '../services/geminiService'
+import { getRegisteredUsers } from '../services/userRegistry'
 
 interface Props {
   navigate: NavigateFn
   onAddExpense?: (expense: Expense) => void
+  trip?: Trip | null
+  currentUser?: User | null
 }
 
 const categories = ['Food', 'Transport', 'Accommodation', 'Activities', 'Shopping', 'Other']
 const currencies = ['INR (₹)', 'EUR (€)', 'USD ($)', 'GBP (£)', 'JPY (¥)', 'SGD (S$)']
-const availableMembers = ['You (Aisha)', 'Ravi', 'Asha', 'David']
 
 const catIcons: Record<string, string> = {
   Food: '🍽️',
@@ -28,7 +31,20 @@ const FX_RATES: Record<string, number> = {
   INR: 1.0,
 }
 
-export default function AddExpense({ navigate, onAddExpense }: Props) {
+export default function AddExpense({ navigate, onAddExpense, trip, currentUser }: Props) {
+  // Resolve member display names from trip.members or registered users
+  const registered = getRegisteredUsers()
+  const currentUserName = currentUser?.name || 'You (Aisha)'
+  
+  const tripMemberNames: string[] = (trip?.members || ['usr_you', 'usr_ravi', 'usr_asha']).map((id) => {
+    if (id === currentUser?.id) return currentUserName
+    const found = registered.find((u) => u.id === id)
+    return found ? found.name : id
+  })
+  if (!tripMemberNames.includes(currentUserName)) {
+    tripMemberNames.unshift(currentUserName)
+  }
+
   // Classification: 'shared' (trip dashboard expense, split across all trip members) vs 'personal' (flexible personal, select specific people to split with)
   const [expenseType, setExpenseType] = useState<'personal' | 'shared'>('personal')
   const [amount, setAmount] = useState('1200')
@@ -36,9 +52,60 @@ export default function AddExpense({ navigate, onAddExpense }: Props) {
   const [category, setCategory] = useState('Food')
   const [merchant, setMerchant] = useState('')
   const [date, setDate] = useState('2026-09-16')
-  const [paidBy, setPaidBy] = useState('You (Aisha)')
-  const [personalSplitMembers, setPersonalSplitMembers] = useState<string[]>(['You (Aisha)'])
+  const [paidBy, setPaidBy] = useState(currentUserName)
+  const [personalSplitMembers, setPersonalSplitMembers] = useState<string[]>([currentUserName])
   const [notes, setNotes] = useState('')
+
+  // Natural Language AI Parsing State
+  const [nlInput, setNlInput] = useState('')
+  const [isNlParsing, setIsNlParsing] = useState(false)
+  const [aiSummaryBadge, setAiSummaryBadge] = useState<string | null>(null)
+  const [aiWarning, setAiWarning] = useState<string | null>(null)
+
+  const handleParseNl = async (textToParse?: string) => {
+    const text = textToParse || nlInput
+    if (!text.trim()) return
+    setIsNlParsing(true)
+    setAiWarning(null)
+    setAiSummaryBadge(null)
+
+    try {
+      const res = await parseNaturalLanguageExpenseWithLLM({
+        text,
+        availableMembers: tripMemberNames,
+        currentUser: { id: currentUser?.id || 'usr_you', name: currentUserName },
+        defaultCurrency: trip?.currency || 'INR',
+        tripBudget: trip?.budget || 60000,
+      })
+
+      setAmount(String(res.amount))
+      if (res.currency.includes('EUR')) setCurrency('EUR (€)')
+      else if (res.currency.includes('USD')) setCurrency('USD ($)')
+      else if (res.currency.includes('GBP')) setCurrency('GBP (£)')
+      else setCurrency('INR (₹)')
+
+      setCategory(res.category)
+      setMerchant(res.merchant)
+      setPaidBy(res.paidBy)
+
+      if (res.isShared) {
+        setExpenseType('personal')
+        setPersonalSplitMembers(res.splitMembers)
+      } else {
+        setExpenseType('personal')
+        setPersonalSplitMembers([currentUserName])
+      }
+
+      setAiSummaryBadge(res.summary)
+      if (res.warning) {
+        setAiWarning(res.warning)
+      }
+    } catch (e) {
+      console.warn('NLP parse error:', e)
+    } finally {
+      setIsNlParsing(false)
+    }
+  }
 
   const currCode = currency.split(' ')[0]
   const numAmount = parseFloat(amount) || 0
@@ -46,8 +113,8 @@ export default function AddExpense({ navigate, onAddExpense }: Props) {
   const convertedAmount = Math.round(numAmount * rate)
 
   // Trip members for shared trip budget expenses
-  const allTripMembers = ['You (Aisha)', 'Ravi', 'Asha']
-  const tripPerPerson = (convertedAmount / allTripMembers.length).toFixed(2)
+  const allTripMembers = tripMemberNames
+  const tripPerPerson = (convertedAmount / Math.max(allTripMembers.length, 1)).toFixed(2)
 
   // Personal split calculation
   const personalCount = Math.max(personalSplitMembers.length, 1)
@@ -56,7 +123,6 @@ export default function AddExpense({ navigate, onAddExpense }: Props) {
   const togglePersonalMember = (m: string) => {
     setPersonalSplitMembers((prev) => {
       if (prev.includes(m)) {
-        // don't allow empty, default to at least one
         return prev.length > 1 ? prev.filter((x) => x !== m) : prev
       } else {
         return [...prev, m]
@@ -68,7 +134,7 @@ export default function AddExpense({ navigate, onAddExpense }: Props) {
     const isShared = expenseType === 'shared'
     const newExp: Expense = {
       id: `exp_${Date.now().toString(36)}`,
-      tripId: isShared ? 'europe' : 'personal',
+      tripId: trip?.id || 'trp_europe',
       merchant: merchant.trim() || `${category} Spend`,
       amount: numAmount,
       currency: currCode,
@@ -88,16 +154,16 @@ export default function AddExpense({ navigate, onAddExpense }: Props) {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-xl mx-auto">
+    <div className="p-4 md:p-8 max-w-xl mx-auto space-y-4">
       <button
         onClick={() => navigate('expense-history')}
-        className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 mb-4 transition"
+        className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition"
       >
         ← Back to Expenses
       </button>
 
       {/* Header with Quick Scan Button */}
-      <div className="flex items-center justify-between gap-3 mb-5">
+      <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Add an Expense</h1>
           <p className="text-slate-500 text-xs md:text-sm mt-0.5">
@@ -111,6 +177,127 @@ export default function AddExpense({ navigate, onAddExpense }: Props) {
         >
           <span>📸 Scan Receipt</span>
         </button>
+      </div>
+
+      {/* =========================================================================
+          LIFT 2: AI NATURAL LANGUAGE PROMPT BAR (WITH ANTI-HALLUCINATION GUARDRAILS)
+      ========================================================================= */}
+      <div className="bg-gradient-to-br from-indigo-50 via-teal-50 to-emerald-50 border border-indigo-200/80 rounded-3xl p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-base">✨</span>
+            <span className="text-xs font-black text-indigo-950 uppercase tracking-wide">
+              AI Natural-Language Entry
+            </span>
+          </div>
+          <span className="text-[10px] font-bold bg-indigo-200/70 text-indigo-900 px-2 py-0.5 rounded-full">
+            Gemini Powered
+          </span>
+        </div>
+
+        <p className="text-[11px] text-slate-600 mb-2.5">
+          Type or speak naturally. AI extracts merchant, amount, category, and splits automatically.
+        </p>
+
+        {/* Input Bar */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              value={nlInput}
+              onChange={(e) => setNlInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleParseNl()
+              }}
+              placeholder="e.g. 'add 1200 rupees dinner, split with Asha and Ravi'"
+              className="w-full bg-white border border-indigo-200 rounded-2xl pl-3.5 pr-8 py-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+            {nlInput && (
+              <button
+                type="button"
+                onClick={() => setNlInput('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleParseNl()}
+            disabled={isNlParsing || !nlInput.trim()}
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-2xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 shrink-0"
+          >
+            {isNlParsing ? (
+              <>
+                <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Parsing...</span>
+              </>
+            ) : (
+              <>
+                <span>⚡</span>
+                <span>Parse</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Quick Sample Chips */}
+        <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+          <span className="text-[10px] text-slate-400 font-semibold">Try sample:</span>
+          <button
+            type="button"
+            onClick={() => {
+              const sample = 'add 1200 rupees dinner, split with Asha and Ravi'
+              setNlInput(sample)
+              handleParseNl(sample)
+            }}
+            className="text-[10px] bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-200/80 px-2 py-0.5 rounded-lg transition font-medium"
+          >
+            🍽️ 1200 rs dinner split Asha & Ravi
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const sample = 'paid 45 euros airport taxi for everyone'
+              setNlInput(sample)
+              handleParseNl(sample)
+            }}
+            className="text-[10px] bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-200/80 px-2 py-0.5 rounded-lg transition font-medium"
+          >
+            🚕 45 eur taxi for everyone
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const sample = '350 inr coffee for myself'
+              setNlInput(sample)
+              handleParseNl(sample)
+            }}
+            className="text-[10px] bg-white hover:bg-indigo-100 text-indigo-800 border border-indigo-200/80 px-2 py-0.5 rounded-lg transition font-medium"
+          >
+            ☕ 350 inr coffee personal
+          </button>
+        </div>
+
+        {/* AI Extracted Banner */}
+        {aiSummaryBadge && (
+          <div className="mt-3 p-2.5 bg-emerald-100/80 border border-emerald-300 rounded-xl text-emerald-900 text-xs font-semibold flex items-center justify-between animate-in fade-in">
+            <span>✨ {aiSummaryBadge}</span>
+            <span className="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">
+              Form Auto-Filled
+            </span>
+          </div>
+        )}
+
+        {/* Anti-Hallucination Guardrail Alert */}
+        {aiWarning && (
+          <div className="mt-2.5 p-2.5 bg-amber-100 border border-amber-300 rounded-xl text-amber-900 text-xs font-medium flex items-center gap-1.5 animate-in fade-in">
+            <span>⚠️</span>
+            <span>{aiWarning}</span>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-3xl border border-teal-100 shadow-sm p-5 md:p-6 space-y-5">

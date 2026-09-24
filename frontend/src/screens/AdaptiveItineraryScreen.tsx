@@ -8,6 +8,7 @@ import {
   type DisruptionScenario,
 } from '../features/adaptive-itinerary/adaptiveItineraryEngine'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { resolveCityName } from '../services/geminiService'
 
 interface Props {
   navigate: NavigateFn
@@ -51,6 +52,52 @@ export default function AdaptiveItineraryScreen({ navigate, trip, currentUser }:
   const [adaptationSummary, setAdaptationSummary] = useState<string | null>(null)
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
   const [costSavings, setCostSavings] = useState<number>(0)
+
+  // Custom activity entry state
+  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [actTitle, setActTitle] = useState('')
+  const [actTime, setActTime] = useState('11:00 AM – 01:00 PM')
+  const [actCost, setActCost] = useState('0')
+  const [actCategory, setActCategory] = useState<'activity' | 'meal' | 'lodging' | 'transit'>('activity')
+  const [actLocation, setActLocation] = useState('')
+  const [actLocked, setActLocked] = useState(false)
+
+  const handleAddCustomActivity = () => {
+    if (!actTitle.trim()) return
+    const newItem: ItineraryItem = {
+      id: `custom_${Date.now()}`,
+      tripId: trip.id,
+      dayIndex: selectedDay,
+      time: actTime.trim() || '11:00 AM',
+      title: actTitle.trim(),
+      category: actCategory,
+      cost: Number(actCost) || 0,
+      currency: trip.currency,
+      note: 'User-entered custom itinerary activity',
+      location: actLocation.trim() || resolveCityName(trip.destination, trip.name),
+      isLocked: actLocked,
+      isAdapted: false,
+    }
+    const updated = [...items, newItem]
+    setItems(updated)
+    setIsAddOpen(false)
+    setActTitle('')
+    setActCost('0')
+    setActLocation('')
+    syncAdaptedItinerary({ tripId: trip.id, items: updated })
+  }
+
+  const handleDeleteActivity = (id: string) => {
+    const updated = items.filter((i) => i.id !== id)
+    setItems(updated)
+    syncAdaptedItinerary({ tripId: trip.id, items: updated })
+  }
+
+  const handleToggleLock = (id: string) => {
+    const updated = items.map((i) => (i.id === id ? { ...i, isLocked: !i.isLocked } : i))
+    setItems(updated)
+    syncAdaptedItinerary({ tripId: trip.id, items: updated })
+  }
 
   const currencySymbol = trip.currency === 'USD' ? '$' : trip.currency === 'EUR' ? '€' : '₹'
 
@@ -190,7 +237,7 @@ export default function AdaptiveItineraryScreen({ navigate, trip, currentUser }:
             <div>
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <span className="bg-teal-700/80 text-teal-100 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase">
-                  {trip.destination}
+                  {resolveCityName(trip.destination, trip.name)}
                 </span>
                 <span className="bg-emerald-600/80 text-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded-md">
                   Day {selectedDay} of 8
@@ -366,37 +413,136 @@ export default function AdaptiveItineraryScreen({ navigate, trip, currentUser }:
         {/* =========================================================================
             DAY SELECTOR TABS
         ========================================================================= */}
-        <div className="flex items-center gap-2 mb-5 overflow-x-auto pb-1">
-          {availableDays.map((day) => {
-            const isSelected = selectedDay === day
-            const dayItemsCount = items.filter((i) => i.dayIndex === day).length
-            const dayHasAdapted = items.some((i) => i.dayIndex === day && i.isAdapted)
+        {/* Day Tabs & Add Activity Row */}
+        <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {availableDays.map((day) => {
+              const isSelected = selectedDay === day
+              const dayItemsCount = items.filter((i) => i.dayIndex === day).length
+              const dayHasAdapted = items.some((i) => i.dayIndex === day && i.isAdapted)
 
-            return (
-              <button
-                key={day}
-                onClick={() => setSelectedDay(day)}
-                className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
-                  isSelected
-                    ? 'bg-teal-700 text-white shadow-sm'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
-                }`}
-              >
-                <span>Day {day}</span>
-                {dayHasAdapted && (
-                  <span className="w-2 h-2 rounded-full bg-amber-400" title="AI Adapted" />
-                )}
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-md ${
-                    isSelected ? 'bg-teal-800 text-teal-100' : 'bg-slate-100 text-slate-400'
+              return (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDay(day)}
+                  className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
+                    isSelected
+                      ? 'bg-teal-700 text-white shadow-sm'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
                   }`}
                 >
-                  {dayItemsCount} stops
-                </span>
-              </button>
-            )
-          })}
+                  <span>Day {day}</span>
+                  {dayHasAdapted && (
+                    <span className="w-2 h-2 rounded-full bg-amber-400" title="AI Adapted" />
+                  )}
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                      isSelected ? 'bg-teal-800 text-teal-100' : 'bg-slate-100 text-slate-400'
+                    }`}
+                  >
+                    {dayItemsCount} stops
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          <button
+            onClick={() => setIsAddOpen(!isAddOpen)}
+            className="px-3.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs shrink-0"
+          >
+            <span>➕</span>
+            <span>{isAddOpen ? 'Close Form' : 'Add Activity'}</span>
+          </button>
         </div>
+
+        {/* Quick Add Custom Activity Form */}
+        {isAddOpen && (
+          <div className="mb-5 p-4 rounded-3xl bg-white border border-teal-200 shadow-sm space-y-3 animate-in fade-in">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                Add Custom Activity for Day {selectedDay} ({resolveCityName(trip.destination, trip.name)})
+              </h3>
+              <button
+                onClick={() => setIsAddOpen(false)}
+                className="text-xs text-slate-400 hover:text-slate-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Activity Title</label>
+                <input
+                  type="text"
+                  value={actTitle}
+                  onChange={(e) => setActTitle(e.target.value)}
+                  placeholder="e.g. Visit Trevi Fountain & Gelato"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-teal-500 bg-slate-50 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Time Slot</label>
+                <input
+                  type="text"
+                  value={actTime}
+                  onChange={(e) => setActTime(e.target.value)}
+                  placeholder="e.g. 11:00 AM – 01:00 PM"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-teal-500 bg-slate-50 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Estimated Cost ({currencySymbol})</label>
+                <input
+                  type="number"
+                  value={actCost}
+                  onChange={(e) => setActCost(e.target.value)}
+                  placeholder="0"
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-teal-500 bg-slate-50 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Category</label>
+                <select
+                  value={actCategory}
+                  onChange={(e) => setActCategory(e.target.value as any)}
+                  className="w-full text-xs p-2.5 border border-slate-200 rounded-xl focus:outline-teal-500 bg-slate-50 focus:bg-white"
+                >
+                  <option value="activity">🎟️ Sightseeing / Activity</option>
+                  <option value="meal">🍽️ Meal / Dining</option>
+                  <option value="transit">🚆 Transport / Transit</option>
+                  <option value="lodging">🏨 Hotel / Lodging</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={actLocked}
+                  onChange={(e) => setActLocked(e.target.checked)}
+                  className="rounded text-teal-600 focus:ring-teal-500"
+                />
+                <span className="text-xs text-slate-700 font-medium">
+                  🔒 Mark as Locked (Prepaid ticket / Cannot be altered by AI)
+                </span>
+              </label>
+
+              <button
+                onClick={handleAddCustomActivity}
+                disabled={!actTitle.trim()}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition self-end sm:self-auto"
+              >
+                Save to Itinerary
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* =========================================================================
             ITINERARY TIMELINE ITEMS
@@ -493,19 +639,45 @@ export default function AdaptiveItineraryScreen({ navigate, trip, currentUser }:
                     </div>
                   </div>
 
-                  {/* Cost Display */}
-                  <div className="text-left sm:text-right shrink-0 pl-13 sm:pl-0">
-                    <p className="text-base font-extrabold text-slate-900">
-                      {item.cost === 0 ? 'Free' : `${currencySymbol}${item.cost.toLocaleString()}`}
-                    </p>
-                    {isAdapted && item.originalCost !== undefined && item.originalCost !== item.cost && (
-                      <p className="text-[11px] text-slate-400 line-through">
-                        {currencySymbol}{item.originalCost.toLocaleString()}
+                  {/* Cost Display & Card Actions */}
+                  <div className="flex items-center sm:flex-col justify-between sm:justify-start gap-2 shrink-0 pl-13 sm:pl-0">
+                    <div className="text-left sm:text-right">
+                      <p className="text-base font-extrabold text-slate-900">
+                        {item.cost === 0 ? 'Free' : `${currencySymbol}${item.cost.toLocaleString()}`}
                       </p>
-                    )}
-                    <span className="text-[10px] text-slate-400 capitalize block mt-0.5">
-                      {item.category}
-                    </span>
+                      {isAdapted && item.originalCost !== undefined && item.originalCost !== item.cost && (
+                        <p className="text-[11px] text-slate-400 line-through">
+                          {currencySymbol}{item.originalCost.toLocaleString()}
+                        </p>
+                      )}
+                      <span className="text-[10px] text-slate-400 capitalize block mt-0.5">
+                        {item.category}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleLock(item.id)}
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg border transition ${
+                          item.isLocked
+                            ? 'bg-slate-200 text-slate-700 border-slate-300'
+                            : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'
+                        }`}
+                        title={item.isLocked ? 'Click to unlock' : 'Click to lock (protects from AI re-planning)'}
+                      >
+                        {item.isLocked ? '🔒 Locked' : '🔓 Flexible'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteActivity(item.id)}
+                        className="text-xs text-slate-400 hover:text-rose-600 p-1 rounded-lg transition"
+                        title="Delete stop"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -2,6 +2,7 @@ import type { ItineraryItem, Trip } from '../../types'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { broadcastTripChange } from '../../services/supabaseDataService'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { resolveCityName } from '../../services/geminiService'
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null
@@ -52,7 +53,7 @@ export const DISRUPTION_SCENARIOS: DisruptionScenario[] = [
 
 // Default base itinerary generator tailored to the trip destination
 export function getDefaultItinerary(trip: Trip): ItineraryItem[] {
-  const dest = trip.destination || 'Rome'
+  const dest = resolveCityName(trip.destination, trip.name)
   const curr = trip.currency === 'USD' ? 'USD' : trip.currency === 'EUR' ? 'EUR' : 'INR'
   const isEuro = curr === 'EUR'
   const isUSD = curr === 'USD'
