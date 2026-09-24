@@ -3,15 +3,31 @@
  */
 
 export const BASELINE_FX_RATES: Record<string, number> = {
-  EUR: 94.0,
-  USD: 86.5,
-  GBP: 112.4,
-  SGD: 65.2,
-  JPY: 0.58,
-  CHF: 98.2,
-  AED: 23.5,
-  THB: 2.5,
   INR: 1.0,
+  USD: 84.0,
+  EUR: 89.0,
+  GBP: 104.0,
+  AED: 22.45,
+  SGD: 61.6,
+  THB: 2.35,
+  LKR: 0.28,
+  NPR: 0.62,
+  BTN: 1.0,
+  MVR: 5.36,
+  JPY: 0.55,
+  KRW: 0.061,
+  KWD: 270.0,
+  BHD: 220.0,
+  AUD: 54.0,
+  CAD: 60.0,
+  CHF: 94.6,
+  MYR: 18.5,
+  IDR: 0.00517,
+  VND: 0.0033,
+  CNY: 11.43,
+  QAR: 22.76,
+  SAR: 22.13,
+  NZD: 49.2,
 }
 
 const CACHE_KEY = 'tripwallet_live_fx_rates'
@@ -119,17 +135,31 @@ export function convertCurrency(
  */
 export function getCurrencySymbol(curr: string): string {
   const c = (curr || 'INR').toUpperCase()
-  if (c === 'EUR') return '€'
-  if (c === 'USD') return '$'
-  if (c === 'GBP') return '£'
-  if (c === 'JPY') return '¥'
-  if (c === 'SGD') return 'S$'
-  if (c === 'CHF') return 'CHF '
-  if (c === 'CAD') return 'CA$'
-  if (c === 'AUD') return 'A$'
-  if (c === 'THB') return '฿'
-  if (c === 'AED') return 'AED '
   if (c === 'INR') return '₹'
+  if (c === 'USD') return '$'
+  if (c === 'EUR') return '€'
+  if (c === 'GBP') return '£'
+  if (c === 'AED') return 'د.إ '
+  if (c === 'SGD') return 'S$'
+  if (c === 'THB') return '฿'
+  if (c === 'LKR') return 'Rs '
+  if (c === 'NPR') return 'Rs '
+  if (c === 'BTN') return 'Nu. '
+  if (c === 'MVR') return '.ރ '
+  if (c === 'JPY') return '¥'
+  if (c === 'KRW') return '₩'
+  if (c === 'KWD') return 'د.ك '
+  if (c === 'BHD') return '.د.ب '
+  if (c === 'AUD') return 'A$'
+  if (c === 'CAD') return 'C$'
+  if (c === 'CHF') return 'CHF '
+  if (c === 'MYR') return 'RM '
+  if (c === 'IDR') return 'Rp '
+  if (c === 'VND') return '₫'
+  if (c === 'CNY') return '¥'
+  if (c === 'QAR') return 'ر.ق '
+  if (c === 'SAR') return 'ر.س '
+  if (c === 'NZD') return 'NZ$'
   return `${c} `
 }
 
