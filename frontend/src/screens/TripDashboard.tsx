@@ -294,10 +294,15 @@ export default function TripDashboard({
   const tripDestCurr = (trip?.currency || 'JPY').toUpperCase()
 
   const groupBudgetDual = formatUserDualCurrency(budget, userHomeCurr, userHomeCurr, tripDestCurr)
+  const groupRemainingDual = formatUserDualCurrency(remaining, userHomeCurr, userHomeCurr, tripDestCurr)
+  const groupSpentDual = formatUserDualCurrency(spent, userHomeCurr, userHomeCurr, tripDestCurr)
+  const groupSafeDailyDual = formatUserDualCurrency(safeDaily, userHomeCurr, userHomeCurr, tripDestCurr)
+  const projectedFinalDual = formatUserDualCurrency(projectedFinal, userHomeCurr, userHomeCurr, tripDestCurr)
+
   const personalBudgetDual = formatUserDualCurrency(personalBudget, userHomeCurr, userHomeCurr, tripDestCurr)
   const personalRemainingDual = formatUserDualCurrency(personalRemaining, userHomeCurr, userHomeCurr, tripDestCurr)
-  const groupSpentDual = formatUserDualCurrency(spent, userHomeCurr, userHomeCurr, tripDestCurr)
   const personalSpentDual = formatUserDualCurrency(personalSpent, userHomeCurr, userHomeCurr, tripDestCurr)
+  const personalSafeDailyDual = formatUserDualCurrency(personalSafeDaily, userHomeCurr, userHomeCurr, tripDestCurr)
   const currencySymbol = groupBudgetDual.primarySymbol
 
   // Look up registered users to display members dynamically
@@ -841,20 +846,23 @@ export default function TripDashboard({
 
             <div className="text-center -mt-1 w-full">
               <p className="font-extrabold text-slate-900 text-lg">
-                {currencySymbol}
-                {(budgetViewMode === 'group' ? remaining : personalRemaining).toLocaleString()} left
+                {(budgetViewMode === 'group' ? groupRemainingDual.primary : personalRemainingDual.primary)} left
               </p>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 {budgetViewMode === 'group'
-                  ? `Funded: ${currencySymbol}${budget.toLocaleString()} (${trip.currency})`
-                  : `Your Personal Fund: ${currencySymbol}${personalBudget.toLocaleString()}`}
+                  ? `Funded: ${groupBudgetDual.primary} (≈ ${groupBudgetDual.secondary})`
+                  : `Personal Fund: ${personalBudgetDual.primary} (≈ ${personalBudgetDual.secondary})`}
               </p>
               <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-xs px-2">
                 <span className="text-slate-500 font-medium">Safe Daily Runway:</span>
-                <span className="font-bold text-teal-800">
-                  {currencySymbol}
-                  {(budgetViewMode === 'group' ? safeDaily : personalSafeDaily).toLocaleString()} / day
-                </span>
+                <div className="text-right">
+                  <span className="font-bold text-teal-800 block">
+                    {(budgetViewMode === 'group' ? groupSafeDailyDual.primary : personalSafeDailyDual.primary)} / day
+                  </span>
+                  <span className="text-[10px] text-teal-700 font-mono block">
+                    ≈ {(budgetViewMode === 'group' ? groupSafeDailyDual.secondary : personalSafeDailyDual.secondary)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -1076,23 +1084,26 @@ export default function TripDashboard({
             <div className="grid grid-cols-3 gap-2.5 mb-5">
               <div className="bg-white/80 p-3 rounded-2xl border border-amber-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Group Spend</span>
-                <span className="text-base font-extrabold text-slate-900">{currencySymbol}{trip.spent.toLocaleString()}</span>
+                <span className="text-base font-extrabold text-slate-900 block">{groupSpentDual.primary}</span>
+                <span className="text-[10px] text-teal-700 font-mono block">≈ {groupSpentDual.secondary}</span>
                 <span className="text-[10px] text-slate-400 block mt-0.5">{pct}% of group fund</span>
               </div>
 
               <div className="bg-white/80 p-3 rounded-2xl border border-amber-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Safe Daily Limit</span>
-                <span className="text-base font-extrabold text-teal-800">{currencySymbol}{safeDaily.toLocaleString()}</span>
+                <span className="text-base font-extrabold text-teal-800 block">{groupSafeDailyDual.primary}</span>
+                <span className="text-[10px] text-teal-700 font-mono block">≈ {groupSafeDailyDual.secondary}</span>
                 <span className="text-[10px] text-teal-600 font-medium block mt-0.5">{daysLeft} days left</span>
               </div>
 
               <div className="bg-white/80 p-3 rounded-2xl border border-amber-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Projected Total</span>
-                <span className={`text-base font-extrabold ${projectedOver > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
-                  {currencySymbol}{projectedFinal.toLocaleString()}
+                <span className={`text-base font-extrabold block ${projectedOver > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                  {projectedFinalDual.primary}
                 </span>
+                <span className="text-[10px] text-teal-700 font-mono block">≈ {projectedFinalDual.secondary}</span>
                 <span className="text-[10px] text-rose-600 font-medium block mt-0.5">
-                  {projectedOver > 0 ? `+${currencySymbol}${projectedOver.toLocaleString()} over` : 'On track'}
+                  {projectedOver > 0 ? `+${formatUserDualCurrency(projectedOver, userHomeCurr, userHomeCurr, tripDestCurr).primary} over` : 'On track'}
                 </span>
               </div>
             </div>
