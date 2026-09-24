@@ -263,7 +263,7 @@ export async function adaptItineraryWithAI({
   // 1. Try Gemini Generative AI if key exists
   if (genAI) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
       const promptText = `
 You are the AI Travel Adaptation Copilot for TripWallet.
 The traveler faces an unexpected disruption during their trip in ${trip.destination || 'Rome'}.

@@ -74,9 +74,14 @@ export async function parseReceiptWithGeminiVision({
   base64Data?: string
   mimeType?: string
 }): Promise<ReceiptOCRResult> {
-  if (genAI && base64Data && GEMINI_API_KEY && GEMINI_API_KEY !== 'your_gemini_api_key_here') {
+  if (!base64Data) {
+    throw new Error('No receipt image provided for scanning')
+  }
+
+  // 1. Live Google Gemini Vision OCR with gemini-3.6-flash
+  if (genAI && GEMINI_API_KEY && GEMINI_API_KEY !== 'your_gemini_api_key_here') {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
       const prompt = `You are an expert AI Receipt OCR specialist for TripWallet.
 Analyze this receipt image and extract structured financial data.
 
@@ -84,17 +89,17 @@ EXTRACT AND RETURN STRICT JSON ONLY (no markdown formatting, no code fences):
 {
   "merchant": "Name of the business, restaurant, hotel, or store",
   "amount": numeric total sum paid,
-  "currency": "3-letter standard currency code like EUR, USD, INR, GBP, JPY, CHF",
-  "date": "Transaction date in YYYY-MM-DD format (if only DD/MM, assume year 2026)",
+  "currency": "3-letter standard currency code like INR, USD, EUR, GBP, JPY",
+  "date": "Transaction date in YYYY-MM-DD format (if year is missing, assume 2026)",
   "category": "Food" | "Transport" | "Accommodation" | "Activities" | "Shopping" | "Other",
   "tax": numeric tax/VAT amount if listed,
   "lineItems": [
     { "description": "item name", "price": numeric price }
   ],
-  "confidence": 0.95
+  "confidence": 0.98
 }`
 
-      const cleanBase64 = base64Data.replace(/^data:image\/[a-z]+;base64,/, '')
+      const cleanBase64 = base64Data.replace(/^data:image\/[a-z0-9-+.]+;base64,/, '')
       const imagePart = {
         inlineData: {
           data: cleanBase64,
@@ -108,41 +113,91 @@ EXTRACT AND RETURN STRICT JSON ONLY (no markdown formatting, no code fences):
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0])
         return {
-          merchant: parsed.merchant || 'Scanned Merchant',
-          amount: typeof parsed.amount === 'number' && !isNaN(parsed.amount) ? parsed.amount : 42,
-          currency: parsed.currency || 'EUR',
+          merchant: parsed.merchant || 'Receipt Merchant',
+          amount: typeof parsed.amount === 'number' && !isNaN(parsed.amount) ? parsed.amount : 0,
+          currency: parsed.currency || 'INR',
           date: parsed.date || new Date().toISOString().split('T')[0],
           category: parsed.category || 'Food',
           tax: parsed.tax || 0,
           lineItems: Array.isArray(parsed.lineItems) ? parsed.lineItems : [],
-          confidence: parsed.confidence || 0.95,
+          confidence: parsed.confidence || 0.98,
           rawText: text,
           isLiveGeminiVision: true,
         }
       }
     } catch (e) {
-      console.warn('Gemini Vision OCR extraction failed, falling back to deterministic parser:', e)
+      console.warn('Gemini 3.6 Flash OCR failed, trying local Tesseract fallback:', e)
     }
   }
 
-  // High-fidelity fallback parser (e.g. for sample Milan receipt or offline mode)
-  return {
-    merchant: 'Restaurant Milano',
-    amount: 42.0,
-    currency: 'EUR',
-    date: '2026-09-15',
-    category: 'Food',
-    tax: 3.8,
-    lineItems: [
-      { description: 'Pasta Carbonara (x1)', price: 18.0 },
-      { description: 'Bruschetta al Pomodoro', price: 8.5 },
-      { description: 'Tiramisu Tradizionale', price: 9.5 },
-      { description: 'Acqua Naturale 75cl', price: 3.0 },
-      { description: 'Coperto / Table Cover (x2)', price: 3.0 },
-    ],
-    confidence: 0.96,
-    isLiveGeminiVision: false,
+  // 2. Real Client-Side OCR Fallback via Tesseract.js (Zero API key needed, zero synthetic data)
+  try {
+    const Tesseract = await import('tesseract.js')
+    const { data: { text } } = await Tesseract.recognize(base64Data, 'eng')
+    if (text && text.trim().length > 3) {
+      const lines = text.split('\n').map((l: string) => l.trim()).filter(Boolean)
+
+      // Merchant from top lines
+      let merchant = lines[0] || 'Scanned Merchant'
+      const skipWords = ['sale', 'cash', 'invoice', 'receipt', 'tax', 'batch', 'customer']
+      for (const line of lines.slice(0, 4)) {
+        if (!skipWords.some((sw) => line.toLowerCase().includes(sw)) && line.length > 2) {
+          merchant = line
+          break
+        }
+      }
+
+      // Amounts and items
+      let amount = 0
+      let tax = 0
+      const lineItems: Array<{ description: string; price: number }> = []
+
+      for (const line of lines) {
+        const lower = line.toLowerCase()
+        if (lower.includes('tax') || lower.includes('cgst') || lower.includes('sgst')) {
+          const m = line.match(/([0-9]+(?:\.[0-9]{1,2})?)/)
+          if (m) tax += parseFloat(m[1])
+        } else if (lower.includes('total') && !lower.includes('subtotal')) {
+          const m = line.match(/([0-9]+(?:\.[0-9]{1,2})?)/)
+          if (m) amount = parseFloat(m[1])
+        } else {
+          const itemMatch = line.match(/^(.+?)\s+[\$₹€£]?\s*([0-9]+(?:\.[0-9]{1,2})?)$/)
+          if (itemMatch && !lower.includes('subtotal') && !lower.includes('cash') && !lower.includes('trace')) {
+            lineItems.push({
+              description: itemMatch[1].trim(),
+              price: parseFloat(itemMatch[2]),
+            })
+          }
+        }
+      }
+
+      if (amount === 0 && lineItems.length > 0) {
+        amount = lineItems.reduce((s, it) => s + it.price, 0) + tax
+      }
+
+      let detectedCurrency = 'INR'
+      if (text.includes('$')) detectedCurrency = 'USD'
+      else if (text.includes('€')) detectedCurrency = 'EUR'
+
+      return {
+        merchant,
+        amount: Math.round(amount * 100) / 100,
+        currency: detectedCurrency,
+        date: new Date().toISOString().split('T')[0],
+        category: 'Food',
+        tax: Math.round(tax * 100) / 100,
+        lineItems,
+        confidence: 0.92,
+        rawText: text,
+        isLiveGeminiVision: false,
+      }
+    }
+  } catch (tessErr) {
+    console.warn('Tesseract client OCR failed:', tessErr)
   }
+
+  // 3. Honest Error (NEVER return synthetic fake data)
+  throw new Error('Unable to extract text from this receipt image. Please ensure the receipt is clear or enter manually.')
 }
 
 /**
@@ -192,7 +247,7 @@ CRITICAL IDENTITY & ACCESS RULES:
   if (genAI && GEMINI_API_KEY && GEMINI_API_KEY !== 'your_gemini_api_key_here') {
     try {
       const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
+        model: 'gemini-3.6-flash',
         systemInstruction: systemInstructions,
       })
 
@@ -352,7 +407,7 @@ export async function parseNaturalLanguageExpenseWithLLM({
   // 1. Try Gemini Generative AI if key is configured
   if (genAI) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
       const prompt = `
 You are the AI Financial Entity Extractor for TripWallet.
 A traveler typed/spoke an expense: "${cleanInput}"
@@ -555,7 +610,7 @@ export async function forecastSpendRunwayWithLLM({
   // 1. Try Gemini LLM for predictive intelligence
   if (genAI) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
       const prompt = `
 You are the Chief AI Travel Financial Officer for TripWallet.
 Analyze this live group trip and predict financial runway and overrun risk:
@@ -759,7 +814,7 @@ export async function queryGuardianCopilotWithLLM(
   // 2. Try Gemini 1.5 Flash if available
   if (genAI && GEMINI_API_KEY && GEMINI_API_KEY !== 'your_gemini_api_key_here') {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
       const prompt = `
 You are the AI Travel Guardian & Financial Copilot for TripWallet.
 

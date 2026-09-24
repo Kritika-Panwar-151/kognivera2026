@@ -74,36 +74,7 @@ export default function ReceiptScanner({ navigate, onReceiptScanned }: Props) {
     reader.readAsDataURL(file)
   }
 
-  const handleSampleReceipt = async () => {
-    setPreviewUrl(null)
-    setScanState('processing')
-    setProgress(20)
 
-    const timer = setInterval(() => {
-      setProgress((p) => (p < 85 ? p + 15 : p))
-    }, 180)
-
-    const ocrResult = await parseReceiptWithGeminiVision({})
-    clearInterval(timer)
-    setProgress(100)
-
-    localStorage.setItem(
-      'last_scanned_receipt',
-      JSON.stringify({
-        result: ocrResult,
-        imageUrl: null,
-        scannedAt: new Date().toISOString(),
-      })
-    )
-
-    if (onReceiptScanned) {
-      onReceiptScanned(ocrResult)
-    }
-
-    setTimeout(() => {
-      navigate('ocr-confirm')
-    }, 400)
-  }
 
   return (
     <div className="p-4 md:p-8 max-w-xl mx-auto space-y-5">
@@ -180,25 +151,7 @@ export default function ReceiptScanner({ navigate, onReceiptScanned }: Props) {
             </button>
           </div>
 
-          {/* 1-TAP DEMO SAMPLE RECEIPT BUTTON */}
-          <div className="pt-2 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={handleSampleReceipt}
-              className="w-full py-3 px-4 bg-linear-to-r from-teal-50 to-cyan-50 hover:from-teal-100 hover:to-cyan-100 border border-teal-200/80 rounded-2xl text-teal-900 text-xs font-bold transition flex items-center justify-between"
-            >
-              <div className="flex items-center gap-2 text-left">
-                <span className="text-base">✨</span>
-                <div>
-                  <p className="leading-tight font-bold">Try Sample Milan Restaurant Receipt</p>
-                  <p className="text-[10px] text-teal-700 font-normal">Italian dinner · €42.00 EUR · 5 line items</p>
-                </div>
-              </div>
-              <span className="text-xs font-bold text-teal-700 bg-white px-2.5 py-1 rounded-lg border border-teal-200 shrink-0">
-                Test Vision OCR →
-              </span>
-            </button>
-          </div>
+
 
           {/* Info callout */}
           <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-2.5 text-xs text-slate-500">

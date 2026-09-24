@@ -102,11 +102,15 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   const customRemaining = Math.round((convertedAmount - totalAllocatedCustom) * 100) / 100
 
   // -------------------------------------------------------------------------
-  // OCR Scan Handlers (Camera, Upload, Demo)
+  const [ocrError, setOcrError] = useState<string | null>(null)
+
   // -------------------------------------------------------------------------
-  const processImageWithOCR = async (base64Data?: string, mimeType?: string) => {
+  // OCR Scan Handlers (Camera & File Upload)
+  // -------------------------------------------------------------------------
+  const processImageWithOCR = async (base64Data: string, mimeType?: string) => {
     setScanState('processing')
     setScanProgress(15)
+    setOcrError(null)
 
     const progressTimer = setInterval(() => {
       setScanProgress((prev) => {
@@ -116,9 +120,10 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
     }, 200)
 
     try {
-      const res = await parseReceiptWithGeminiVision(
-        base64Data ? { base64Data, mimeType: mimeType || 'image/jpeg' } : {}
-      )
+      const res = await parseReceiptWithGeminiVision({
+        base64Data,
+        mimeType: mimeType || 'image/jpeg',
+      })
 
       clearInterval(progressTimer)
       setScanProgress(100)
@@ -144,13 +149,14 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
 
       setNotes(
         res.isLiveGeminiVision
-          ? `Scanned via Gemini 1.5 Flash Vision (${res.lineItems?.length || 0} line items extracted)`
+          ? `Scanned via Gemini 3.6 Flash Vision (${res.lineItems?.length || 0} line items extracted)`
           : 'Scanned via Vision OCR Verification'
       )
-    } catch (err) {
+    } catch (err: any) {
       console.error('OCR parsing failed:', err)
       clearInterval(progressTimer)
-      setScanState('done')
+      setScanState('idle')
+      setOcrError(err?.message || 'Could not extract text from receipt image. Please enter details manually.')
     }
   }
 
@@ -165,11 +171,6 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
       processImageWithOCR(base64, file.type || 'image/jpeg')
     }
     reader.readAsDataURL(file)
-  }
-
-  const handleDemoReceipt = () => {
-    setReceiptImage(null)
-    processImageWithOCR()
   }
 
   // -------------------------------------------------------------------------
@@ -487,17 +488,13 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
                 </button>
               </div>
 
-              {/* Sample Demo Receipt Shortcut */}
-              <div className="pt-1 flex items-center justify-between text-xs text-slate-500">
-                <span>No paper receipt right now?</span>
-                <button
-                  type="button"
-                  onClick={handleDemoReceipt}
-                  className="text-teal-700 font-extrabold hover:text-teal-900 underline flex items-center gap-1"
-                >
-                  <span>⚡ Try Demo Receipt (Milan Café)</span>
-                </button>
-              </div>
+              {/* OCR Error Alert (Zero Fake Data) */}
+              {ocrError && (
+                <div className="p-3 bg-rose-50 border border-rose-300 rounded-xl text-rose-950 text-xs flex items-center gap-2">
+                  <span className="text-base">⚠️</span>
+                  <span>{ocrError}</span>
+                </div>
+              )}
             </div>
           )}
 
