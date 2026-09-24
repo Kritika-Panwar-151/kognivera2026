@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import type { NavigateFn, Expense, Trip } from '../types'
+import EditExpenseModal from '../components/EditExpenseModal'
 
 interface Props {
   navigate: NavigateFn
   expenses: Expense[]
   trips?: Trip[]
+  onDeleteExpense?: (expenseId: string) => void
+  onEditExpense?: (updated: Expense) => void
 }
 
 const defaultTrips: Trip[] = [
@@ -56,9 +59,16 @@ const catIcons: Record<string, string> = {
   Other: '📦',
 }
 
-export default function ExpenseHistory({ navigate, expenses, trips = defaultTrips }: Props) {
+export default function ExpenseHistory({
+  navigate,
+  expenses,
+  trips = defaultTrips,
+  onDeleteExpense,
+  onEditExpense,
+}: Props) {
   const [selectedMember, setSelectedMember] = useState('All Members')
   const [search, setSearch] = useState('')
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
 
   // Ensure isShared and splitBetween are populated
   const richExpenses: Expense[] = expenses.map((e, idx) => ({
@@ -66,6 +76,50 @@ export default function ExpenseHistory({ navigate, expenses, trips = defaultTrip
     isShared: e.isShared !== undefined ? e.isShared : idx !== 4, // 5th item is personal by default
     splitBetween: e.splitBetween || (idx !== 4 ? ['You (Aisha)', 'Ravi', 'Asha'] : ['You (Aisha)']),
   }))
+
+  // 1-Click CSV Expense Report Exporter
+  const exportToCSV = () => {
+    const headers = [
+      'Transaction ID',
+      'Date',
+      'Merchant',
+      'Category',
+      'Paid By',
+      'Currency',
+      'Original Amount',
+      'Converted INR Amount',
+      'Split Type',
+      'Split With',
+    ]
+
+    const rows = richExpenses.map((e) => [
+      `"${e.id}"`,
+      `"${e.date}"`,
+      `"${e.merchant.replace(/"/g, '""')}"`,
+      `"${e.category}"`,
+      `"${e.paidBy}"`,
+      `"${e.currency || 'INR'}"`,
+      e.amount,
+      e.convertedAmount,
+      `"${e.isShared ? 'Group Shared' : 'Personal'}"`,
+      `"${(e.splitBetween || [e.paidBy]).join('; ')}"`,
+    ])
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+
+    const encodedUri = encodeURI(csvContent)
+    const link = document.createElement('a')
+    link.setAttribute('href', encodedUri)
+    link.setAttribute(
+      'download',
+      `TripWallet_Expenses_${new Date().toISOString().split('T')[0]}.csv`
+    )
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   // Filter helper
   const filterExpense = (e: Expense) => {
@@ -96,7 +150,18 @@ export default function ExpenseHistory({ navigate, expenses, trips = defaultTrip
           >
             ← Back to Dashboard
           </button>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Expenses Hub</h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Expenses Hub</h1>
+            <button
+              type="button"
+              onClick={exportToCSV}
+              className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-2xs"
+              title="Download CSV report"
+            >
+              <span>📥</span>
+              <span>Export CSV</span>
+            </button>
+          </div>
           <p className="text-slate-500 text-xs md:text-sm mt-0.5">
             Personal spending hub & card-wise group trip ledgers
           </p>
@@ -227,14 +292,38 @@ export default function ExpenseHistory({ navigate, expenses, trips = defaultTrip
                       </div>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      <p className="font-bold text-slate-900 text-base">
-                        {exp.currency === 'EUR' ? '€' : exp.currency === 'USD' ? '$' : '₹'}
-                        {exp.amount.toLocaleString()}
-                      </p>
-                      <p className="text-[11px] font-bold text-indigo-700">
-                        ≈ ₹{exp.convertedAmount.toLocaleString()} INR
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right shrink-0">
+                        <p className="font-bold text-slate-900 text-base">
+                          {exp.currency === 'EUR' ? '€' : exp.currency === 'USD' ? '$' : '₹'}
+                          {exp.amount.toLocaleString()}
+                        </p>
+                        <p className="text-[11px] font-bold text-indigo-700">
+                          ≈ ₹{exp.convertedAmount.toLocaleString()} INR
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => setEditingExpense(exp)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          title="Edit expense"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Delete expense "${exp.merchant}"?`)) {
+                              onDeleteExpense?.(exp.id)
+                            }
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          title="Delete expense"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -382,14 +471,38 @@ export default function ExpenseHistory({ navigate, expenses, trips = defaultTrip
                             </div>
                           </div>
 
-                          <div className="text-right shrink-0">
-                            <p className="font-extrabold text-slate-900 text-base">
-                              {exp.currency === 'EUR' ? '€' : exp.currency === 'USD' ? '$' : '₹'}
-                              {exp.amount.toLocaleString()}
-                            </p>
-                            <p className="text-xs font-bold text-teal-700">
-                              ≈ ₹{exp.convertedAmount.toLocaleString()} INR
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right shrink-0">
+                              <p className="font-extrabold text-slate-900 text-base">
+                                {exp.currency === 'EUR' ? '€' : exp.currency === 'USD' ? '$' : '₹'}
+                                {exp.amount.toLocaleString()}
+                              </p>
+                              <p className="text-xs font-bold text-teal-700">
+                                ≈ ₹{exp.convertedAmount.toLocaleString()} INR
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
+                              <button
+                                type="button"
+                                onClick={() => setEditingExpense(exp)}
+                                className="p-1.5 text-slate-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition"
+                                title="Edit expense"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Delete expense "${exp.merchant}"?`)) {
+                                    onDeleteExpense?.(exp.id)
+                                  }
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                title="Delete expense"
+                              >
+                                🗑️
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -420,6 +533,19 @@ export default function ExpenseHistory({ navigate, expenses, trips = defaultTrip
           )
         })}
       </div>
+
+      {/* Edit Expense Modal */}
+      {editingExpense && (
+        <EditExpenseModal
+          expense={editingExpense}
+          isOpen={Boolean(editingExpense)}
+          onClose={() => setEditingExpense(null)}
+          onSave={(updated) => {
+            onEditExpense?.(updated)
+            setEditingExpense(null)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import type { NavigateFn, Trip } from '../types'
+import EditTripModal from '../components/EditTripModal'
 
 interface Props {
   navigate: NavigateFn
   trips: Trip[]
   onSelectTrip: (trip: Trip) => void
+  onUpdateTrip?: (updatedTrip: Trip) => void
 }
 
 const tripImages: Record<string, string> = {
@@ -13,7 +16,8 @@ const tripImages: Record<string, string> = {
     'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=1200&q=80',
 }
 
-export default function HomeScreen({ navigate, trips, onSelectTrip }: Props) {
+export default function HomeScreen({ navigate, trips, onSelectTrip, onUpdateTrip }: Props) {
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null)
   return (
     <div className="min-h-screen bg-[#f0fdfa] p-8 max-w-6xl">
 
@@ -181,12 +185,22 @@ export default function HomeScreen({ navigate, trips, onSelectTrip }: Props) {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => onSelectTrip(trip)}
-                  className="mt-4 w-full py-2.5 bg-[#0f766e] text-white rounded-xl text-sm font-semibold hover:bg-[#115e59] transition-colors"
-                >
-                  View Trip
-                </button>
+                <div className="flex items-center gap-2 mt-4">
+                  <button
+                    onClick={() => onSelectTrip(trip)}
+                    className="flex-1 py-2.5 bg-[#0f766e] text-white rounded-xl text-sm font-semibold hover:bg-[#115e59] transition-colors"
+                  >
+                    View Trip
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingTrip(trip)}
+                    className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold transition shadow-2xs"
+                    title="Edit Trip Details"
+                  >
+                    ⚙️
+                  </button>
+                </div>
               </div>
             </div>
           )
@@ -250,6 +264,19 @@ export default function HomeScreen({ navigate, trips, onSelectTrip }: Props) {
         <div className="absolute -right-10 -top-20 w-56 h-56 rounded-full border border-white/20" />
         <div className="absolute right-10 -bottom-32 w-64 h-64 rounded-full border border-white/10" />
       </div>
+
+      {/* Edit Trip Modal */}
+      {editingTrip && (
+        <EditTripModal
+          trip={editingTrip}
+          isOpen={Boolean(editingTrip)}
+          onClose={() => setEditingTrip(null)}
+          onSave={(updated) => {
+            onUpdateTrip?.(updated)
+            setEditingTrip(null)
+          }}
+        />
+      )}
     </div>
   )
 }

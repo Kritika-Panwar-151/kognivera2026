@@ -21,12 +21,16 @@ import {
   fetchExpensesFromSupabase,
   saveTripToSupabase,
   saveExpenseToSupabase,
+  deleteExpenseFromSupabase,
+  updateExpenseInSupabase,
+  updateTripDetailsInSupabase,
   acceptTripInvite,
   fetchPendingTripInvites,
   updateMemberPersonalBudgetInSupabase,
   initialTripsFallback,
   initialExpensesFallback,
 } from './services/supabaseDataService'
+import { enqueueOfflineAction } from './services/offlineQueueService'
 import type { CategoryCaps } from './types'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 
@@ -409,6 +413,87 @@ export default function App() {
     }
   }
 
+  const handleDeleteExpense = (expenseId: string) => {
+    const toDelete = expenses.find((e) => e.id === expenseId)
+    setExpenses((prev) => prev.filter((e) => e.id !== expenseId))
+    if (toDelete && currentTrip) {
+      setCurrentTrip((prev) =>
+        prev
+          ? {
+              ...prev,
+              spent: Math.max(0, prev.spent - toDelete.convertedAmount),
+            }
+          : null
+      )
+    }
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      enqueueOfflineAction('DELETE_EXPENSE', { expenseId })
+    } else {
+      deleteExpenseFromSupabase(expenseId).then(() => {
+        if (isSupabaseConfigured && currentTrip) {
+          supabase.channel('global_trip_sync').send({
+            type: 'broadcast',
+            event: 'expense_deleted',
+            payload: { tripId: currentTrip.id, expenseId },
+          })
+        }
+      })
+    }
+  }
+
+  const handleEditExpense = (updatedExpense: Expense) => {
+    const oldExpense = expenses.find((e) => e.id === updatedExpense.id)
+    setExpenses((prev) => prev.map((e) => (e.id === updatedExpense.id ? updatedExpense : e)))
+    if (oldExpense && currentTrip) {
+      const delta = updatedExpense.convertedAmount - oldExpense.convertedAmount
+      setCurrentTrip((prev) =>
+        prev
+          ? {
+              ...prev,
+              spent: Math.max(0, prev.spent + delta),
+            }
+          : null
+      )
+    }
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      enqueueOfflineAction('UPDATE_EXPENSE', { expenseId: updatedExpense.id, updates: updatedExpense })
+    } else {
+      updateExpenseInSupabase(updatedExpense.id, updatedExpense).then(() => {
+        if (isSupabaseConfigured && currentTrip) {
+          supabase.channel('global_trip_sync').send({
+            type: 'broadcast',
+            event: 'expense_updated',
+            payload: { tripId: currentTrip.id, expenseId: updatedExpense.id },
+          })
+        }
+      })
+    }
+  }
+
+  const handleUpdateTripDetails = (updatedTrip: Trip) => {
+    setTrips((prev) => prev.map((t) => (t.id === updatedTrip.id ? updatedTrip : t)))
+    if (currentTrip && currentTrip.id === updatedTrip.id) {
+      setCurrentTrip(updatedTrip)
+    }
+    updateTripDetailsInSupabase(updatedTrip.id, {
+      name: updatedTrip.name,
+      destination: updatedTrip.destination,
+      budget: updatedTrip.budget,
+      startDate: updatedTrip.startDate,
+      endDate: updatedTrip.endDate,
+    }).then(() => {
+      if (isSupabaseConfigured) {
+        supabase.channel('global_trip_sync').send({
+          type: 'broadcast',
+          event: 'trip_details_updated',
+          payload: { tripId: updatedTrip.id },
+        })
+      }
+    })
+  }
+
   const handleUpdateMemberBudget = (tripId: string, userId: string, newBudget: number) => {
     const updateTripState = (t: Trip): Trip => {
       const updatedBudgets = {
@@ -458,6 +543,7 @@ export default function App() {
               setCurrentTrip(trip)
               navigate('trip-dashboard')
             }}
+            onUpdateTrip={handleUpdateTripDetails}
           />
         )
       case 'create-trip':
@@ -476,6 +562,9 @@ export default function App() {
             expenses={expenses}
             currentUser={currentUser}
             onUpdateMemberBudget={handleUpdateMemberBudget}
+            onUpdateTrip={handleUpdateTripDetails}
+            onDeleteExpense={handleDeleteExpense}
+            onEditExpense={handleEditExpense}
           />
         )
       case 'add-expense':
@@ -504,6 +593,8 @@ export default function App() {
             navigate={navigate}
             expenses={expenses}
             trips={trips}
+            onDeleteExpense={handleDeleteExpense}
+            onEditExpense={handleEditExpense}
           />
         )
       case 'ai-guardian':

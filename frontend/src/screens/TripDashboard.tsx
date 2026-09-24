@@ -9,6 +9,7 @@ import { useCategoryCaps } from '../features/category-spending/useCategoryCaps'
 import CategoryBreachAlert from '../components/CategoryBreachAlert'
 import PendingRequestsModal from '../components/PendingRequestsModal'
 import CategoryCapAdjusterModal from '../components/CategoryCapAdjusterModal'
+import EditTripModal from '../components/EditTripModal'
 
 interface Props {
   navigate: NavigateFn
@@ -17,6 +18,7 @@ interface Props {
   currentUser?: User | null
   onUpdateMemberBudget?: (tripId: string, userId: string, newBudget: number) => void
   onUpdateTripName?: (tripId: string, newName: string) => void
+  onUpdateTrip?: (updatedTrip: Trip) => void
 }
 
 const defaultCategories = [
@@ -132,6 +134,7 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
   const categoryCapsHook = useCategoryCaps(trip, expenses)
   const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false)
   const [isAdjustCapsOpen, setIsAdjustCapsOpen] = useState(false)
+  const [isEditTripOpen, setIsEditTripOpen] = useState(false)
 
   // Edit Trip Name State
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -377,6 +380,15 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsEditTripOpen(true)}
+                className="px-4 py-3 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white rounded-xl font-bold text-sm transition shadow-lg flex items-center gap-2 border border-white/25"
+                title="Edit Trip Dates, Destination & Budget"
+              >
+                <span>⚙️</span>
+                <span>Trip Settings</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setIsPendingRequestsOpen(true)}
@@ -1195,6 +1207,21 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
         onClose={() => setIsAdjustCapsOpen(false)}
         trip={trip}
       />
+
+      {/* =========================
+          EDIT TRIP DETAILS MODAL
+      ========================= */}
+      {isEditTripOpen && trip && (
+        <EditTripModal
+          trip={trip}
+          isOpen={isEditTripOpen}
+          onClose={() => setIsEditTripOpen(false)}
+          onSave={(updated) => {
+            onUpdateTrip?.(updated)
+            setIsEditTripOpen(false)
+          }}
+        />
+      )}
     </div>
   )
 }

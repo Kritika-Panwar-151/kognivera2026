@@ -532,7 +532,90 @@ export async function saveExpenseToSupabase(expense: Expense, payerUserId: strin
   }
 }
 
-// 6. Update Member Personal Budget in Supabase & Recalculate Group Budget
+// 5. Delete Expense from Supabase
+export async function deleteExpenseFromSupabase(expenseId: string): Promise<boolean> {
+  if (!isSupabaseConfigured) return true
+
+  try {
+    const { error } = await supabase.from('expenses').delete().eq('expense_id', expenseId)
+    if (error) {
+      console.error('Supabase expense delete error:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.error('Failed to delete expense from Supabase:', err)
+    return false
+  }
+}
+
+// 6. Update Existing Expense in Supabase
+export async function updateExpenseInSupabase(
+  expenseId: string,
+  updates: Partial<Expense>
+): Promise<boolean> {
+  if (!isSupabaseConfigured) return true
+
+  try {
+    const payload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    }
+    if (updates.merchant !== undefined) payload.description = updates.merchant
+    if (updates.amount !== undefined) payload.amount = updates.amount
+    if (updates.currency !== undefined) payload.currency = updates.currency
+    if (updates.convertedAmount !== undefined) payload.home_amount = updates.convertedAmount
+    if (updates.category !== undefined) payload.category = updates.category.toLowerCase()
+    if (updates.date !== undefined) payload.incurred_at = updates.date
+
+    const { error } = await supabase.from('expenses').update(payload).eq('expense_id', expenseId)
+    if (error) {
+      console.error('Supabase expense update error:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.error('Failed to update expense in Supabase:', err)
+    return false
+  }
+}
+
+// 7. Update Master Trip Details in Supabase (Dates, Budget, Destination, Name)
+export async function updateTripDetailsInSupabase(
+  tripId: string,
+  updates: {
+    name?: string
+    budget?: number
+    destination?: string
+    startDate?: string
+    endDate?: string
+  }
+): Promise<boolean> {
+  if (!isSupabaseConfigured) return true
+
+  try {
+    const targetTripId = tripId === 'europe' ? 'trp_000000000001' : tripId
+    const payload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    }
+    if (updates.name !== undefined) payload.title = updates.name
+    if (updates.budget !== undefined) payload.budget = updates.budget
+    if (updates.destination !== undefined) payload.destination_city_id = updates.destination
+    if (updates.startDate !== undefined) payload.start_date = updates.startDate
+    if (updates.endDate !== undefined) payload.end_date = updates.endDate
+
+    const { error } = await supabase.from('trips').update(payload).eq('trip_id', targetTripId)
+    if (error) {
+      console.error('Supabase trip update error:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.error('Failed to update trip details in Supabase:', err)
+    return false
+  }
+}
+
+// 8. Update Member Personal Budget in Supabase & Recalculate Group Budget
 export async function updateMemberPersonalBudgetInSupabase(
   tripId: string,
   userId: string,
