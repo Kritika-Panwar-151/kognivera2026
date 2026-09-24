@@ -140,25 +140,71 @@ export async function fetchTripsFromSupabase(): Promise<Trip[]> {
     const { data: rawBudgets } = await supabase.from('budgets').select('*')
     const budgetMap = new Map((rawBudgets || []).map(b => [b.trip_id, b]))
 
-    // Fetch members for each trip
+    // Fetch members for each trip with personal_budget and category_caps
     const { data: rawMembers } = await supabase.from('trip_members').select('*')
     const memberMap = new Map<string, string[]>()
-    ;(rawMembers || []).forEach(m => {
+    const memberDetailsMap = new Map<string, any[]>()
+    const memberBudgetsMap = new Map<string, Record<string, number>>()
+
+    ;(rawMembers || []).forEach((m) => {
       const list = memberMap.get(m.trip_id) || []
       list.push(m.user_id)
       memberMap.set(m.trip_id, list)
+
+      const details = memberDetailsMap.get(m.trip_id) || []
+      details.push({
+        userId: m.user_id,
+        role: m.role || 'editor',
+        status: m.status || 'active',
+        personalBudget: Number(m.personal_budget || 0),
+        categoryCaps: m.category_caps || {},
+        invitedByUserId: m.invited_by_user_id,
+      })
+      memberDetailsMap.set(m.trip_id, details)
+
+      const bMap = memberBudgetsMap.get(m.trip_id) || {}
+      bMap[m.user_id] = Number(m.personal_budget || 0)
+      memberBudgetsMap.set(m.trip_id, bMap)
     })
 
     // Fetch expenses to compute spent sum
     const { data: rawExpenses } = await supabase.from('expenses').select('*')
     const spentMap = new Map<string, number>()
-    ;(rawExpenses || []).forEach(e => {
+    ;(rawExpenses || []).forEach((e) => {
       const current = spentMap.get(e.trip_id) || 0
       spentMap.set(e.trip_id, current + Number(e.home_amount || 0))
     })
 
-    return rawTrips.map(t => {
+    return rawTrips.map((t) => {
       const b = budgetMap.get(t.trip_id)
+      const membersForTrip = memberDetailsMap.get(t.trip_id) || []
+      const activeMembers = membersForTrip.filter((m) => m.status === 'active')
+
+      // Group budget is the sum of personal budgets of all active members
+      const aggregatedGroupBudget =
+        activeMembers.length > 0 && activeMembers.some((m) => m.personalBudget > 0)
+          ? activeMembers.reduce((sum, m) => sum + (m.personalBudget || 0), 0)
+          : b
+          ? Number(b.total_amount)
+          : 50000
+
+      // Aggregate category caps across all active members if they defined them
+      let aggCaps = b
+        ? {
+            accommodation: Number(b.accommodation_cap || Math.round(aggregatedGroupBudget * 0.35)),
+            food: Number(b.food_cap || Math.round(aggregatedGroupBudget * 0.25)),
+            transport: Number(b.transport_cap || Math.round(aggregatedGroupBudget * 0.2)),
+            activities: Number(b.activities_cap || Math.round(aggregatedGroupBudget * 0.1)),
+            misc: Number(b.misc_cap || Math.round(aggregatedGroupBudget * 0.1)),
+          }
+        : {
+            accommodation: Math.round(aggregatedGroupBudget * 0.35),
+            food: Math.round(aggregatedGroupBudget * 0.25),
+            transport: Math.round(aggregatedGroupBudget * 0.2),
+            activities: Math.round(aggregatedGroupBudget * 0.1),
+            misc: Math.round(aggregatedGroupBudget * 0.1),
+          }
+
       return {
         id: t.trip_id,
         name: t.title,
@@ -166,20 +212,17 @@ export async function fetchTripsFromSupabase(): Promise<Trip[]> {
         startDate: t.start_date,
         endDate: t.end_date,
         currency: t.home_currency || 'INR',
-        budget: b ? Number(b.total_amount) : 50000,
+        budget: aggregatedGroupBudget,
         spent: spentMap.get(t.trip_id) || 0,
+        ownerId: t.owner_user_id,
         adults: Number(t.adults || 1),
         children: Number(t.children || 0),
         partySize: Number(t.party_size || 1),
         members: memberMap.get(t.trip_id) || ['usr_you'],
+        memberDetails: membersForTrip,
+        memberBudgets: memberBudgetsMap.get(t.trip_id) || {},
         isGroupTrip: Boolean(t.is_group_trip),
-        categoryCaps: b ? {
-          accommodation: Number(b.accommodation_cap || 0),
-          food: Number(b.food_cap || 0),
-          transport: Number(b.transport_cap || 0),
-          activities: Number(b.activities_cap || 0),
-          misc: Number(b.misc_cap || 0),
-        } : undefined,
+        categoryCaps: aggCaps,
       }
     })
   } catch (err) {
@@ -204,7 +247,7 @@ export async function fetchExpensesFromSupabase(tripId?: string): Promise<Expens
       return initialExpensesFallback
     }
 
-    return rawExpenses.map(e => ({
+    return rawExpenses.map((e) => ({
       id: e.expense_id,
       tripId: e.trip_id,
       merchant: e.description,
@@ -212,8 +255,13 @@ export async function fetchExpensesFromSupabase(tripId?: string): Promise<Expens
       currency: e.currency,
       convertedAmount: Number(e.home_amount),
       category: e.category.charAt(0).toUpperCase() + e.category.slice(1),
-      date: e.incurred_at ? new Date(e.incurred_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'Today',
-      paidBy: e.payer_user_id === 'usr_000000000001' || e.payer_user_id === 'usr_you' ? 'You (Aisha)' : e.payer_user_id,
+      date: e.incurred_at
+        ? new Date(e.incurred_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+        : 'Today',
+      paidBy:
+        e.payer_user_id === 'usr_000000000001' || e.payer_user_id === 'usr_you'
+          ? 'You (Aisha)'
+          : e.payer_user_id,
       isShared: true,
       splitBetween: ['You (Aisha)', 'Ravi', 'Asha'],
     }))
@@ -223,46 +271,81 @@ export async function fetchExpensesFromSupabase(tripId?: string): Promise<Expens
   }
 }
 
-// 3. Save New Trip into Supabase
+// 3. Save New Trip into Supabase (Admin + Members + Budget)
 export async function saveTripToSupabase(trip: Trip, ownerUserId: string = 'usr_000000000001'): Promise<void> {
   if (!isSupabaseConfigured) return
 
   try {
     const tripId = trip.id.startsWith('trp_') ? trip.id : `trp_${Date.now()}`
     const now = new Date().toISOString()
-    
-    // Insert into trips
+
+    // 1. Insert into trips
     const { error: tripErr } = await supabase.from('trips').insert({
       trip_id: tripId,
       owner_user_id: ownerUserId,
       title: trip.name,
       destination_city_id: 'cty_0b92e2e7', // Canonical City ID
-      start_date: '2026-09-12',
-      end_date: '2026-09-20',
-      party_size: trip.partySize,
-      adults: trip.adults,
-      children: trip.children,
+      start_date: trip.startDate || '2026-09-12',
+      end_date: trip.endDate || '2026-09-20',
+      party_size: trip.partySize || 1,
+      adults: trip.adults || 1,
+      children: trip.children || 0,
       trip_type: 'friends',
-      is_group_trip: trip.isGroupTrip,
+      is_group_trip: Boolean(trip.isGroupTrip),
       status: 'planning',
-      home_currency: trip.currency,
+      home_currency: trip.currency || 'INR',
       created_at: now,
       updated_at: now,
     })
 
     if (tripErr) console.error('Supabase trip insert error:', tripErr.message)
 
-    // Insert into budgets
+    // 2. Insert Admin as active Owner in trip_members
+    const hostBudget = trip.personalBudget || trip.memberBudgets?.[ownerUserId] || trip.budget || 25000
+    const { error: hostMemberErr } = await supabase.from('trip_members').upsert({
+      member_id: `tmb_${Date.now()}_host`,
+      trip_id: tripId,
+      user_id: ownerUserId,
+      role: 'owner',
+      status: 'active',
+      personal_budget: hostBudget,
+      category_caps: trip.categoryCaps || {},
+      created_at: now,
+      updated_at: now,
+    })
+
+    if (hostMemberErr) console.error('Host trip_member insert error:', hostMemberErr.message)
+
+    // 3. Insert each invited member into trip_members with status: 'pending'
+    const otherMembers = (trip.members || []).filter((mId) => mId !== ownerUserId)
+    for (const mId of otherMembers) {
+      const memberInitialBudget = trip.memberBudgets?.[mId] || 0
+      const { error: mErr } = await supabase.from('trip_members').upsert({
+        member_id: `tmb_${Date.now()}_${mId.replace(/[^a-zA-Z0-9]/g, '').slice(-4)}`,
+        trip_id: tripId,
+        user_id: mId,
+        role: 'editor',
+        status: 'pending',
+        invited_by_user_id: ownerUserId,
+        personal_budget: memberInitialBudget,
+        category_caps: {},
+        created_at: now,
+        updated_at: now,
+      })
+      if (mErr) console.error(`Invited member ${mId} insert error:`, mErr.message)
+    }
+
+    // 4. Insert into budgets with initial aggregated budget
     const { error: budErr } = await supabase.from('budgets').insert({
       budget_id: `bud_${Date.now()}`,
       trip_id: tripId,
-      total_amount: trip.budget,
-      currency: trip.currency,
+      total_amount: trip.budget || hostBudget,
+      currency: trip.currency || 'INR',
       accommodation_cap: trip.categoryCaps?.accommodation || Math.round(trip.budget * 0.35),
       food_cap: trip.categoryCaps?.food || Math.round(trip.budget * 0.25),
-      transport_cap: trip.categoryCaps?.transport || Math.round(trip.budget * 0.20),
-      activities_cap: trip.categoryCaps?.activities || Math.round(trip.budget * 0.10),
-      misc_cap: trip.categoryCaps?.misc || Math.round(trip.budget * 0.10),
+      transport_cap: trip.categoryCaps?.transport || Math.round(trip.budget * 0.2),
+      activities_cap: trip.categoryCaps?.activities || Math.round(trip.budget * 0.1),
+      misc_cap: trip.categoryCaps?.misc || Math.round(trip.budget * 0.1),
       alert_threshold_pct: 80,
       created_at: now,
       updated_at: now,
@@ -271,6 +354,111 @@ export async function saveTripToSupabase(trip: Trip, ownerUserId: string = 'usr_
     if (budErr) console.error('Supabase budget insert error:', budErr.message)
   } catch (err) {
     console.error('Failed to save trip to Supabase:', err)
+  }
+}
+
+// 4. Accept a Trip Invite & Set Personal Budget (recalculates group budget in DB)
+export async function acceptTripInvite(
+  tripId: string,
+  userId: string,
+  personalBudget: number,
+  categoryCaps?: any
+): Promise<{ success: boolean; error?: string }> {
+  if (!isSupabaseConfigured) return { success: true }
+
+  try {
+    const now = new Date().toISOString()
+
+    // 1. Update this member's status to 'active' and set their personal budget & category caps
+    const { error: updateErr } = await supabase
+      .from('trip_members')
+      .update({
+        status: 'active',
+        personal_budget: personalBudget,
+        category_caps: categoryCaps || {},
+        updated_at: now,
+      })
+      .eq('trip_id', tripId)
+      .eq('user_id', userId)
+
+    if (updateErr) {
+      console.error('Failed to accept trip invite:', updateErr.message)
+      return { success: false, error: updateErr.message }
+    }
+
+    // 2. Query all active members to recompute the new Group Budget total
+    const { data: allActiveMembers } = await supabase
+      .from('trip_members')
+      .select('personal_budget, category_caps')
+      .eq('trip_id', tripId)
+      .eq('status', 'active')
+
+    const newGroupBudget = (allActiveMembers || []).reduce(
+      (sum, m) => sum + Number(m.personal_budget || 0),
+      0
+    )
+
+    // Aggregate category caps across all active members
+    let sumAccom = 0,
+      sumFood = 0,
+      sumTrans = 0,
+      sumAct = 0,
+      sumMisc = 0
+    ;(allActiveMembers || []).forEach((m) => {
+      const caps = m.category_caps || {}
+      sumAccom += Number(caps.accommodation || 0)
+      sumFood += Number(caps.food || 0)
+      sumTrans += Number(caps.transport || 0)
+      sumAct += Number(caps.activities || 0)
+      sumMisc += Number(caps.misc || 0)
+    })
+
+    // If active members did not set category caps individually, apply default ratio
+    if (sumAccom + sumFood + sumTrans + sumAct + sumMisc === 0) {
+      sumAccom = Math.round(newGroupBudget * 0.35)
+      sumFood = Math.round(newGroupBudget * 0.25)
+      sumTrans = Math.round(newGroupBudget * 0.2)
+      sumAct = Math.round(newGroupBudget * 0.1)
+      sumMisc = Math.round(newGroupBudget * 0.1)
+    }
+
+    // 3. Update the budgets table with the new group total & category caps
+    await supabase
+      .from('budgets')
+      .update({
+        total_amount: newGroupBudget,
+        accommodation_cap: sumAccom,
+        food_cap: sumFood,
+        transport_cap: sumTrans,
+        activities_cap: sumAct,
+        misc_cap: sumMisc,
+        updated_at: now,
+      })
+      .eq('trip_id', tripId)
+
+    return { success: true }
+  } catch (err: any) {
+    console.error('acceptTripInvite error:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+// 5. Fetch Pending Invites for a User
+export async function fetchPendingTripInvites(userId: string): Promise<any[]> {
+  if (!isSupabaseConfigured) return []
+
+  try {
+    const { data: pendingMemberships, error } = await supabase
+      .from('trip_members')
+      .select('*, trips(*)')
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+
+    if (error || !pendingMemberships) return []
+    return pendingMemberships
+  } catch (err) {
+    console.error('Error fetching pending trip invites:', err)
+    return []
   }
 }
 
