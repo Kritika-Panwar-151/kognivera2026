@@ -335,19 +335,9 @@ export default function App() {
     setCurrentUser(user)
     localStorage.setItem('tripwallet_auth_user', JSON.stringify(user))
 
-    // Filter or initialize trips for newly logged in user
-    const userTrips = initialTripsFallback.filter(
-      (t) => t.members?.includes(user.id) || user.id === 'usr_aisha'
-    )
-
-    if (userTrips.length > 0) {
-      setTrips(userTrips)
-      setCurrentTrip(userTrips[0])
-    } else {
-      // Empty state for new accounts with 0 trips
-      setTrips([])
-      setCurrentTrip(null)
-    }
+    fetchTripsFromSupabase().then((freshTrips) => {
+      updateTripsSafely(freshTrips, user)
+    })
 
     setScreen('trip-dashboard')
   }
