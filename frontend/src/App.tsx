@@ -735,8 +735,8 @@ export default function App() {
 
   // Filter expenses strictly belonging to the currently active trip
   const currentTripExpenses = useMemo(() => {
-    if (!currentTrip?.id) return []
-    return expenses.filter((e) => e.tripId === currentTrip.id)
+    if (!currentTrip?.id) return expenses
+    return expenses.filter((e) => isTripMatch(e.tripId, currentTrip.id))
   }, [expenses, currentTrip?.id])
 
   const renderScreen = () => {

@@ -312,7 +312,15 @@ export function isTripMatch(expenseTripId?: string, targetTripId?: string): bool
     (tId === 'europe' || tId === 'trp_europe' || tId === 'trp_000000000001')
   )
     return true
-  if ((eId === 'goa' || eId === 'trp_goa') && (tId === 'goa' || tId === 'trp_goa')) return true
-  if ((eId === 'india' || eId === 'trp_india') && (tId === 'india' || tId === 'trp_india')) return true
+  if (
+    (eId === 'goa' || eId === 'trp_goa' || eId === 'trp_000000000002') &&
+    (tId === 'goa' || tId === 'trp_goa' || tId === 'trp_000000000002')
+  )
+    return true
+  if (
+    (eId === 'india' || eId === 'trp_india' || eId === 'trp_000000000003') &&
+    (tId === 'india' || tId === 'trp_india' || tId === 'trp_000000000003')
+  )
+    return true
   return eId.includes(tId) || tId.includes(eId)
 }

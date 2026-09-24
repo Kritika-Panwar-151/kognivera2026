@@ -4,7 +4,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { toggleSettleExpenseInSupabase } from '../services/supabaseDataService'
 import PendingRequestsModal from '../components/PendingRequestsModal'
 import { resolveMemberName } from '../services/userRegistry'
-import { getCurrencySymbol } from '../services/currencyService'
+import { getCurrencySymbol, isTripMatch } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -34,7 +34,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     const currentUserName = currentUser?.name || 'You (Aisha)'
     const currentUserId = currentUser?.id || 'usr_you'
 
-    const tripExpenses = (expenses || []).filter((exp) => !trip?.id || exp.tripId === trip.id)
+    const tripExpenses = (expenses || []).filter((exp) => !trip?.id || isTripMatch(exp.tripId, trip.id))
 
     // Map of memberName -> { owedToMe: number, iOweThem: number, expenseIds: string[], isAllSettled: boolean }
     const memberMap = new Map<

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { Trip, Expense, User } from '../../types'
-import { getCurrencySymbol } from '../../services/currencyService'
+import { getCurrencySymbol, isTripMatch } from '../../services/currencyService'
 
 export interface CategoryCapItem {
   id: string
@@ -37,7 +37,7 @@ export function useCategoryCaps(trip?: Trip | null, expenses: Expense[] = [], cu
   // Strictly filter expenses belonging only to this trip
   const tripExpenses = useMemo(() => {
     if (!trip?.id) return []
-    return (expenses || []).filter((e) => e.tripId === trip.id)
+    return (expenses || []).filter((e) => isTripMatch(e.tripId, trip.id))
   }, [trip?.id, expenses])
 
   const categories: CategoryCapItem[] = useMemo(() => {

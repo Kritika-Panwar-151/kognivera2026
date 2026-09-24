@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { NavigateFn, Trip, User, Expense } from '../types'
 import EditTripModal from '../components/EditTripModal'
-import { formatUserDualCurrency, getTripDestinationCurrency } from '../services/currencyService'
+import { formatUserDualCurrency, getTripDestinationCurrency, isTripMatch } from '../services/currencyService'
 import { resolveCityName } from '../services/geminiService'
 
 interface Props {
@@ -87,7 +87,7 @@ export default function HomeScreen({ navigate, trips, currentUser, onSelectTrip,
 
             // Group level calculations
             const activeTripExpenses = expenses.filter(
-              (e) => e.tripId === activeTrip.id || (!e.tripId && (activeTrip.id === 'europe' || activeTrip.id === 'trp_europe'))
+              (e) => isTripMatch(e.tripId, activeTrip.id)
             )
             const activeTripExpensesSum = activeTripExpenses.reduce((s, e) => s + (e.convertedAmount || e.amount || 0), 0)
             const groupBudget = activeTrip.budget || 60000
