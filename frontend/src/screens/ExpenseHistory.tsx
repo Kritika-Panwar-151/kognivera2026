@@ -559,7 +559,8 @@ export default function ExpenseHistory({
                         {groupExpenses.map((exp) => {
                           const expUserAmount = convertCurrency(exp.amount, exp.currency || userHomeCurr, userHomeCurr)
                           const expDestAmount = convertCurrency(exp.amount, exp.currency || userHomeCurr, tripDestCurr)
-                          const expUserShare = Math.round((expUserAmount / groupCount) * 100) / 100
+                          const splitCount = Math.max(exp.splitBetween?.length || groupCount || 1, 1)
+                          const expUserShare = Math.round((expUserAmount / splitCount) * 100) / 100
                           const secText = getSecondarySubtext(exp, tripDestCurr)
 
                           return (
@@ -628,7 +629,7 @@ export default function ExpenseHistory({
                               <div className="p-2.5 bg-teal-50/60 rounded-xl border border-teal-100 flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-[10px] font-bold bg-teal-600 text-white px-1.5 py-0.5 rounded">
-                                    Split by {exp.splitBetween?.length || groupCount}
+                                    Split by {splitCount}
                                   </span>
                                   <span className="text-slate-600 font-semibold text-[11px]">
                                     Each owes {getCurrencySymbol(userHomeCurr)}{expUserShare.toLocaleString()} {userHomeCurr}
@@ -636,7 +637,7 @@ export default function ExpenseHistory({
                                 </div>
                                 {tripDestCurr !== userHomeCurr && (
                                   <span className="text-[10px] font-bold text-teal-700 font-mono">
-                                    ≈ {getCurrencySymbol(tripDestCurr)}{(expDestAmount / groupCount).toFixed(2)} {tripDestCurr}
+                                    ≈ {getCurrencySymbol(tripDestCurr)}{(expDestAmount / splitCount).toFixed(2)} {tripDestCurr}
                                   </span>
                                 )}
                               </div>

@@ -62,7 +62,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
           return Math.round(exp.splitBreakdown[matchedKey])
         }
       }
-      const count = exp.splitBetween ? exp.splitBetween.length : 1
+      const count = exp.splitBetween && exp.splitBetween.length > 0 ? exp.splitBetween.length : Math.max(trip?.partySize || trip?.members?.length || 1, 1)
       return Math.round(expAmount / count)
     }
 
