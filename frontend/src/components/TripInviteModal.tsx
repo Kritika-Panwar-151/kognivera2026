@@ -22,40 +22,40 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
   const [personalBudget, setPersonalBudget] = useState(defaultBudget)
   const [submitting, setSubmitting] = useState(false)
 
-  // Category breakdown based on personal budget
-  const [accommodation, setAccommodation] = useState(Math.round(defaultBudget * 0.35))
-  const [food, setFood] = useState(Math.round(defaultBudget * 0.25))
-  const [transport, setTransport] = useState(Math.round(defaultBudget * 0.2))
-  const [activities, setActivities] = useState(Math.round(defaultBudget * 0.1))
-  const [misc, setMisc] = useState(Math.max(0, defaultBudget - (Math.round(defaultBudget * 0.35) + Math.round(defaultBudget * 0.25) + Math.round(defaultBudget * 0.2) + Math.round(defaultBudget * 0.1))))
+  // Category percentage allocation (sums to 100%)
+  const [accPct, setAccPct] = useState(35)
+  const [foodPct, setFoodPct] = useState(25)
+  const [transPct, setTransPct] = useState(20)
+  const [actPct, setActPct] = useState(10)
+  const [miscPct, setMiscPct] = useState(10)
 
   if (!isOpen || !trip) return null
 
   const handleBudgetChange = (amount: number) => {
-    const val = Math.max(0, amount)
-    setPersonalBudget(val)
-    const acc = Math.round(val * 0.35)
-    const fd = Math.round(val * 0.25)
-    const tr = Math.round(val * 0.2)
-    const act = Math.round(val * 0.1)
-    const ms = Math.max(0, val - (acc + fd + tr + act))
-    setAccommodation(acc)
-    setFood(fd)
-    setTransport(tr)
-    setActivities(act)
-    setMisc(ms)
+    setPersonalBudget(Math.max(0, amount))
   }
 
-  const categorySum = accommodation + food + transport + activities + misc
-  const isBalanced = categorySum === personalBudget
+  // Calculate live category amounts from budget & percentages
+  const accommodation = Math.round(personalBudget * (accPct / 100))
+  const food = Math.round(personalBudget * (foodPct / 100))
+  const transport = Math.round(personalBudget * (transPct / 100))
+  const activities = Math.round(personalBudget * (actPct / 100))
+  const misc = Math.round(personalBudget * (miscPct / 100))
+
+  const totalPct = accPct + foodPct + transPct + actPct + miscPct
+  const isBalanced = totalPct === 100
 
   const handleAutoBalance = () => {
-    const sum4 = accommodation + food + transport + activities
-    if (personalBudget >= sum4) {
-      setMisc(personalBudget - sum4)
-    } else {
-      handleBudgetChange(personalBudget)
-    }
+    const sum4 = accPct + foodPct + transPct + actPct
+    setMiscPct(Math.max(0, 100 - sum4))
+  }
+
+  const handleResetDefaults = () => {
+    setAccPct(35)
+    setFoodPct(25)
+    setTransPct(20)
+    setActPct(10)
+    setMiscPct(10)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -142,8 +142,9 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
                 type="number"
                 min="0"
                 step="50"
-                value={personalBudget}
-                onChange={(e) => handleBudgetChange(Number(e.target.value))}
+                value={personalBudget === 0 ? '' : personalBudget}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => handleBudgetChange(e.target.value === '' ? 0 : Number(e.target.value))}
                 className="w-full pl-14 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-black text-lg focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition"
                 required
               />
@@ -176,15 +177,15 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
             </div>
           </div>
 
-          {/* Category Allocation */}
+          {/* Editable Percentage Category Allocation */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                2. Editable Category Breakdown ({userHomeCurr})
+                2. Editable Category Split (%)
               </label>
               <button
                 type="button"
-                onClick={() => handleBudgetChange(personalBudget)}
+                onClick={handleResetDefaults}
                 className="text-[10px] font-semibold text-teal-700 hover:underline"
               >
                 Reset Defaults
@@ -193,96 +194,121 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
             
             <div className="grid grid-cols-2 gap-2 text-xs">
               {/* Accommodation */}
-              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
-                <label className="text-slate-600 font-bold block text-[11px]">🏨 Stay (35%)</label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={accommodation}
-                    onChange={(e) => setAccommodation(Math.max(0, Number(e.target.value)))}
-                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
-                  />
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-700 font-bold block text-[11px]">🏨 Stay</label>
+                  <div className="relative flex items-center w-16">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={accPct === 0 ? '' : accPct}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setAccPct(Math.max(0, e.target.value === '' ? 0 : Number(e.target.value)))}
+                      className="w-full pr-4 text-right py-0.5 px-1 bg-white border border-slate-300 rounded-md text-teal-900 font-black text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                    />
+                    <span className="absolute right-1 text-slate-500 font-bold text-[10px]">%</span>
+                  </div>
                 </div>
-                <span className="text-[10px] text-teal-700 block font-mono">
-                  ≈ {destSymbol}{convertCurrency(accommodation, userHomeCurr, tripDestCurr).toLocaleString()}
-                </span>
+                <div className="text-[10px] text-slate-600 font-semibold flex items-center justify-between">
+                  <span>{homeSymbol}{accommodation.toLocaleString()}</span>
+                  <span className="text-teal-700 font-mono">≈ {destSymbol}{convertCurrency(accommodation, userHomeCurr, tripDestCurr).toLocaleString()}</span>
+                </div>
               </div>
 
               {/* Food */}
-              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
-                <label className="text-slate-600 font-bold block text-[11px]">🍽️ Food (25%)</label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={food}
-                    onChange={(e) => setFood(Math.max(0, Number(e.target.value)))}
-                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
-                  />
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-700 font-bold block text-[11px]">🍽️ Food</label>
+                  <div className="relative flex items-center w-16">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={foodPct === 0 ? '' : foodPct}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setFoodPct(Math.max(0, e.target.value === '' ? 0 : Number(e.target.value)))}
+                      className="w-full pr-4 text-right py-0.5 px-1 bg-white border border-slate-300 rounded-md text-teal-900 font-black text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                    />
+                    <span className="absolute right-1 text-slate-500 font-bold text-[10px]">%</span>
+                  </div>
                 </div>
-                <span className="text-[10px] text-teal-700 block font-mono">
-                  ≈ {destSymbol}{convertCurrency(food, userHomeCurr, tripDestCurr).toLocaleString()}
-                </span>
+                <div className="text-[10px] text-slate-600 font-semibold flex items-center justify-between">
+                  <span>{homeSymbol}{food.toLocaleString()}</span>
+                  <span className="text-teal-700 font-mono">≈ {destSymbol}{convertCurrency(food, userHomeCurr, tripDestCurr).toLocaleString()}</span>
+                </div>
               </div>
 
               {/* Transport */}
-              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
-                <label className="text-slate-600 font-bold block text-[11px]">🚕 Transport (20%)</label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={transport}
-                    onChange={(e) => setTransport(Math.max(0, Number(e.target.value)))}
-                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
-                  />
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-700 font-bold block text-[11px]">🚕 Transport</label>
+                  <div className="relative flex items-center w-16">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={transPct === 0 ? '' : transPct}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setTransPct(Math.max(0, e.target.value === '' ? 0 : Number(e.target.value)))}
+                      className="w-full pr-4 text-right py-0.5 px-1 bg-white border border-slate-300 rounded-md text-teal-900 font-black text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                    />
+                    <span className="absolute right-1 text-slate-500 font-bold text-[10px]">%</span>
+                  </div>
                 </div>
-                <span className="text-[10px] text-teal-700 block font-mono">
-                  ≈ {destSymbol}{convertCurrency(transport, userHomeCurr, tripDestCurr).toLocaleString()}
-                </span>
+                <div className="text-[10px] text-slate-600 font-semibold flex items-center justify-between">
+                  <span>{homeSymbol}{transport.toLocaleString()}</span>
+                  <span className="text-teal-700 font-mono">≈ {destSymbol}{convertCurrency(transport, userHomeCurr, tripDestCurr).toLocaleString()}</span>
+                </div>
               </div>
 
               {/* Activities */}
-              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
-                <label className="text-slate-600 font-bold block text-[11px]">🎟️ Activities (10%)</label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={activities}
-                    onChange={(e) => setActivities(Math.max(0, Number(e.target.value)))}
-                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
-                  />
+              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-700 font-bold block text-[11px]">🎟️ Activities</label>
+                  <div className="relative flex items-center w-16">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={actPct === 0 ? '' : actPct}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setActPct(Math.max(0, e.target.value === '' ? 0 : Number(e.target.value)))}
+                      className="w-full pr-4 text-right py-0.5 px-1 bg-white border border-slate-300 rounded-md text-teal-900 font-black text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                    />
+                    <span className="absolute right-1 text-slate-500 font-bold text-[10px]">%</span>
+                  </div>
                 </div>
-                <span className="text-[10px] text-teal-700 block font-mono">
-                  ≈ {destSymbol}{convertCurrency(activities, userHomeCurr, tripDestCurr).toLocaleString()}
-                </span>
+                <div className="text-[10px] text-slate-600 font-semibold flex items-center justify-between">
+                  <span>{homeSymbol}{activities.toLocaleString()}</span>
+                  <span className="text-teal-700 font-mono">≈ {destSymbol}{convertCurrency(activities, userHomeCurr, tripDestCurr).toLocaleString()}</span>
+                </div>
               </div>
 
               {/* Misc */}
-              <div className="col-span-2 bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
+              <div className="col-span-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 space-y-1">
                 <div className="flex items-center justify-between">
-                  <label className="text-slate-600 font-bold block text-[11px]">🧩 Misc / Buffer (10%)</label>
-                  <span className="text-[10px] text-slate-400">Flexible fund</span>
+                  <div>
+                    <label className="text-slate-700 font-bold block text-[11px]">🧩 Misc / Buffer</label>
+                    <span className="text-[10px] text-slate-400">Flexible balance</span>
+                  </div>
+                  <div className="relative flex items-center w-20">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={miscPct === 0 ? '' : miscPct}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => setMiscPct(Math.max(0, e.target.value === '' ? 0 : Number(e.target.value)))}
+                      className="w-full pr-4 text-right py-0.5 px-1 bg-white border border-slate-300 rounded-md text-teal-900 font-black text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                    />
+                    <span className="absolute right-1 text-slate-500 font-bold text-[10px]">%</span>
+                  </div>
                 </div>
-                <div className="relative flex items-center">
-                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={misc}
-                    onChange={(e) => setMisc(Math.max(0, Number(e.target.value)))}
-                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
-                  />
+                <div className="text-[10px] text-slate-600 font-semibold flex items-center justify-between pt-0.5">
+                  <span>{homeSymbol}{misc.toLocaleString()}</span>
+                  <span className="text-teal-700 font-mono">≈ {destSymbol}{convertCurrency(misc, userHomeCurr, tripDestCurr).toLocaleString()}</span>
                 </div>
-                <span className="text-[10px] text-teal-700 block font-mono">
-                  ≈ {destSymbol}{convertCurrency(misc, userHomeCurr, tripDestCurr).toLocaleString()}
-                </span>
               </div>
             </div>
 
@@ -296,8 +322,8 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
                 <span>{isBalanced ? '✅' : '⚠️'}</span>
                 <span>
                   {isBalanced
-                    ? `Allocated: ${homeSymbol}${categorySum.toLocaleString()} (100%)`
-                    : `Sum (${homeSymbol}${categorySum.toLocaleString()}) ≠ Budget (${homeSymbol}${personalBudget.toLocaleString()})`}
+                    ? `Total Percentage Allocation: 100% (${homeSymbol}${personalBudget.toLocaleString()})`
+                    : `Total Split: ${totalPct}% (Must equal 100%)`}
                 </span>
               </div>
               {!isBalanced && (
@@ -354,7 +380,7 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
               {submitting
                 ? 'Joining Trip...'
                 : !isBalanced
-                ? 'Please Balance Categories'
+                ? 'Total Split Must Be 100%'
                 : 'Accept & Join Group'}
             </button>
           </div>
