@@ -35,6 +35,73 @@ import type { CategoryCaps } from './types'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import { syncActiveCurrencies, getTripDestinationCurrency } from './services/currencyService'
 
+const DEFAULT_DEMO_TRIPS: Trip[] = [
+  {
+    id: 'europe',
+    name: 'Europe Adventure',
+    destination: 'Rome, Italy & Zurich, Switzerland',
+    destinationCountry: 'Europe',
+    startDate: '2026-09-12',
+    endDate: '2026-09-20',
+    currency: 'EUR',
+    budget: 60000,
+    personalBudget: 20000,
+    spent: 26172,
+    partySize: 3,
+    ownerId: 'usr_aisha',
+    members: ['usr_aisha', 'usr_ravi', 'usr_pooja'],
+    memberDetails: [
+      { userId: 'usr_aisha', role: 'owner', status: 'active', personalBudget: 20000 },
+      { userId: 'usr_ravi', role: 'editor', status: 'active', personalBudget: 20000 },
+      { userId: 'usr_pooja', role: 'viewer', status: 'active', personalBudget: 20000 },
+    ],
+    memberBudgets: {
+      usr_aisha: 20000,
+      usr_ravi: 20000,
+      usr_pooja: 20000,
+    },
+    categoryCaps: {
+      accommodation: 21000,
+      food: 15000,
+      transport: 12000,
+      activities: 6000,
+      misc: 6000,
+    },
+  },
+  {
+    id: 'goa',
+    name: 'Goa Getaway',
+    destination: 'Goa, India',
+    destinationCountry: 'India',
+    startDate: '2026-10-05',
+    endDate: '2026-10-09',
+    currency: 'INR',
+    budget: 25000,
+    personalBudget: 8333,
+    spent: 8420,
+    partySize: 3,
+    ownerId: 'usr_aisha',
+    members: ['usr_aisha', 'usr_ravi', 'usr_pooja'],
+    memberDetails: [
+      { userId: 'usr_aisha', role: 'owner', status: 'active', personalBudget: 8333 },
+      { userId: 'usr_ravi', role: 'editor', status: 'active', personalBudget: 8333 },
+      { userId: 'usr_pooja', role: 'viewer', status: 'active', personalBudget: 8333 },
+    ],
+    memberBudgets: {
+      usr_aisha: 8333,
+      usr_ravi: 8333,
+      usr_pooja: 8333,
+    },
+    categoryCaps: {
+      accommodation: 8750,
+      food: 6250,
+      transport: 5000,
+      activities: 2500,
+      misc: 2500,
+    },
+  },
+]
+
 export default function App() {
   // Read persisted user session from localStorage
   const getStoredUser = (): User | null => {
@@ -47,16 +114,76 @@ export default function App() {
     return null
   }
 
+  const getStoredTrips = (): Trip[] => {
+    try {
+      const stored = localStorage.getItem('tripwallet_user_trips')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch (e) {
+      console.warn('Failed reading stored trips:', e)
+    }
+    return DEFAULT_DEMO_TRIPS
+  }
+
+  const getStoredActiveTrip = (tripsList: Trip[]): Trip | null => {
+    try {
+      const activeId = localStorage.getItem('tripwallet_active_trip_id')
+      if (activeId) {
+        const found = tripsList.find((t) => t.id === activeId)
+        if (found) return found
+      }
+    } catch (e) {
+      console.warn('Failed reading active trip id:', e)
+    }
+    return tripsList.length > 0 ? tripsList[0] : null
+  }
+
+  const getStoredScreen = (user: User | null): Screen => {
+    try {
+      const stored = localStorage.getItem('tripwallet_current_screen')
+      if (stored && stored !== 'login') return stored as Screen
+    } catch (e) {
+      console.warn('Failed reading current screen:', e)
+    }
+    return user ? 'trip-dashboard' : 'login'
+  }
+
   const initialUser = getStoredUser()
+  const initialTrips = getStoredTrips()
+  const initialCurrentTrip = getStoredActiveTrip(initialTrips)
+  const initialScreen = getStoredScreen(initialUser)
+
   const [currentUser, setCurrentUser] = useState<User | null>(initialUser)
-  // First screen is LOGIN if not authenticated; otherwise DASHBOARD
-  const [screen, setScreen] = useState<Screen>(initialUser ? 'trip-dashboard' : 'login')
-  const [trips, setTrips] = useState<Trip[]>([])
-  const [currentTrip, setCurrentTrip] = useState<Trip | null>(null)
+  const [screen, setScreenState] = useState<Screen>(initialScreen)
+  const [trips, setTrips] = useState<Trip[]>(initialTrips)
+  const [currentTrip, setCurrentTripState] = useState<Trip | null>(initialCurrentTrip)
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [isConverterOpen, setIsConverterOpen] = useState(false)
   const [, setLoadingData] = useState(true)
   const [showInviteModal, setShowInviteModal] = useState(false)
+
+  // Sync active trip ID and user trips to localStorage
+  useEffect(() => {
+    if (trips && trips.length > 0) {
+      try {
+        localStorage.setItem('tripwallet_user_trips', JSON.stringify(trips))
+      } catch (e) {
+        console.warn('Failed saving trips to localStorage:', e)
+      }
+    }
+  }, [trips])
+
+  useEffect(() => {
+    if (currentTrip?.id) {
+      try {
+        localStorage.setItem('tripwallet_active_trip_id', currentTrip.id)
+      } catch (e) {
+        console.warn('Failed saving active trip id to localStorage:', e)
+      }
+    }
+  }, [currentTrip?.id])
 
   // Globally sync active destination currency + symbol and home currency + symbol
   useEffect(() => {
@@ -87,27 +214,28 @@ export default function App() {
     })
   }
 
-  // Safe trip updater ensuring user isolation is always preserved
+  // Safe trip updater ensuring user isolation is always preserved and page refresh never wipes data
   const updateTripsSafely = (freshTrips: Trip[], targetUser: User | null) => {
     const userTrips = deduplicateTrips(filterTripsForUser(freshTrips, targetUser))
     
-    // Preserve newly created local trips while they finish persisting to Supabase
-    setTrips((prevTrips) => {
-      const pendingLocalTrips = prevTrips.filter(
-        (pt) => pt.id.startsWith('trp_') && !userTrips.some((ut) => ut.id === pt.id)
-      )
-      return deduplicateTrips([...pendingLocalTrips, ...userTrips])
-    })
+    // Only update if Supabase returned actual user trips; avoid clearing local/fallback state with empty array
+    if (userTrips.length > 0) {
+      setTrips((prevTrips) => {
+        const pendingLocalTrips = prevTrips.filter(
+          (pt) => pt.id.startsWith('trp_') && !userTrips.some((ut) => ut.id === pt.id)
+        )
+        return deduplicateTrips([...pendingLocalTrips, ...userTrips])
+      })
 
-    setCurrentTrip((prev) => {
-      if (prev) {
-        const updated = userTrips.find((t) => t.id === prev.id)
-        if (updated) return updated
-        // If prev was just created locally and hasn't finished persisting to Supabase DB yet, KEEP prev!
-        return prev
-      }
-      return userTrips.length > 0 ? userTrips[0] : null
-    })
+      setCurrentTripState((prev) => {
+        if (prev) {
+          const updated = userTrips.find((t) => t.id === prev.id)
+          if (updated) return updated
+          return prev
+        }
+        return userTrips[0]
+      })
+    }
   }
 
   // Load Trips & Expenses based on logged-in user
@@ -369,33 +497,56 @@ export default function App() {
   }
 
   const navigate = (s: Screen) => {
-    setScreen(s)
+    setScreenState(s)
+    try {
+      localStorage.setItem('tripwallet_current_screen', s)
+    } catch (e) {
+      console.warn('Error saving current screen:', e)
+    }
     window.scrollTo(0, 0)
+  }
+
+  const setCurrentTrip = (t: Trip | null) => {
+    setCurrentTripState(t)
+    if (t?.id) {
+      try {
+        localStorage.setItem('tripwallet_active_trip_id', t.id)
+      } catch (e) {
+        console.warn('Error saving active trip id:', e)
+      }
+    }
   }
 
   const handleUserLogin = (user: User) => {
     setCurrentUser(user)
-    localStorage.setItem('tripwallet_auth_user', JSON.stringify(user))
+    try {
+      localStorage.setItem('tripwallet_auth_user', JSON.stringify(user))
+    } catch (e) {
+      console.warn('Error saving auth user:', e)
+    }
 
     fetchTripsFromSupabase().then((freshTrips) => {
       updateTripsSafely(freshTrips, user)
     })
 
-    setScreen('trip-dashboard')
+    navigate('trip-dashboard')
   }
 
   const handleSignOut = async () => {
     try {
       localStorage.removeItem('tripwallet_auth_user')
+      localStorage.removeItem('tripwallet_user_trips')
+      localStorage.removeItem('tripwallet_active_trip_id')
+      localStorage.removeItem('tripwallet_current_screen')
       await supabase.auth.signOut()
     } catch (e) {
       console.warn('Sign out error:', e)
     }
     setCurrentUser(null)
-    setCurrentTrip(null)
-    setTrips([])
+    setCurrentTripState(null)
+    setTrips(DEFAULT_DEMO_TRIPS)
     setExpenses([])
-    setScreen('login')
+    setScreenState('login')
   }
 
   const handleCreateTrip = (newTrip: Trip) => {
