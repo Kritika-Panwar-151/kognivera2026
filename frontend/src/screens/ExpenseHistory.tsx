@@ -93,6 +93,20 @@ export default function ExpenseHistory({
     splitBetween: e.splitBetween || (idx !== 4 ? ['You (Aisha)', 'Ravi', 'Asha'] : ['You (Aisha)']),
   }))
 
+  // Helper for dual currency subtext on individual expense cards
+  const getSecondarySubtext = (exp: Expense, tripDestCurr: string) => {
+    const origCurr = (exp.currency || userHomeCurr).toUpperCase()
+    if (origCurr !== userHomeCurr) {
+      const sym = getCurrencySymbol(origCurr)
+      return `Receipt: ${sym}${exp.amount.toLocaleString('en-IN')} ${origCurr}`
+    }
+    if (tripDestCurr.toUpperCase() !== userHomeCurr) {
+      const dual = formatUserDualCurrency(exp.convertedAmount, userHomeCurr, userHomeCurr, tripDestCurr)
+      return dual.secondary
+    }
+    return null
+  }
+
   // 1-Click CSV Expense Report Exporter
   const exportToCSV = () => {
     const headers = [
@@ -103,7 +117,7 @@ export default function ExpenseHistory({
       'Paid By',
       'Currency',
       'Original Amount',
-      'Converted INR Amount',
+      `Converted ${userHomeCurr} Amount`,
       'Split Type',
       'Split With',
     ]
@@ -114,7 +128,7 @@ export default function ExpenseHistory({
       `"${e.merchant.replace(/"/g, '""')}"`,
       `"${e.category}"`,
       `"${resolveMemberName(e.paidBy)}"`,
-      `"${e.currency || 'INR'}"`,
+      `"${e.currency || userHomeCurr}"`,
       e.amount,
       e.convertedAmount,
       `"${e.isShared ? 'Group Shared' : 'Personal'}"`,
@@ -175,7 +189,7 @@ export default function ExpenseHistory({
             </button>
           </div>
           <p className="text-slate-500 text-xs md:text-sm mt-0.5">
-            Trip-wise expense ledgers with active trip expanded by default.
+            Trip-wise expense ledgers in your Home Currency ({userHomeCurr}) with destination currency subtext.
           </p>
         </div>
 
@@ -205,7 +219,7 @@ export default function ExpenseHistory({
       </div>
 
       {/* =========================================================================
-          MAIN QUICK ACTION BAR (DIRECTLY BELOW PAGE HEADER ONLY)
+          PROMINENT QUICK ACTION BAR (BELOW PAGE HEADER ONLY)
           Defaults to adding expenses to the active current trip
       ========================================================================= */}
       <div className="bg-white border border-teal-200/90 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 ring-1 ring-teal-50">
@@ -221,7 +235,7 @@ export default function ExpenseHistory({
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Scanned receipts and manual entries are added to your active trip ({trips[0]?.destination || 'Current Destination'}).
+              Entries default to active destination ({trips[0]?.destination || 'Current Destination'}). Amounts convert to {userHomeCurr}.
             </p>
           </div>
         </div>
@@ -246,7 +260,7 @@ export default function ExpenseHistory({
 
       {/* =========================================================================
           TRIP-WISE PRESENTATION (CURRENT TRIP EXPANDED BY DEFAULT)
-          Each trip card displays Home Currency & Destination Currency dual values
+          Home Country Currency (Primary) vs Active Trip Destination Currency (Subtext)
       ========================================================================= */}
       <div className="space-y-6">
         {trips.map((trip, tripIdx) => {
@@ -311,13 +325,15 @@ export default function ExpenseHistory({
                   {/* Right Header Dual Currency Status & Expand Toggle */}
                   <div className="flex items-center gap-3">
                     <div className="text-right hidden sm:block">
-                      <p className="text-xs text-slate-500 font-medium">Total Spent</p>
+                      <p className="text-xs text-slate-500 font-medium">Total Spent ({userHomeCurr})</p>
                       <p className="text-sm font-extrabold text-slate-900">
-                        {spentDual.primary}
+                        {spentDual.primary} {userHomeCurr}
                       </p>
-                      <p className="text-[10px] text-teal-700 font-mono font-semibold">
-                        {spentDual.secondary}
-                      </p>
+                      {tripDestCurr !== userHomeCurr && (
+                        <p className="text-[10px] text-teal-700 font-mono font-semibold">
+                          {spentDual.secondary}
+                        </p>
+                      )}
                     </div>
 
                     <button
@@ -338,9 +354,14 @@ export default function ExpenseHistory({
                   <div className="flex-1 space-y-1">
                     <div className="flex justify-between items-center font-medium text-slate-600">
                       <span>
-                        Spent: <strong className="text-slate-900">{spentDual.primary}</strong>{' '}
-                        <span className="text-[10px] text-teal-700 font-mono">({spentDual.secondary})</span> of{' '}
-                        <strong>{budgetDual.primary}</strong> <span className="text-[10px] text-teal-700 font-mono">({budgetDual.secondary})</span>
+                        Spent: <strong className="text-slate-900">{spentDual.primary} {userHomeCurr}</strong>{' '}
+                        {tripDestCurr !== userHomeCurr && (
+                          <span className="text-[10px] text-teal-700 font-mono">({spentDual.secondary})</span>
+                        )}{' '}
+                        of <strong>{budgetDual.primary} {userHomeCurr}</strong>{' '}
+                        {tripDestCurr !== userHomeCurr && (
+                          <span className="text-[10px] text-teal-700 font-mono">({budgetDual.secondary})</span>
+                        )}
                       </span>
                       <span className="font-extrabold text-teal-800 shrink-0">{pct}% Used</span>
                     </div>
@@ -354,7 +375,7 @@ export default function ExpenseHistory({
                 </div>
               </div>
 
-              {/* EXPANDED CONTENT: NO REDUNDANT INTERNAL QUICK BAR, JUST CLEAN PERSONAL & GROUP EXPENSES */}
+              {/* EXPANDED CONTENT: CLEAN PERSONAL & GROUP EXPENSES (NO REDUNDANT INTERNAL QUICK BAR) */}
               {isExpanded && (
                 <div className="p-5 md:p-6 space-y-6 bg-slate-50/40">
                   {/* =========================================================================
@@ -375,11 +396,13 @@ export default function ExpenseHistory({
                       </div>
                       <div className="text-right">
                         <span className="text-xs font-extrabold text-indigo-800 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-200 inline-block">
-                          Personal Total: {personalTotalDual.primary} ({personalExpenses.length} items)
+                          Personal Total: {personalTotalDual.primary} {userHomeCurr} ({personalExpenses.length} items)
                         </span>
-                        <span className="text-[10px] text-indigo-600 font-mono font-semibold block mt-0.5">
-                          {personalTotalDual.secondary}
-                        </span>
+                        {tripDestCurr !== userHomeCurr && (
+                          <span className="text-[10px] text-indigo-600 font-mono font-semibold block mt-0.5">
+                            {personalTotalDual.secondary}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -390,7 +413,7 @@ export default function ExpenseHistory({
                     ) : (
                       <div className="space-y-2.5">
                         {personalExpenses.map((exp) => {
-                          const expDual = formatUserDualCurrency(exp.convertedAmount, userHomeCurr, userHomeCurr, tripDestCurr)
+                          const secText = getSecondarySubtext(exp, tripDestCurr)
                           return (
                             <div
                               key={exp.id}
@@ -421,11 +444,13 @@ export default function ExpenseHistory({
                                 <div className="flex items-center gap-2">
                                   <div className="text-right shrink-0">
                                     <p className="font-bold text-slate-900 text-base">
-                                      {getCurrencySymbol(userHomeCurr)}{exp.convertedAmount.toLocaleString('en-IN')}
+                                      {getCurrencySymbol(userHomeCurr)}{exp.convertedAmount.toLocaleString('en-IN')} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
                                     </p>
-                                    <p className="text-[11px] font-bold text-indigo-700 font-mono">
-                                      {expDual.secondary}
-                                    </p>
+                                    {secText && (
+                                      <p className="text-[11px] font-bold text-indigo-700 font-mono">
+                                        {secText}
+                                      </p>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
                                     <button
@@ -483,11 +508,13 @@ export default function ExpenseHistory({
                       </div>
                       <div className="text-right">
                         <span className="text-xs font-extrabold text-teal-800 bg-teal-50 px-3 py-1 rounded-xl border border-teal-200 inline-block">
-                          Group Total: {groupTotalDual.primary} ({groupExpenses.length} items)
+                          Group Total: {groupTotalDual.primary} {userHomeCurr} ({groupExpenses.length} items)
                         </span>
-                        <span className="text-[10px] text-teal-700 font-mono font-semibold block mt-0.5">
-                          {groupTotalDual.secondary}
-                        </span>
+                        {tripDestCurr !== userHomeCurr && (
+                          <span className="text-[10px] text-teal-700 font-mono font-semibold block mt-0.5">
+                            {groupTotalDual.secondary}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -499,7 +526,7 @@ export default function ExpenseHistory({
                       <div className="space-y-2.5">
                         {groupExpenses.map((exp) => {
                           const splitAmountInr = (exp.convertedAmount / groupCount).toFixed(2)
-                          const expDual = formatUserDualCurrency(exp.convertedAmount, userHomeCurr, userHomeCurr, tripDestCurr)
+                          const secText = getSecondarySubtext(exp, tripDestCurr)
                           const perPersonShareDual = formatUserDualCurrency(parseFloat(splitAmountInr), userHomeCurr, userHomeCurr, tripDestCurr)
 
                           return (
@@ -532,11 +559,13 @@ export default function ExpenseHistory({
                                 <div className="flex items-center gap-2">
                                   <div className="text-right shrink-0">
                                     <p className="font-extrabold text-slate-900 text-base">
-                                      {getCurrencySymbol(userHomeCurr)}{exp.convertedAmount.toLocaleString('en-IN')}
+                                      {getCurrencySymbol(userHomeCurr)}{exp.convertedAmount.toLocaleString('en-IN')} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
                                     </p>
-                                    <p className="text-xs font-bold text-teal-700 font-mono">
-                                      {expDual.secondary}
-                                    </p>
+                                    {secText && (
+                                      <p className="text-xs font-bold text-teal-700 font-mono">
+                                        {secText}
+                                      </p>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
                                     <button
@@ -576,7 +605,10 @@ export default function ExpenseHistory({
                                 <div className="text-right">
                                   <span className="text-[10px] text-teal-600 block leading-none font-medium">Per Member</span>
                                   <span className="text-xs font-extrabold text-teal-900">
-                                    ₹{splitAmountInr} <span className="text-[10px] font-mono text-teal-700 font-semibold">({perPersonShareDual.secondary})</span>
+                                    {getCurrencySymbol(userHomeCurr)}{parseFloat(splitAmountInr).toLocaleString('en-IN')} {userHomeCurr}
+                                    {tripDestCurr !== userHomeCurr && (
+                                      <span className="text-[10px] font-mono text-teal-700 font-semibold ml-1">({perPersonShareDual.secondary})</span>
+                                    )}
                                   </span>
                                 </div>
                               </div>
