@@ -576,6 +576,7 @@ export default function App() {
           <HomeScreen
             navigate={navigate}
             trips={trips}
+            currentUser={currentUser}
             onSelectTrip={(trip) => {
               setCurrentTrip(trip)
               navigate('trip-dashboard')
