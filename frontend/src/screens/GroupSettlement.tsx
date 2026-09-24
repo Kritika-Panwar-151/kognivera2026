@@ -278,6 +278,8 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     .filter((d) => !d.isSettled)
     .reduce((sum, d) => sum + d.amount, 0)
 
+  const netBalance = totalOwedToYou - totalYouOwe
+
   const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false)
   const [confirmModalTarget, setConfirmModalTarget] = useState<SettlingTarget | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
