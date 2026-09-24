@@ -642,32 +642,23 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
 
         {/* Submit Actions */}
         <div className="space-y-3 pt-2">
-          {missingRequests > 0 && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between">
-              <span>⚠️ <strong>{missingRequests} more invite request{missingRequests > 1 ? 's' : ''}</strong> will be sent automatically before creating trip.</span>
-              <button
-                type="button"
-                onClick={handleQuickSendRemainingInvites}
-                className="px-3 py-1 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 transition"
-              >
-                Send Now
-              </button>
-            </div>
-          )}
-
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={handleCreate}
-              className="flex-1 py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl shadow-md transition text-sm flex items-center justify-center gap-2"
+              className="flex-1 py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl shadow-md transition text-sm flex items-center justify-center gap-2 cursor-pointer"
             >
               <span>🚀</span>
-              <span>{missingRequests > 0 ? `Send ${missingRequests} Invites & Create Trip` : 'Create Trip & Confirm Budget'}</span>
+              <span>
+                {invitedMembers.length > 0
+                  ? `Create Trip & Send ${invitedMembers.length} Invite${invitedMembers.length > 1 ? 's' : ''}`
+                  : 'Create Trip & Confirm Budget'}
+              </span>
             </button>
             <button
               type="button"
               onClick={() => navigate('trip-dashboard')}
-              className="px-6 py-3.5 border border-slate-200 text-slate-700 font-semibold rounded-2xl hover:bg-slate-50 transition text-sm"
+              className="px-6 py-3.5 border border-slate-200 text-slate-700 font-semibold rounded-2xl hover:bg-slate-50 transition text-sm cursor-pointer"
             >
               Cancel
             </button>
