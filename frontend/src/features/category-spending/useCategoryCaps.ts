@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import type { Trip, Expense } from '../../types'
+import type { Trip, Expense, User } from '../../types'
+import { getCurrencySymbol } from '../../services/currencyService'
 
 export interface CategoryCapItem {
   id: string
@@ -25,12 +26,13 @@ export interface BreachDetail {
   }
 }
 
-export function useCategoryCaps(trip?: Trip | null, expenses: Expense[] = []) {
+export function useCategoryCaps(trip?: Trip | null, expenses: Expense[] = [], currentUser?: User | null) {
   const [isOpen, setIsOpen] = useState(false)
   const [isDismissed, setIsDismissed] = useState(false)
 
   const budget = trip?.budget || 60000
-  const currencySymbol = trip?.currency === 'EUR' ? '€' : trip?.currency === 'USD' ? '$' : '₹'
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const currencySymbol = getCurrencySymbol(userHomeCurr)
 
   // Strictly filter expenses belonging only to this trip
   const tripExpenses = useMemo(() => {

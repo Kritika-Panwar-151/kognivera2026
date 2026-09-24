@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Trip, User, Expense } from '../common/types'
 import { useBudget } from './useBudget'
+import { getCurrencySymbol } from '../../services/currencyService'
 
 interface Props {
   trip: Trip
@@ -34,7 +35,8 @@ export default function BudgetDonutGauge({ trip, currentUser, expenses }: Props)
   const circ = 2 * Math.PI * radius
   const strokeDashoffset = circ - (activePct / 100) * circ
 
-  const currencySymbol = trip.currency === 'USD' ? '$' : trip.currency === 'EUR' ? '€' : '₹'
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const currencySymbol = getCurrencySymbol(userHomeCurr)
 
   return (
     <div className="bg-white rounded-3xl border border-teal-100 shadow-sm p-5 md:p-6 mb-6">

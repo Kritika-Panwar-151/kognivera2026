@@ -379,17 +379,11 @@ export default function AIGuardian({ navigate, trip, currentUser, onAddExpense }
           <div className="text-right">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Safe Daily Limit</span>
             <span className="text-sm font-extrabold text-teal-800">{safeDailyDual.primary} / day</span>
-            {safeDailyDual.secondary && (
-              <span className="text-[10px] font-bold text-teal-600 block">{safeDailyDual.secondary}</span>
-            )}
           </div>
           <div className="w-px h-8 bg-slate-100" />
           <div className="text-right">
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Trip Total Spend</span>
             <span className="text-sm font-extrabold text-indigo-900">{totalSpentDual.primary}</span>
-            {totalSpentDual.secondary && (
-              <span className="text-[10px] font-bold text-slate-500 block">{totalSpentDual.secondary}</span>
-            )}
           </div>
         </div>
       </div>

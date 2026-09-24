@@ -9,6 +9,7 @@ import {
 } from '../features/adaptive-itinerary/adaptiveItineraryEngine'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { resolveCityName } from '../services/geminiService'
+import { getCurrencySymbol } from '../services/currencyService'
 
 export interface CuratedSpot {
   id: string
@@ -299,7 +300,8 @@ export default function AdaptiveItineraryScreen({ navigate, trip, currentUser }:
     syncAdaptedItinerary({ tripId: trip.id, items: updated })
   }
 
-  const currencySymbol = trip.currency === 'USD' ? '$' : trip.currency === 'EUR' ? '€' : '₹'
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const currencySymbol = getCurrencySymbol(userHomeCurr)
 
   // Listen to remote itinerary updates across devices
   useEffect(() => {

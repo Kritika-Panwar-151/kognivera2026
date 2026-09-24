@@ -168,16 +168,16 @@ export default function TopBar({
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
         </button>
 
-        {/* Global Synced Dual Currency Pill & Converter Button */}
+        {/* Global Unified Currency Pill & Converter Button */}
         <button
           type="button"
           onClick={onOpenConverter}
           className="px-2.5 py-1.5 bg-gradient-to-r from-teal-50 to-emerald-50 hover:from-teal-100 hover:to-emerald-100 border border-teal-200/80 text-teal-900 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
-          title={`Active Destination: ${activeCurr} (${activeSym}) · Home Currency: ${homeCurr} (${homeSym}) — Tap for FX Converter`}
+          title={`Home Currency: ${homeCurr} (${homeSym}) — Tap for FX Converter`}
         >
           <span className="text-xs">💱</span>
           <span className="text-[11px] font-black text-teal-800 tracking-tight">
-            {activeCurr} ({activeSym}) · {homeCurr} ({homeSym})
+            {homeCurr} ({homeSym})
           </span>
         </button>
 

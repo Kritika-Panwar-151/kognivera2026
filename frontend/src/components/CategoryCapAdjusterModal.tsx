@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import type { Trip, CategoryCaps } from '../types'
+import type { Trip, CategoryCaps, User } from '../types'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { getCurrencySymbol } from '../services/currencyService'
 
 interface Props {
   isOpen: boolean
   onClose: () => void
   trip?: Trip | null
+  currentUser?: User | null
   onSaveCaps?: (updatedCaps: CategoryCaps) => void
 }
 
@@ -13,10 +15,12 @@ export default function CategoryCapAdjusterModal({
   isOpen,
   onClose,
   trip,
+  currentUser,
   onSaveCaps,
 }: Props) {
   const budget = trip?.budget || 60000
-  const currencySymbol = trip?.currency === 'EUR' ? '€' : trip?.currency === 'USD' ? '$' : '₹'
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const currencySymbol = getCurrencySymbol(userHomeCurr)
 
   const defaultCaps: CategoryCaps = trip?.categoryCaps || {
     accommodation: Math.round(budget * 0.35),

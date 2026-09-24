@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Trip, Expense, User } from '../types'
 import { resolveMemberName } from '../services/userRegistry'
+import { getCurrencySymbol } from '../services/currencyService'
 
 export interface PendingDebtItem {
   id: string
@@ -38,7 +39,8 @@ export default function PendingRequestsModal({
   if (!isOpen) return null
 
   const currentUserName = currentUser?.name || 'You (Aisha)'
-  const currencySymbol = trip?.currency === 'EUR' ? '€' : trip?.currency === 'USD' ? '$' : '₹'
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const currencySymbol = getCurrencySymbol(userHomeCurr)
 
   // 1. Pending Debts / Split Claims (derived strictly from real logged expenses)
   const pendingDebts: PendingDebtItem[] = []
