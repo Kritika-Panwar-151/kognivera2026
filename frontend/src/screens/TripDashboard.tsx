@@ -10,7 +10,7 @@ import CategoryBreachAlert from '../components/CategoryBreachAlert'
 import PendingRequestsModal from '../components/PendingRequestsModal'
 import CategoryCapAdjusterModal from '../components/CategoryCapAdjusterModal'
 import EditTripModal from '../components/EditTripModal'
-import { formatUserDualCurrency } from '../services/currencyService'
+import { formatUserDualCurrency, getTripDestinationCurrency } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -291,7 +291,7 @@ export default function TripDashboard({
 
   const projectedOver = isOverBudgetProjected ? projectedFinal - budget : 0
   const userHomeCurr = (activeUser.homeCurrency || 'INR').toUpperCase()
-  const tripDestCurr = (trip?.currency || 'JPY').toUpperCase()
+  const tripDestCurr = getTripDestinationCurrency(trip)
 
   const groupBudgetDual = formatUserDualCurrency(budget, userHomeCurr, userHomeCurr, tripDestCurr)
   const groupRemainingDual = formatUserDualCurrency(remaining, userHomeCurr, userHomeCurr, tripDestCurr)

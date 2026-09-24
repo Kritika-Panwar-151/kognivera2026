@@ -197,3 +197,20 @@ export function formatUserDualCurrency(
     secondaryAmount,
   }
 }
+
+/**
+ * Resolves the exact destination currency for any trip record,
+ * checking trip.currency, destinationCountry, or destination string.
+ */
+export function getTripDestinationCurrency(trip?: { currency?: string; destinationCountry?: string; destination?: string } | null): string {
+  if (!trip) return 'USD'
+  if (trip.currency && trip.currency.trim()) return trip.currency.toUpperCase()
+  const dest = trip.destinationCountry || trip.destination || ''
+  if (dest.toLowerCase().includes('switzerland') || dest.toLowerCase().includes('zurich')) return 'CHF'
+  if (dest.toLowerCase().includes('japan') || dest.toLowerCase().includes('tokyo')) return 'JPY'
+  if (dest.toLowerCase().includes('france') || dest.toLowerCase().includes('paris') || dest.toLowerCase().includes('germany') || dest.toLowerCase().includes('italy')) return 'EUR'
+  if (dest.toLowerCase().includes('uk') || dest.toLowerCase().includes('london') || dest.toLowerCase().includes('england')) return 'GBP'
+  if (dest.toLowerCase().includes('usa') || dest.toLowerCase().includes('states') || dest.toLowerCase().includes('york')) return 'USD'
+  if (dest.toLowerCase().includes('india') || dest.toLowerCase().includes('delhi') || dest.toLowerCase().includes('mumbai')) return 'INR'
+  return 'USD'
+}

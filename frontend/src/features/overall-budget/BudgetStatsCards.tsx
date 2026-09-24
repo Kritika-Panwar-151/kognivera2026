@@ -1,6 +1,6 @@
 import type { Trip, User, Expense } from '../common/types'
 import { useBudget } from './useBudget'
-import { formatUserDualCurrency } from '../../services/currencyService'
+import { formatUserDualCurrency, getTripDestinationCurrency } from '../../services/currencyService'
 
 interface Props {
   trip: Trip
@@ -21,7 +21,7 @@ export default function BudgetStatsCards({ trip, currentUser, expenses, onEditPe
   } = useBudget(trip, currentUser, expenses)
 
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
-  const tripDestCurr = (trip?.currency || 'JPY').toUpperCase()
+  const tripDestCurr = getTripDestinationCurrency(trip)
 
   const groupBudgetDual = formatUserDualCurrency(budget, userHomeCurr, userHomeCurr, tripDestCurr)
   const personalBudgetDual = formatUserDualCurrency(personalBudget, userHomeCurr, userHomeCurr, tripDestCurr)

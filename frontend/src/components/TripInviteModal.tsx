@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Trip, CategoryCaps, User } from '../types'
-import { formatUserDualCurrency, convertCurrency, getCurrencySymbol } from '../services/currencyService'
+import { formatUserDualCurrency, convertCurrency, getCurrencySymbol, getTripDestinationCurrency } from '../services/currencyService'
 
 interface Props {
   trip: Trip
@@ -12,7 +12,7 @@ interface Props {
 
 export default function TripInviteModal({ trip, currentUser, isOpen, onClose, onAccept }: Props) {
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
-  const tripDestCurr = (trip?.currency || 'JPY').toUpperCase()
+  const tripDestCurr = getTripDestinationCurrency(trip)
 
   const homeSymbol = getCurrencySymbol(userHomeCurr)
   const destSymbol = getCurrencySymbol(tripDestCurr)
