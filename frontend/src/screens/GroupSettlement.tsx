@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import type { NavigateFn, Trip, Expense, User } from '../types'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { toggleSettleExpenseInSupabase } from '../services/supabaseDataService'
+import PendingRequestsModal from '../components/PendingRequestsModal'
 
 interface Props {
   navigate: NavigateFn
@@ -64,7 +65,22 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     if (expenses && expenses.length > 0) {
       expenses.forEach((exp) => {
         if (exp.isShared && exp.splitBetween && exp.splitBetween.length > 1) {
-          const splitAmount = Math.round(exp.convertedAmount / exp.splitBetween.length)
+          const getMemberShare = (personName: string) => {
+            if (exp.splitBreakdown) {
+              const keys = Object.keys(exp.splitBreakdown)
+              const matchedKey = keys.find(
+                (k) =>
+                  k.toLowerCase() === personName.toLowerCase() ||
+                  (personName.toLowerCase().includes('you') &&
+                    (k.toLowerCase().includes('you') || k.toLowerCase().includes(currentUserName.toLowerCase())))
+              )
+              if (matchedKey && exp.splitBreakdown[matchedKey] !== undefined) {
+                return Math.round(exp.splitBreakdown[matchedKey])
+              }
+            }
+            return Math.round(exp.convertedAmount / exp.splitBetween.length)
+          }
+
           const isPayer =
             exp.paidBy.toLowerCase().includes(currentUserName.toLowerCase()) ||
             exp.paidBy === currentUserId ||
@@ -86,9 +102,9 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                     ? '👩🏻'
                     : '👤',
                   direction: 'they_owe_you',
-                  amount: splitAmount,
+                  amount: getMemberShare(person),
                   currency: exp.currency || 'INR',
-                  reason: `${exp.category}: ${exp.merchant}`,
+                  reason: `${exp.category}: ${exp.merchant} (${exp.splitType === 'custom' ? 'Custom Share' : 'Equal Split'})`,
                   isSettled: Boolean(exp.isSettled),
                 })
               }
@@ -109,9 +125,9 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                   ? '👩🏻'
                   : '👤',
                 direction: 'you_owe_them',
-                amount: splitAmount,
+                amount: getMemberShare(currentUserName),
                 currency: exp.currency || 'INR',
-                reason: `${exp.category}: ${exp.merchant}`,
+                reason: `${exp.category}: ${exp.merchant} (${exp.splitType === 'custom' ? 'Custom Share' : 'Equal Split'})`,
                 isSettled: Boolean(exp.isSettled),
               })
             }
@@ -196,6 +212,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     .reduce((sum, d) => sum + d.amount, 0)
 
   const netBalance = totalOwedToYou - totalYouOwe
+  const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false)
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-6">
@@ -208,15 +225,27 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       </button>
 
       {/* Screen Header */}
-      <div>
-        <div className="flex items-center gap-1.5 text-teal-700 text-xs font-bold uppercase tracking-wider mb-1">
-          <span>👥</span>
-          <span>Settlement Ledger</span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-1.5 text-teal-700 text-xs font-bold uppercase tracking-wider mb-1">
+            <span>👥</span>
+            <span>Settlement Ledger</span>
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Who Owes Whom</h1>
+          <p className="text-slate-500 text-xs md:text-sm mt-0.5">
+            Person-wise balances with instant 1-tap settlement
+          </p>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Who Owes Whom</h1>
-        <p className="text-slate-500 text-xs md:text-sm mt-0.5">
-          Person-wise balances with instant 1-tap settlement
-        </p>
+
+        <button
+          type="button"
+          onClick={() => setIsPendingRequestsOpen(true)}
+          className="px-4 py-2.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-900 font-extrabold rounded-xl text-xs transition shadow-sm flex items-center gap-2 self-start sm:self-auto"
+        >
+          <span>⏳</span>
+          <span>Pending Requests</span>
+          <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+        </button>
       </div>
 
       {/* =========================================================================
@@ -382,6 +411,16 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
           Split via Largest Remainder method ensuring zero decimal discrepancy across all group members.
         </span>
       </div>
+
+      {/* PENDING REQUESTS MODAL */}
+      <PendingRequestsModal
+        isOpen={isPendingRequestsOpen}
+        onClose={() => setIsPendingRequestsOpen(false)}
+        trip={trip}
+        expenses={expenses}
+        currentUser={currentUser}
+        onSettleExpense={(debtId) => toggleSettle(debtId)}
+      />
     </div>
   )
 }

@@ -120,6 +120,35 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   const personalCount = Math.max(personalSplitMembers.length, 1)
   const personalPerPerson = (convertedAmount / personalCount).toFixed(2)
 
+  // Split Strategy: 'equal' vs 'custom'
+  const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal')
+  const [customBreakdown, setCustomBreakdown] = useState<Record<string, string>>({})
+
+  const activeSplitMembers = expenseType === 'shared' ? allTripMembers : personalSplitMembers
+
+  const totalAllocatedCustom = activeSplitMembers.reduce(
+    (sum, m) => sum + (parseFloat(customBreakdown[m]) || 0),
+    0
+  )
+  const customRemaining = Math.round((convertedAmount - totalAllocatedCustom) * 100) / 100
+
+  const handleSetCustomAmount = (member: string, val: string) => {
+    setCustomBreakdown((prev) => ({
+      ...prev,
+      [member]: val,
+    }))
+  }
+
+  const handleDistributeEvenly = () => {
+    const count = activeSplitMembers.length || 1
+    const share = (convertedAmount / count).toFixed(2)
+    const newMap: Record<string, string> = {}
+    activeSplitMembers.forEach((m) => {
+      newMap[m] = share
+    })
+    setCustomBreakdown(newMap)
+  }
+
   const togglePersonalMember = (m: string) => {
     setPersonalSplitMembers((prev) => {
       if (prev.includes(m)) {
@@ -132,6 +161,17 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
 
   const handleSave = () => {
     const isShared = expenseType === 'shared'
+    const splitBetween = isShared ? allTripMembers : personalSplitMembers
+
+    let splitBreakdown: Record<string, number> | undefined = undefined
+    if (splitMode === 'custom') {
+      splitBreakdown = {}
+      splitBetween.forEach((m) => {
+        splitBreakdown![m] =
+          parseFloat(customBreakdown[m]) || Math.round((convertedAmount / splitBetween.length) * 100) / 100
+      })
+    }
+
     const newExp: Expense = {
       id: `exp_${Date.now().toString(36)}`,
       tripId: trip?.id || 'trp_europe',
@@ -143,7 +183,9 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
       date: new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
       paidBy,
       isShared,
-      splitBetween: isShared ? allTripMembers : personalSplitMembers,
+      splitBetween,
+      splitType: splitMode,
+      splitBreakdown,
       notes,
     }
 
@@ -429,67 +471,182 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
           </select>
         </div>
 
-        {/* CONDITIONAL SPLIT CONTROLS */}
-        {expenseType === 'personal' ? (
-          /* PERSONAL MODE: CHOOSE MEMBERS TO SPLIT WITH */
-          <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-950">
-                Select Members to Split With ({personalSplitMembers.length})
+        {/* SPLIT STRATEGY CONTROLS (EQUAL VS CUSTOM SPLIT) */}
+        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                Cost Allocation Mode
               </span>
-              <span className="text-xs font-bold text-indigo-700">
-                {personalSplitMembers.length === 1 ? 'Personal (100% You)' : `₹${personalPerPerson} / person`}
-              </span>
+              <p className="text-[10px] text-slate-400">
+                Choose equal distribution or enter custom decimal shares per person
+              </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              {availableMembers.map((m) => {
-                const isSelected = personalSplitMembers.includes(m)
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => togglePersonalMember(m)}
-                    className={`p-2.5 rounded-xl border text-left text-xs font-bold transition flex items-center justify-between ${
-                      isSelected
-                        ? 'border-indigo-600 bg-white text-indigo-900 shadow-xs ring-2 ring-indigo-200'
-                        : 'border-slate-200 bg-white/60 text-slate-500 hover:bg-white'
-                    }`}
-                  >
-                    <span className="truncate">{m}</span>
-                    <span className="text-sm">{isSelected ? '✓' : '+'}</span>
-                  </button>
-                )
-              })}
+            {/* Split Mode Segmented Switch */}
+            <div className="flex bg-slate-200/80 p-0.5 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setSplitMode('equal')}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
+                  splitMode === 'equal'
+                    ? 'bg-white text-teal-800 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ⚖️ Equal Split
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSplitMode('custom')
+                  if (Object.keys(customBreakdown).length === 0) {
+                    handleDistributeEvenly()
+                  }
+                }}
+                className={`px-3 py-1 text-xs font-bold rounded-lg transition ${
+                  splitMode === 'custom'
+                    ? 'bg-white text-indigo-700 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ✏️ Custom Split
+              </button>
             </div>
-            <p className="text-[10px] text-indigo-600">
-              💡 Select only the specific people sharing this cost. Not counted against the group trip budget.
-            </p>
           </div>
-        ) : (
-          /* SHARED TRIP MODE: AUTOMATICALLY SPLIT ACROSS ALL GROUP MEMBERS */
-          <div className="p-4 bg-teal-50/60 rounded-2xl border border-teal-100 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-teal-950">
-                Split Across All Group Members ({allTripMembers.length})
+
+          {/* Member Selection for Personal Mode */}
+          {expenseType === 'personal' && (
+            <div className="space-y-2 pt-1 border-t border-slate-200/60">
+              <span className="text-[11px] font-bold text-slate-600 block">
+                Select Members in Split ({personalSplitMembers.length})
               </span>
-              <span className="text-xs font-extrabold text-teal-800">
-                ₹{tripPerPerson} / member
-              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {availableMembers.map((m) => {
+                  const isSelected = personalSplitMembers.includes(m)
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => togglePersonalMember(m)}
+                      className={`p-2 rounded-xl border text-left text-xs font-bold transition flex items-center justify-between ${
+                        isSelected
+                          ? 'border-indigo-600 bg-white text-indigo-900 shadow-2xs ring-1 ring-indigo-200'
+                          : 'border-slate-200 bg-white/60 text-slate-500 hover:bg-white'
+                      }`}
+                    >
+                      <span className="truncate">{m}</span>
+                      <span className="text-xs">{isSelected ? '✓' : '+'}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {allTripMembers.map((m) => (
-                <span
-                  key={m}
-                  className="bg-white text-teal-900 border border-teal-200 px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-2xs"
-                >
-                  ✓ {m}
+          )}
+
+          {/* Split Mode Content */}
+          {splitMode === 'equal' ? (
+            <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">⚖️</span>
+                <span className="text-slate-700 font-medium">
+                  Divided equally across <strong>{activeSplitMembers.length} member{activeSplitMembers.length > 1 ? 's' : ''}</strong>
                 </span>
-              ))}
+              </div>
+              <span className="text-xs font-black text-teal-800 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-100">
+                ₹{(convertedAmount / Math.max(activeSplitMembers.length, 1)).toFixed(2)} / person
+              </span>
             </div>
-            <p className="text-[10px] text-teal-700">
-              Allocated equally by largest-remainder rule and deducted from total trip budget.
-            </p>
+          ) : (
+            /* Custom Split Inputs */
+            <div className="space-y-2.5 bg-white p-3.5 rounded-xl border border-indigo-200">
+              <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-100">
+                <span className="font-bold text-indigo-950">Custom Member Shares (INR ₹)</span>
+                <button
+                  type="button"
+                  onClick={handleDistributeEvenly}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
+                >
+                  Reset Evenly
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {activeSplitMembers.map((m) => {
+                  const val =
+                    customBreakdown[m] !== undefined
+                      ? customBreakdown[m]
+                      : (convertedAmount / activeSplitMembers.length).toFixed(2)
+
+                  return (
+                    <div
+                      key={m}
+                      className="flex items-center justify-between gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200"
+                    >
+                      <span className="text-xs font-bold text-slate-800 truncate">{m}</span>
+                      <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1 w-28 shadow-2xs">
+                        <span className="text-[11px] font-bold text-slate-400 mr-1">₹</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={val}
+                          onChange={(e) => handleSetCustomAmount(m, e.target.value)}
+                          className="w-full text-xs font-black text-slate-900 outline-none text-right"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Checksum & Balance Status */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">
+                  Allocated: <strong>₹{totalAllocatedCustom.toFixed(2)}</strong> / ₹{convertedAmount.toFixed(2)}
+                </span>
+                <span
+                  className={`font-black text-xs px-2 py-0.5 rounded-md ${
+                    Math.abs(customRemaining) < 0.01
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {Math.abs(customRemaining) < 0.01
+                    ? '✓ Balanced'
+                    : `Remaining: ₹${customRemaining.toFixed(2)}`}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* CATEGORY CAP BREACH PREVIEW WARNING */}
+        {convertedAmount >
+          (trip?.categoryCaps
+            ? category.toLowerCase().includes('food')
+              ? trip.categoryCaps.food
+              : category.toLowerCase().includes('stay') || category.toLowerCase().includes('accommodation')
+              ? trip.categoryCaps.accommodation
+              : category.toLowerCase().includes('transport')
+              ? trip.categoryCaps.transport
+              : category.toLowerCase().includes('activit')
+              ? trip.categoryCaps.activities
+              : trip.categoryCaps.misc
+            : 15000) && (
+          <div className="p-3.5 bg-rose-50 border-2 border-rose-300 rounded-2xl flex items-center justify-between gap-3 text-xs text-rose-950 shadow-xs animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🚨</span>
+              <div>
+                <p className="font-black">Category Cap Breach Alert</p>
+                <p className="text-[11px] text-rose-700 mt-0.5">
+                  This expense ({currCode} {numAmount} → ₹{convertedAmount.toLocaleString()}) pushes {category} spend past the allocated category cap!
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold bg-rose-200 text-rose-900 px-2 py-0.5 rounded-full shrink-0">
+              Cap Exceeded
+            </span>
           </div>
         )}
 

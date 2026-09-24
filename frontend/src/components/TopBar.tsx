@@ -70,6 +70,22 @@ export default function TopBar({
           </button>
         )}
 
+        {/* Dedicated AI Guardian Copilot Button */}
+        <button
+          type="button"
+          onClick={() => navigate('ai-guardian')}
+          className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs ${
+            currentScreen === 'ai-guardian'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
+              : 'bg-orange-50 hover:bg-orange-100 text-orange-800 border border-orange-200'
+          }`}
+          title="Open AI Travel Guardian & Copilot"
+        >
+          <span className="text-sm">🤖</span>
+          <span className="hidden sm:inline">AI Guardian</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        </button>
+
         {/* Global Currency Converter Button */}
         <button
           onClick={onOpenConverter}

@@ -81,6 +81,8 @@ export interface Expense {
   paidBy: string
   isShared?: boolean
   splitBetween?: string[]
+  splitType?: 'equal' | 'custom'
+  splitBreakdown?: Record<string, number>
   notes?: string
 }
 

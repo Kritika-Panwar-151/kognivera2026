@@ -1,12 +1,13 @@
-import type { Trip } from '../common/types'
+import type { Trip, Expense } from '../../types'
 import { useCategoryCaps } from './useCategoryCaps'
 
 interface Props {
-  trip: Trip
+  trip?: Trip | null
+  expenses?: Expense[]
 }
 
-export default function CategoryCapsDrawer({ trip }: Props) {
-  const { isOpen, toggleOpen, categories, totalCap, totalSpent } = useCategoryCaps(trip)
+export default function CategoryCapsDrawer({ trip, expenses = [] }: Props) {
+  const { isOpen, toggleOpen, categories, totalCap, totalSpent, currencySymbol } = useCategoryCaps(trip, expenses)
 
   return (
     <div className="bg-white rounded-3xl border border-teal-100 shadow-sm overflow-hidden mb-6">
@@ -22,11 +23,16 @@ export default function CategoryCapsDrawer({ trip }: Props) {
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-slate-900 text-sm md:text-base">Category Budget Caps</h3>
               <span className="text-[11px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded-full">
-                5 Tracked
+                5 Monitored
               </span>
+              {categories.some((c) => c.status === 'breached') && (
+                <span className="text-[10px] font-black bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full border border-rose-200 animate-pulse">
+                  Cap Breached!
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              ₹{totalSpent.toLocaleString()} spent of ₹{totalCap.toLocaleString()} allocated across caps
+              {currencySymbol}{totalSpent.toLocaleString()} spent of {currencySymbol}{totalCap.toLocaleString()} allocated across caps
             </p>
           </div>
         </div>
@@ -44,15 +50,26 @@ export default function CategoryCapsDrawer({ trip }: Props) {
                 <span className="font-bold text-slate-800 flex items-center gap-1.5">
                   <span>{c.icon}</span>
                   <span>{c.name}</span>
+                  {c.status === 'breached' && (
+                    <span className="text-[9px] font-black bg-rose-100 text-rose-700 px-1.5 py-0.2 rounded border border-rose-200">
+                      OVER BY +{currencySymbol}{c.overshoot.toLocaleString()}
+                    </span>
+                  )}
                 </span>
-                <span className="font-bold text-slate-600">
-                  ₹{c.spent.toLocaleString()} / ₹{c.cap.toLocaleString()} ({c.pct}%)
+                <span className={`font-bold ${c.status === 'breached' ? 'text-rose-600' : 'text-slate-600'}`}>
+                  {currencySymbol}{c.spent.toLocaleString()} / {currencySymbol}{c.cap.toLocaleString()} ({c.pct}%)
                 </span>
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-teal-600 rounded-full transition-all duration-500"
-                  style={{ width: `${c.pct}%` }}
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    c.status === 'breached'
+                      ? 'bg-rose-500'
+                      : c.status === 'warning'
+                      ? 'bg-amber-500'
+                      : 'bg-teal-600'
+                  }`}
+                  style={{ width: `${Math.min(c.pct, 100)}%` }}
                 />
               </div>
             </div>

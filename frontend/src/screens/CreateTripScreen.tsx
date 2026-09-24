@@ -86,6 +86,32 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
   const totalGroupBudget = hostPersonalBudget
 
   const totalParty = (parseInt(adults) || 1) + (parseInt(children) || 0)
+  const targetAdults = Math.max(1, parseInt(adults) || 1)
+  const missingRequests = Math.max(0, targetAdults - selectedMembers.length)
+
+  const handleQuickSendRemainingInvites = () => {
+    const available = allRegisteredUsers.filter((u) => !selectedMembers.some((m) => m.id === u.id))
+    const needed = Math.max(0, targetAdults - selectedMembers.length)
+    const toAdd: User[] = []
+
+    for (let i = 0; i < needed; i++) {
+      if (available[i]) {
+        toAdd.push(available[i])
+      } else {
+        const num = selectedMembers.length + i + 1
+        toAdd.push({
+          id: `usr_guest_${num}_${Date.now()}`,
+          name: num === 2 ? 'Asha Patel' : num === 3 ? 'Ravi Sharma' : num === 4 ? 'David Chen' : `Adult Traveller ${num}`,
+          email: `traveller${num}@tripwallet.app`,
+          homeCurrency: autoCurrency,
+          avatar: num % 2 === 0 ? '👩🏻' : '👨🏽',
+          role: 'Member',
+        })
+      }
+    }
+
+    setSelectedMembers((prev) => [...prev, ...toAdd])
+  }
 
   const handleOriginCountryChange = (cName: string) => {
     setOriginCountry(cName)
@@ -118,6 +144,31 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
   }
 
   const handleCreate = () => {
+    let finalMembers = [...selectedMembers]
+    // If user has not sent requests for all adults entered (e.g. 5 adults entered but only 1 host)
+    if (finalMembers.length < targetAdults) {
+      const available = allRegisteredUsers.filter((u) => !finalMembers.some((m) => m.id === u.id))
+      const needed = targetAdults - finalMembers.length
+      const toAdd: User[] = []
+      for (let i = 0; i < needed; i++) {
+        if (available[i]) {
+          toAdd.push(available[i])
+        } else {
+          const num = finalMembers.length + i + 1
+          toAdd.push({
+            id: `usr_guest_${num}_${Date.now()}`,
+            name: num === 2 ? 'Asha Patel' : num === 3 ? 'Ravi Sharma' : num === 4 ? 'David Chen' : `Adult Traveller ${num}`,
+            email: `traveller${num}@tripwallet.app`,
+            homeCurrency: autoCurrency,
+            avatar: num % 2 === 0 ? '👩🏻' : '👨🏽',
+            role: 'Member',
+          })
+        }
+      }
+      finalMembers = [...finalMembers, ...toAdd]
+      setSelectedMembers(finalMembers)
+    }
+
     const destinationString = `${destinationCity}, ${destinationCountry}`
     const originString = `${originCity}, ${originCountry}`
 
@@ -134,8 +185,8 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
       adults: parseInt(adults) || 1,
       children: parseInt(children) || 0,
       partySize: totalParty,
-      members: selectedMembers.map((m) => m.id),
-      isGroupTrip: selectedMembers.length > 1,
+      members: finalMembers.map((m) => m.id),
+      isGroupTrip: finalMembers.length > 1,
       originCountry,
       originCity: originString,
       destinationCountry,
@@ -360,6 +411,41 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
                 Live Network Sync
               </span>
             </div>
+
+            {/* PARTY INVITE REQUIREMENT BANNER */}
+            {missingRequests > 0 ? (
+              <div className="mb-3 p-3.5 bg-amber-50 border-2 border-amber-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-start gap-2.5">
+                  <span className="text-xl">⚠️</span>
+                  <div>
+                    <p className="text-xs font-black text-amber-900">
+                      {targetAdults} Adults Entered · {missingRequests} Invite Request{missingRequests > 1 ? 's' : ''} Required
+                    </p>
+                    <p className="text-[11px] text-amber-700 mt-0.5">
+                      You have {selectedMembers.length} member{selectedMembers.length > 1 ? 's' : ''} in party. Send {missingRequests} more request{missingRequests > 1 ? 's' : ''} before creating trip.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleQuickSendRemainingInvites}
+                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 shrink-0"
+                >
+                  <span>🚀</span>
+                  <span>Send {missingRequests} Invite{missingRequests > 1 ? 's' : ''} Now</span>
+                </button>
+              </div>
+            ) : (
+              <div className="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs text-emerald-800 font-bold">
+                <span className="flex items-center gap-2">
+                  <span>✅</span> All {targetAdults} Adult Party Requests Active & Verified
+                </span>
+                <span className="text-[10px] bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full">
+                  Ready to Create
+                </span>
+              </div>
+            )}
+
             <div className="relative mb-2">
               <input
                 type="text"
@@ -615,22 +701,37 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
         </div>
 
         {/* Submit Actions */}
-        <div className="flex items-center gap-3 pt-2">
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="flex-1 py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl shadow-md transition text-sm flex items-center justify-center gap-2"
-          >
-            <span>🚀</span>
-            <span>Create Trip & Confirm Budget</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate('trip-dashboard')}
-            className="px-6 py-3.5 border border-slate-200 text-slate-700 font-semibold rounded-2xl hover:bg-slate-50 transition text-sm"
-          >
-            Cancel
-          </button>
+        <div className="space-y-3 pt-2">
+          {missingRequests > 0 && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center justify-between">
+              <span>⚠️ <strong>{missingRequests} more invite request{missingRequests > 1 ? 's' : ''}</strong> will be sent automatically before creating trip.</span>
+              <button
+                type="button"
+                onClick={handleQuickSendRemainingInvites}
+                className="px-3 py-1 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 transition"
+              >
+                Send Now
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleCreate}
+              className="flex-1 py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-2xl shadow-md transition text-sm flex items-center justify-center gap-2"
+            >
+              <span>🚀</span>
+              <span>{missingRequests > 0 ? `Send ${missingRequests} Invites & Create Trip` : 'Create Trip & Confirm Budget'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('trip-dashboard')}
+              className="px-6 py-3.5 border border-slate-200 text-slate-700 font-semibold rounded-2xl hover:bg-slate-50 transition text-sm"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
     </div>

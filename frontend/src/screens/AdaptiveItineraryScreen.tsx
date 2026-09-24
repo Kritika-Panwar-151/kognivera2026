@@ -566,9 +566,9 @@ export default function AdaptiveItineraryScreen({ navigate, trip, currentUser }:
                 })
               }
               disabled={isAdapting || !customPrompt.trim()}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-40"
+              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold rounded-xl transition disabled:opacity-40 whitespace-nowrap"
             >
-              Ask AI
+              🔄 Adapt Schedule
             </button>
           </div>
         </div>

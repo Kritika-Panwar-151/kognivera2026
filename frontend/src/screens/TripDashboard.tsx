@@ -3,6 +3,11 @@ import { useState, useEffect } from 'react'
 import { useBudget } from '../features/overall-budget/useBudget'
 import { getRegisteredUsers } from '../services/userRegistry'
 import { resolveCityName, forecastSpendRunwayWithLLM, type SpendForecastReport } from '../services/geminiService'
+import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { broadcastTripChange } from '../services/supabaseDataService'
+import { useCategoryCaps } from '../features/category-spending/useCategoryCaps'
+import CategoryBreachAlert from '../components/CategoryBreachAlert'
+import PendingRequestsModal from '../components/PendingRequestsModal'
 
 interface Props {
   navigate: NavigateFn
@@ -10,6 +15,7 @@ interface Props {
   expenses: Expense[]
   currentUser?: User | null
   onUpdateMemberBudget?: (tripId: string, userId: string, newBudget: number) => void
+  onUpdateTripName?: (tripId: string, newName: string) => void
 }
 
 const defaultCategories = [
@@ -120,6 +126,40 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
   const [budgetViewMode, setBudgetViewMode] = useState<'group' | 'personal'>('group')
   const [isEditBudgetOpen, setIsEditBudgetOpen] = useState(false)
   const [editedBudgetInput, setEditedBudgetInput] = useState('')
+
+  // Dynamic Category Caps & Breach Alerts
+  const categoryCapsHook = useCategoryCaps(trip, expenses)
+  const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false)
+
+  // Edit Trip Name State
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [editedTitle, setEditedTitle] = useState(trip?.name || '')
+
+  useEffect(() => {
+    if (trip?.name) {
+      setEditedTitle(trip.name)
+    }
+  }, [trip?.name])
+
+  const handleSaveTripTitle = async () => {
+    if (!editedTitle.trim() || !trip) return
+    const updatedName = editedTitle.trim()
+    trip.name = updatedName
+    setIsEditingTitle(false)
+
+    try {
+      if (isSupabaseConfigured) {
+        await supabase.from('trips').update({ name: updatedName }).eq('id', trip.id)
+        broadcastTripChange({ type: 'trip_update', tripId: trip.id, name: updatedName })
+      }
+      localStorage.setItem(`trip_name_${trip.id}`, updatedName)
+      if (onUpdateTripName) {
+        onUpdateTripName(trip.id, updatedName)
+      }
+    } catch (e) {
+      console.warn('Failed saving trip name to Supabase:', e)
+    }
+  }
 
   // LLM Spend Runway Forecasting State
   const [forecastReport, setForecastReport] = useState<SpendForecastReport | null>(null)
@@ -285,13 +325,66 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
               <p className="text-teal-200 text-xs font-semibold mb-1">
                 {resolveCityName(trip.destination, trip.name)} · {trip.startDate} – {trip.endDate}
               </p>
-              <h1 className="text-3xl md:text-5xl font-bold tracking-tight">{trip.name}</h1>
+              {isEditingTitle ? (
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <input
+                    type="text"
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    className="bg-white/20 backdrop-blur-md border border-white/60 text-white rounded-xl px-3 py-1.5 text-2xl md:text-4xl font-bold focus:outline-none focus:ring-2 focus:ring-teal-400 max-w-sm"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveTripTitle}
+                    className="px-3.5 py-2 bg-teal-400 hover:bg-teal-300 text-slate-900 rounded-xl font-bold text-xs shadow-md transition"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditedTitle(trip.name)
+                      setIsEditingTitle(false)
+                    }}
+                    className="px-3.5 py-2 bg-white/20 hover:bg-white/30 text-white rounded-xl font-bold text-xs transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2.5 group">
+                  <h1 className="text-3xl md:text-5xl font-bold tracking-tight">{trip.name}</h1>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditedTitle(trip.name)
+                      setIsEditingTitle(true)
+                    }}
+                    className="p-1.5 bg-white/15 hover:bg-white/30 rounded-lg text-white/90 hover:text-white transition text-xs flex items-center gap-1 shadow-2xs"
+                    title="Rename Trip (Saves to Database)"
+                  >
+                    <span>✏️</span>
+                    <span className="hidden sm:inline text-[11px] font-semibold">Rename</span>
+                  </button>
+                </div>
+              )}
               <p className="text-white/80 mt-1.5 text-xs md:text-sm">
                 Make memories, track budgets, and travel smarter with AI.
               </p>
             </div>
 
             <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsPendingRequestsOpen(true)}
+                className="px-4 py-3 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-900 rounded-xl font-bold text-sm transition shadow-lg flex items-center gap-2"
+                title="View Pending Debts & Group Member Invites"
+              >
+                <span>⏳</span>
+                <span>Pending Requests</span>
+                <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping" />
+              </button>
               <button
                 onClick={() => navigate('adaptive-itinerary')}
                 className="px-4 py-3 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white rounded-xl font-bold text-sm transition shadow-lg flex items-center gap-2 border border-white/25"
@@ -310,6 +403,17 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
           </div>
         </div>
       </div>
+
+      {/* =========================
+          MANDATORY CATEGORY CAPS BREACH ALERT (PS-08 STANDARD)
+      ========================= */}
+      <CategoryBreachAlert
+        breachDetail={categoryCapsHook.breachDetail}
+        isDismissed={categoryCapsHook.isDismissed}
+        onDismiss={categoryCapsHook.dismissAlert}
+        currencySymbol={currencySymbol}
+        onManageCaps={() => setIsExpensesExpanded(true)}
+      />
 
       {/* =========================
           TRIP TRAVELLERS & PARTY MEMBERS BAR (WITH MEMBER PERSONAL BUDGETS)
@@ -561,7 +665,7 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg">
-                  {defaultCategories.length} Categories
+                  {categoryCapsHook.categories.length} Categories
                 </span>
                 <span className="text-slate-400 text-sm font-bold">
                   {isExpensesExpanded ? '▲' : '▼'}
@@ -572,24 +676,35 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
             {/* EXPANDABLE BODY */}
             {isExpensesExpanded && (
               <div className="px-5 pb-5 pt-2 border-t border-slate-100 space-y-3.5 animate-in fade-in duration-200">
-                {defaultCategories.map((cat) => {
-                  const catPct = Math.round((cat.amount / cat.cap) * 100)
+                {categoryCapsHook.categories.map((cat) => {
+                  const isBreached = cat.status === 'breached'
                   return (
-                    <div key={cat.name}>
+                    <div key={cat.id}>
                       <div className="flex items-center justify-between text-xs mb-1">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-slate-500">{catIcons[cat.name]}</span>
+                          <span className="text-base">{cat.icon}</span>
                           <span className="font-semibold text-slate-800">{cat.name}</span>
+                          {isBreached && (
+                            <span className="text-[9px] font-black bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded border border-rose-200 animate-pulse">
+                              BREACHED +{currencySymbol}{cat.overshoot.toLocaleString()}
+                            </span>
+                          )}
                         </div>
-                        <span className="text-slate-500">
-                          <strong>₹{cat.amount.toLocaleString()}</strong> / ₹{cat.cap.toLocaleString()}
-                          <span className="ml-1.5 text-[10px] text-slate-400">({catPct}%)</span>
+                        <span className={isBreached ? 'text-rose-600 font-bold' : 'text-slate-500'}>
+                          <strong>{currencySymbol}{cat.spent.toLocaleString()}</strong> / {currencySymbol}{cat.cap.toLocaleString()}
+                          <span className="ml-1.5 text-[10px] text-slate-400">({cat.pct}%)</span>
                         </span>
                       </div>
                       <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                         <div
-                          className={`h-2 rounded-full ${catPct > 80 ? 'bg-rose-500' : cat.color} transition-all`}
-                          style={{ width: `${Math.min(catPct, 100)}%` }}
+                          className={`h-2 rounded-full transition-all ${
+                            isBreached
+                              ? 'bg-rose-500'
+                              : cat.status === 'warning'
+                              ? 'bg-amber-500'
+                              : 'bg-teal-600'
+                          }`}
+                          style={{ width: `${Math.min(cat.pct, 100)}%` }}
                         />
                       </div>
                     </div>
@@ -1024,6 +1139,17 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
           </div>
         </div>
       )}
+
+      {/* =========================
+          PENDING REQUESTS MODAL
+      ========================= */}
+      <PendingRequestsModal
+        isOpen={isPendingRequestsOpen}
+        onClose={() => setIsPendingRequestsOpen(false)}
+        trip={trip}
+        expenses={expenses}
+        currentUser={activeUser}
+      />
     </div>
   )
 }
