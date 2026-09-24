@@ -1,13 +1,13 @@
 import type { Trip, User, Expense } from '../common/types'
 
-export function useBudget(trip: Trip, currentUser?: User, expenses?: Expense[]) {
+export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Expense[]) {
   // Filter expenses strictly belonging to this trip
-  const tripExpenses = (expenses || []).filter((e) => e.tripId === trip.id)
+  const tripExpenses = trip?.id ? (expenses || []).filter((e) => e.tripId === trip.id) : []
   const tripExpenseSum = tripExpenses.reduce((sum, e) => sum + (e.convertedAmount || 0), 0)
 
   // Group Budget Metrics
-  const budget = trip.budget || 60000
-  const spent = trip.spent && trip.spent > 0 ? trip.spent : tripExpenseSum
+  const budget = trip?.budget || 0
+  const spent = trip?.spent && trip.spent > 0 ? trip.spent : tripExpenseSum
   const remaining = Math.max(0, budget - spent)
   const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0
 
@@ -23,9 +23,9 @@ export function useBudget(trip: Trip, currentUser?: User, expenses?: Expense[]) 
   // Personal Budget Metrics for Logged-In User
   const userId = currentUser?.id || 'usr_you'
   const personalBudget =
-    trip.memberBudgets?.[userId] ??
-    trip.personalBudget ??
-    Math.round(budget / Math.max(trip.members?.length || 1, 1))
+    trip?.memberBudgets?.[userId] ??
+    trip?.personalBudget ??
+    Math.round(budget / Math.max(trip?.members?.length || 1, 1))
 
   // Calculate personal spend from trip expenses
   let personalSpent = 0

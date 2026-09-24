@@ -262,13 +262,30 @@ export default function TripDashboard({
     personalRemaining,
     personalPct,
     personalSafeDaily,
-    daysGone,
-    daysTotal,
-    daysLeft,
   } = useBudget(trip, activeUser, expenses)
 
+  if (!trip) {
+    return (
+      <div className="min-h-[80vh] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-teal-50 text-teal-700 rounded-3xl flex items-center justify-center text-3xl mb-4 border border-teal-100 shadow-xs">
+          🧳
+        </div>
+        <h2 className="text-xl font-extrabold text-slate-900 mb-1">No Active Trip Selected</h2>
+        <p className="text-xs text-slate-500 max-w-sm mb-6 leading-relaxed">
+          Create a new trip or select one of your existing trips to view budget analytics and log expenses.
+        </p>
+        <button
+          onClick={() => navigate('create-trip')}
+          className="px-6 py-3.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-2xl shadow-md transition"
+        >
+          + Create a New Trip
+        </button>
+      </div>
+    )
+  }
+
   const projectedOver = isOverBudgetProjected ? projectedFinal - budget : 0
-  const currencySymbol = trip.currency === 'USD' ? '$' : trip.currency === 'EUR' ? '€' : '₹'
+  const currencySymbol = trip?.currency === 'USD' ? '$' : trip?.currency === 'EUR' ? '€' : '₹'
 
   // Look up registered users to display members dynamically
   const registeredUsers = getRegisteredUsers()
