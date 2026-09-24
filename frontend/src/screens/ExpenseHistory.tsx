@@ -200,6 +200,46 @@ export default function ExpenseHistory({
       </div>
 
       {/* =========================================================================
+          PROMINENT QUICK ACTION BAR (DIRECTLY BELOW PAGE HEADER)
+          Defaults to adding expenses to the active current trip
+      ========================================================================= */}
+      <div className="bg-white border border-teal-200/90 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 ring-1 ring-teal-50">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center text-xl font-bold shadow-xs">
+            ⚡
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-extrabold text-slate-900">Add New Expense</h3>
+              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full">
+                Defaults to: {trips[0]?.name || 'Current Active Trip'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Scanned receipts and manual entries are added to your active trip ({trips[0]?.destination || 'Current Destination'}).
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => navigate('receipt-scanner')}
+            className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-teal-300 text-teal-900 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-2xs"
+          >
+            <span>📸 Scan Receipt</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('add-expense')}
+            className="px-4 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-sm"
+          >
+            <span>+ Add Expense</span>
+          </button>
+        </div>
+      </div>
+
+      {/* =========================================================================
           TRIP-WISE PRESENTATION (CURRENT TRIP EXPANDED BY DEFAULT)
           Each trip contains BOTH Personal & Group Shared expenses inside it!
       ========================================================================= */}
