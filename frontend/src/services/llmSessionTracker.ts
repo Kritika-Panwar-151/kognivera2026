@@ -46,7 +46,7 @@ export function generateTraceId(): string {
   return `trc_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`
 }
 
-// 3. In-memory buffer of recent traces for live demo/judging inspection
+// 3. In-memory buffer of recent traces for live session audit inspection
 export function getRecentTraces(): TraceRecord[] {
   try {
     const raw = sessionStorage.getItem(IN_MEMORY_TRACES_KEY)

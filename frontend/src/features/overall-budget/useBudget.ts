@@ -29,7 +29,7 @@ export function useBudget(trip: Trip, currentUser?: User, expenses?: Expense[]) 
 
   // Calculate personal spend from trip expenses
   let personalSpent = 0
-  const isCurrentUserOwnerOrDemo =
+  const isCurrentUserOwner =
     !currentUser ||
     currentUser.id === 'usr_you' ||
     currentUser.id === 'usr_aisha' ||
@@ -40,7 +40,7 @@ export function useBudget(trip: Trip, currentUser?: User, expenses?: Expense[]) 
       const isPaidByMe =
         e.paidBy === currentUser?.name ||
         e.paidBy === currentUser?.id ||
-        (isCurrentUserOwnerOrDemo && e.paidBy.toLowerCase().includes('you'))
+        (isCurrentUserOwner && e.paidBy.toLowerCase().includes('you'))
 
       const isSplitWithMe =
         e.splitBetween &&
@@ -48,7 +48,7 @@ export function useBudget(trip: Trip, currentUser?: User, expenses?: Expense[]) 
           (m) =>
             m === currentUser?.name ||
             m === currentUser?.id ||
-            (isCurrentUserOwnerOrDemo && m.toLowerCase().includes('you'))
+            (isCurrentUserOwner && m.toLowerCase().includes('you'))
         )
 
       if (e.isShared && isSplitWithMe) {

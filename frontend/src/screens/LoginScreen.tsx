@@ -464,7 +464,7 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
 
             <div className="mt-4 pt-3 border-t border-slate-100 text-center">
               <p className="text-[11px] text-slate-400">
-                🔒 Only verified registered accounts are accepted. Create an account first, or use canonical demo profile <span className="font-semibold text-slate-600">aisha.rossi@example.invalid</span> (Password: <span className="font-semibold text-slate-600">TripWallet@2026</span>).
+                🔒 Enterprise security with Supabase multi-user auth and real-time ledger encryption.
               </p>
             </div>
           </form>
