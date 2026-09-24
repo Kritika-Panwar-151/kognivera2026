@@ -10,6 +10,7 @@ import CategoryBreachAlert from '../components/CategoryBreachAlert'
 import PendingRequestsModal from '../components/PendingRequestsModal'
 import CategoryCapAdjusterModal from '../components/CategoryCapAdjusterModal'
 import EditTripModal from '../components/EditTripModal'
+import { formatUserDualCurrency } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -288,7 +289,15 @@ export default function TripDashboard({
   }
 
   const projectedOver = isOverBudgetProjected ? projectedFinal - budget : 0
-  const currencySymbol = trip?.currency === 'USD' ? '$' : trip?.currency === 'EUR' ? '€' : '₹'
+  const userHomeCurr = (activeUser.homeCurrency || 'INR').toUpperCase()
+  const tripDestCurr = (trip?.currency || 'JPY').toUpperCase()
+
+  const groupBudgetDual = formatUserDualCurrency(budget, userHomeCurr, userHomeCurr, tripDestCurr)
+  const personalBudgetDual = formatUserDualCurrency(personalBudget, userHomeCurr, userHomeCurr, tripDestCurr)
+  const personalRemainingDual = formatUserDualCurrency(personalRemaining, userHomeCurr, userHomeCurr, tripDestCurr)
+  const groupSpentDual = formatUserDualCurrency(spent, userHomeCurr, userHomeCurr, tripDestCurr)
+  const personalSpentDual = formatUserDualCurrency(personalSpent, userHomeCurr, userHomeCurr, tripDestCurr)
+  const currencySymbol = groupBudgetDual.primarySymbol
 
   // Look up registered users to display members dynamically
   const registeredUsers = getRegisteredUsers()
@@ -558,27 +567,30 @@ export default function TripDashboard({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
         {/* CARD 1: GROUP TRIP BUDGET */}
         <div className="bg-white rounded-2xl border border-teal-200 shadow-sm p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Group Trip Budget</p>
             <span className="text-xl">👥</span>
           </div>
           <p className="text-2xl font-black text-slate-900">
-            {currencySymbol}{budget.toLocaleString()}
+            {groupBudgetDual.primary}
           </p>
-          <p className="text-[11px] text-teal-700 font-semibold mt-1">
+          <p className="text-[10px] text-teal-700 font-mono font-semibold">
+            ≈ {groupBudgetDual.secondary} (Destination)
+          </p>
+          <p className="text-[11px] text-slate-500 font-medium mt-1">
             Sum of all {partyMembers.length} members' budgets
           </p>
         </div>
 
         {/* CARD 2: MY PERSONAL BUDGET */}
         <div className="bg-indigo-50/50 rounded-2xl border border-indigo-200 shadow-sm p-4 hover:shadow-md transition relative">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">My Personal Budget</p>
             <span className="text-xl">👤</span>
           </div>
           <div className="flex items-baseline justify-between">
             <p className="text-2xl font-black text-indigo-900">
-              {currencySymbol}{personalBudget.toLocaleString()}
+              {personalBudgetDual.primary}
             </p>
             <button
               type="button"
@@ -588,19 +600,25 @@ export default function TripDashboard({
               Edit
             </button>
           </div>
+          <p className="text-[10px] text-indigo-700 font-mono font-semibold">
+            ≈ {personalBudgetDual.secondary} (Destination)
+          </p>
           <p className="text-[11px] text-indigo-600 font-medium mt-1">
-            {currencySymbol}{personalRemaining.toLocaleString()} remaining for you
+            {personalRemainingDual.primary} remaining for you
           </p>
         </div>
 
         {/* CARD 3: GROUP SPENT TO DATE */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Group Spent to Date</p>
             <span className="text-xl">🧾</span>
           </div>
           <p className="text-2xl font-black text-slate-900">
-            {currencySymbol}{spent.toLocaleString()}
+            {groupSpentDual.primary}
+          </p>
+          <p className="text-[10px] text-teal-700 font-mono font-semibold">
+            ≈ {groupSpentDual.secondary} (Destination)
           </p>
           <p className="text-[11px] text-slate-400 mt-1">
             {daysGone} of {daysTotal} days used ({pct}%)
@@ -609,15 +627,18 @@ export default function TripDashboard({
 
         {/* CARD 4: MY PERSONAL SPEND */}
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <p className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">My Personal Spend</p>
             <span className="text-xl">💳</span>
           </div>
           <p className="text-2xl font-black text-emerald-800">
-            {currencySymbol}{personalSpent.toLocaleString()}
+            {personalSpentDual.primary}
+          </p>
+          <p className="text-[10px] text-teal-700 font-mono font-semibold">
+            ≈ {personalSpentDual.secondary} (Destination)
           </p>
           <p className="text-[11px] text-emerald-600 font-semibold mt-1">
-            {personalPct}% of your individual cap
+            {personalPct}% of individual cap ({daysLeft} days left)
           </p>
         </div>
       </div>
