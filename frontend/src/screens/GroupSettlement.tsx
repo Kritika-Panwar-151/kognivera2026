@@ -5,6 +5,7 @@ import { toggleSettleExpenseInSupabase } from '../services/supabaseDataService'
 import PendingRequestsModal from '../components/PendingRequestsModal'
 import { resolveMemberName } from '../services/userRegistry'
 import { getCurrencySymbol, isTripMatch } from '../services/currencyService'
+import { calculateHareMemberBreakdown, calculateLargestRemainderSplit } from '../features/group-settlement/largestRemainder'
 
 interface Props {
   navigate: NavigateFn
@@ -50,6 +51,8 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
 
     const getMemberShare = (exp: Expense, personName: string) => {
       const expAmount = exp.convertedAmount || exp.amount
+      const splitMembers = exp.splitBetween && exp.splitBetween.length > 0 ? exp.splitBetween : (trip?.members || ['usr_you'])
+
       if (exp.splitBreakdown) {
         const keys = Object.keys(exp.splitBreakdown)
         const matchedKey = keys.find(
@@ -62,8 +65,22 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
           return Math.round(exp.splitBreakdown[matchedKey])
         }
       }
-      const count = exp.splitBetween && exp.splitBetween.length > 0 ? exp.splitBetween.length : Math.max(trip?.partySize || trip?.members?.length || 1, 1)
-      return Math.round(expAmount / count)
+
+      // Hamilton-Hare Largest Remainder Algorithm for zero-drift precision
+      const hareMap = calculateHareMemberBreakdown(expAmount, splitMembers)
+      const matchedKey = Object.keys(hareMap).find(
+        (k) =>
+          k.toLowerCase() === personName.toLowerCase() ||
+          (personName.toLowerCase().includes('you') &&
+            (k.toLowerCase().includes('you') || k.toLowerCase().includes(currentUserName.toLowerCase())))
+      )
+      if (matchedKey && hareMap[matchedKey] !== undefined) {
+        return Math.round(hareMap[matchedKey])
+      }
+
+      const count = Math.max(splitMembers.length, 1)
+      const shares = calculateLargestRemainderSplit(expAmount, count)
+      return Math.round(shares[0] || expAmount / count)
     }
 
     if (tripExpenses.length > 0) {

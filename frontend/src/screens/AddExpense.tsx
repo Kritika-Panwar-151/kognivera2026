@@ -7,6 +7,7 @@ import {
 } from '../services/geminiService'
 import { getRegisteredUsers } from '../services/userRegistry'
 import { formatUserDualCurrency, convertCurrency, getCurrencySymbol, getTripDestinationCurrency } from '../services/currencyService'
+import { calculateHareMemberBreakdown } from '../features/group-settlement/largestRemainder'
 
 interface Props {
   navigate: NavigateFn
@@ -317,13 +318,19 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
     const isShared = finalMembers.length > 1
 
     let splitBreakdown: Record<string, number> | undefined = undefined
-    if (splitMode === 'custom' && isShared) {
-      splitBreakdown = {}
-      finalMembers.forEach((m) => {
-        splitBreakdown![m] =
-          parseFloat(customBreakdown[m]) ||
-          Math.round((convertedAmount / finalMembers.length) * 100) / 100
-      })
+    if (isShared) {
+      if (splitMode === 'custom') {
+        splitBreakdown = {}
+        const hareFallback = calculateHareMemberBreakdown(convertedAmount, finalMembers)
+        finalMembers.forEach((m) => {
+          splitBreakdown![m] =
+            parseFloat(customBreakdown[m]) ||
+            hareFallback[m] ||
+            Math.round((convertedAmount / finalMembers.length) * 100) / 100
+        })
+      } else {
+        splitBreakdown = calculateHareMemberBreakdown(convertedAmount, finalMembers)
+      }
     }
 
     const newExp: Expense = {
