@@ -20,7 +20,9 @@ export default function EditExpenseModal({ expense, isOpen, onClose, onSave }: P
   const [currency, setCurrency] = useState(expense.currency || 'INR')
   const [category, setCategory] = useState(expense.category || 'Food')
   const [date, setDate] = useState(expense.date || new Date().toISOString().split('T')[0])
-  const [paidBy, setPaidBy] = useState(expense.paidBy || 'You (Aisha)')
+  const [isShared, setIsShared] = useState<boolean>(
+    Boolean(expense.isShared && expense.splitBetween && expense.splitBetween.length > 1)
+  )
 
   const numAmount = parseFloat(amount) || 0
   const convertedAmount = Math.round(convertCurrency(numAmount, currency, 'INR'))
@@ -28,6 +30,10 @@ export default function EditExpenseModal({ expense, isOpen, onClose, onSave }: P
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!merchant.trim() || numAmount <= 0) return
+
+    const updatedSplit = isShared
+      ? (expense.splitBetween && expense.splitBetween.length > 1 ? expense.splitBetween : [paidBy, 'Ravi'])
+      : [paidBy]
 
     const updated: Expense = {
       ...expense,
@@ -38,6 +44,8 @@ export default function EditExpenseModal({ expense, isOpen, onClose, onSave }: P
       category,
       date,
       paidBy,
+      isShared,
+      splitBetween: updatedSplit,
     }
 
     onSave(updated)
@@ -161,6 +169,39 @@ export default function EditExpenseModal({ expense, isOpen, onClose, onSave }: P
               onChange={(e) => setPaidBy(e.target.value)}
               className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-teal-500/20"
             />
+          </div>
+
+          {/* Expense Classification Segmented Control */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5">
+              Expense Type
+            </label>
+            <div className="flex bg-slate-100 p-1 rounded-2xl gap-1 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setIsShared(false)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                  !isShared
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>👤</span>
+                <span>Personal (Only Me)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsShared(true)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                  isShared
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>👥</span>
+                <span>Group Shared</span>
+              </button>
+            </div>
           </div>
 
           {/* Footer Actions */}

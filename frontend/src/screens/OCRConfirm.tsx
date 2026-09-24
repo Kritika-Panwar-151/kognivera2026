@@ -90,15 +90,14 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
   const customRemaining = Math.round((converted - totalAllocatedCustom) * 100) / 100
 
   const toggleMemberSelection = (memberName: string) => {
-    if (memberName === currentUserName || memberName.toLowerCase().includes('you')) {
-      return // Lock 'You' as fixed / selected
-    }
     setSelectedMembers((prev) => {
+      let next: string[]
       if (prev.includes(memberName)) {
-        return prev.filter((m) => m !== memberName)
+        next = prev.filter((m) => m !== memberName)
       } else {
-        return [...prev, memberName]
+        next = [...prev, memberName]
       }
+      return next.length > 0 ? next : [currentUserName]
     })
   }
 
@@ -107,7 +106,7 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
   }
 
   const handleSelectOnlyMe = () => {
-    setSelectedMembers([currentUserName])
+    setSelectedMembers([paidBy || currentUserName])
   }
 
   const handleSetCustomAmount = (member: string, val: string) => {
@@ -137,15 +136,16 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
   }
 
   const handleSaveToLedger = async () => {
-    const isShared = selectedMembers.length > 1
+    const finalMembers = selectedMembers.length > 0 ? selectedMembers : [paidBy || currentUserName]
+    const isShared = finalMembers.length > 1
 
     let splitBreakdown: Record<string, number> | undefined = undefined
-    if (splitMode === 'custom') {
+    if (splitMode === 'custom' && isShared) {
       splitBreakdown = {}
-      selectedMembers.forEach((m) => {
+      finalMembers.forEach((m) => {
         splitBreakdown![m] =
           parseFloat(customBreakdown[m]) ||
-          Math.round((converted / selectedMembers.length) * 100) / 100
+          Math.round((converted / finalMembers.length) * 100) / 100
       })
     }
 
@@ -160,8 +160,8 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
       date: new Date(fields.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
       paidBy,
       isShared,
-      splitBetween: selectedMembers,
-      splitType: splitMode,
+      splitBetween: isShared ? finalMembers : [paidBy],
+      splitType: isShared ? splitMode : 'equal',
       splitBreakdown,
       notes: scannedData?.isLiveGeminiVision
         ? `Scanned via Gemini 1.5 Flash Vision (${scannedData.lineItems?.length || 0} items extracted)`

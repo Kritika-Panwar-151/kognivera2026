@@ -186,15 +186,14 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   // Member Selection & Split Handlers
   // -------------------------------------------------------------------------
   const toggleMemberSelection = (memberName: string) => {
-    if (memberName === currentUserName || memberName.toLowerCase().includes('you')) {
-      return // Lock 'You' as fixed / selected
-    }
     setSelectedMembers((prev) => {
+      let next: string[]
       if (prev.includes(memberName)) {
-        return prev.filter((m) => m !== memberName)
+        next = prev.filter((m) => m !== memberName)
       } else {
-        return [...prev, memberName]
+        next = [...prev, memberName]
       }
+      return next.length > 0 ? next : [currentUserName]
     })
   }
 
@@ -203,7 +202,7 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   }
 
   const handleSelectOnlyMe = () => {
-    setSelectedMembers([currentUserName])
+    setSelectedMembers([paidBy || currentUserName])
   }
 
   const handleSetCustomAmount = (member: string, val: string) => {
@@ -314,15 +313,16 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   // Save & Commit Handlers
   // -------------------------------------------------------------------------
   const handleSave = () => {
-    const isShared = selectedMembers.length > 1
+    const finalMembers = selectedMembers.length > 0 ? selectedMembers : [paidBy || currentUserName]
+    const isShared = finalMembers.length > 1
 
     let splitBreakdown: Record<string, number> | undefined = undefined
-    if (splitMode === 'custom') {
+    if (splitMode === 'custom' && isShared) {
       splitBreakdown = {}
-      selectedMembers.forEach((m) => {
+      finalMembers.forEach((m) => {
         splitBreakdown![m] =
           parseFloat(customBreakdown[m]) ||
-          Math.round((convertedAmount / selectedMembers.length) * 100) / 100
+          Math.round((convertedAmount / finalMembers.length) * 100) / 100
       })
     }
 
@@ -337,8 +337,8 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
       date: new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
       paidBy,
       isShared,
-      splitBetween: selectedMembers,
-      splitType: splitMode,
+      splitBetween: isShared ? finalMembers : [paidBy],
+      splitType: isShared ? splitMode : 'equal',
       splitBreakdown,
       notes,
     }
@@ -804,6 +804,18 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
 
             {/* Quick 1-Tap Select Buttons */}
             <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={handleSelectOnlyMe}
+                className={`px-3 py-1.5 text-xs font-bold border rounded-xl transition shadow-2xs ${
+                  selectedMembers.length === 1 && selectedMembers.includes(paidBy || currentUserName)
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                }`}
+              >
+                👤 Only Me (Personal)
+              </button>
+
               <button
                 type="button"
                 onClick={handleSelectAllMembers}
