@@ -86,12 +86,16 @@ export default function ExpenseHistory({
     )
   }
 
-  // Ensure isShared and splitBetween are populated
-  const richExpenses: Expense[] = expenses.map((e, idx) => ({
-    ...e,
-    isShared: e.isShared !== undefined ? e.isShared : idx !== 4,
-    splitBetween: e.splitBetween || (idx !== 4 ? ['You (Aisha)', 'Ravi', 'Asha'] : ['You (Aisha)']),
-  }))
+  // Ensure isShared and splitBetween reflect actual selected members
+  const richExpenses: Expense[] = expenses.map((e) => {
+    const split = Array.isArray(e.splitBetween) && e.splitBetween.length > 0 ? e.splitBetween : [e.paidBy || 'User']
+    const isShared = (e.isShared !== undefined ? e.isShared : split.length > 1) && split.length > 1
+    return {
+      ...e,
+      isShared,
+      splitBetween: split,
+    }
+  })
 
   // Helper for dual currency subtext on individual expense cards
   const getSecondarySubtext = (exp: Expense, tripDestCurr: string) => {
@@ -274,8 +278,12 @@ export default function ExpenseHistory({
             (e) => (isTripMatch(e.tripId, trip.id) || (!e.tripId && isCurrentTrip)) && filterExpense(e)
           )
 
-          const personalExpenses = tripExpenses.filter((e) => !e.isShared)
-          const groupExpenses = tripExpenses.filter((e) => e.isShared)
+          const personalExpenses = tripExpenses.filter(
+            (e) => !e.isShared || !e.splitBetween || e.splitBetween.length <= 1
+          )
+          const groupExpenses = tripExpenses.filter(
+            (e) => Boolean(e.isShared) && Array.isArray(e.splitBetween) && e.splitBetween.length > 1
+          )
 
           // 1. Calculate Personal and Group Totals in Trip Destination Currency (C_dest)
           let personalTotalDest = 0
@@ -612,7 +620,7 @@ export default function ExpenseHistory({
                               <div className="p-2.5 bg-teal-50/60 rounded-xl border border-teal-100 flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-[10px] font-bold bg-teal-600 text-white px-1.5 py-0.5 rounded">
-                                    Split by {groupCount}
+                                    Split by {exp.splitBetween?.length || groupCount}
                                   </span>
                                   <span className="text-slate-600 font-semibold text-[11px]">
                                     Each owes {getCurrencySymbol(userHomeCurr)}{expUserShare.toLocaleString('en-IN')} {userHomeCurr}

@@ -130,21 +130,30 @@ export async function fetchExpensesFromSupabase(tripId?: string): Promise<Expens
       return []
     }
 
-    return rawExpenses.map((e) => ({
-      id: e.expense_id,
-      tripId: e.trip_id,
-      merchant: e.description || 'Expense',
-      amount: Number(e.amount || 0),
-      currency: e.currency || 'INR',
-      convertedAmount: Number(e.home_amount || e.amount || 0),
-      category: e.category ? e.category.charAt(0).toUpperCase() + e.category.slice(1) : 'Other',
-      date: e.incurred_at
-        ? new Date(e.incurred_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-        : 'Today',
-      paidBy: e.payer_user_id || 'Host',
-      isShared: Boolean(e.is_shared ?? true),
-      splitBetween: Array.isArray(e.split_between) && e.split_between.length > 0 ? e.split_between : [e.payer_user_id || 'Host'],
-    }))
+    return rawExpenses.map((e) => {
+      const splitBetween = Array.isArray(e.split_between) && e.split_between.length > 0
+        ? e.split_between
+        : [e.payer_user_id || 'Host']
+      const isShared = e.is_shared !== null && e.is_shared !== undefined
+        ? Boolean(e.is_shared)
+        : splitBetween.length > 1
+
+      return {
+        id: e.expense_id,
+        tripId: e.trip_id,
+        merchant: e.description || 'Expense',
+        amount: Number(e.amount || 0),
+        currency: e.currency || 'INR',
+        convertedAmount: Number(e.home_amount || e.amount || 0),
+        category: e.category ? e.category.charAt(0).toUpperCase() + e.category.slice(1) : 'Other',
+        date: e.incurred_at
+          ? new Date(e.incurred_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+          : 'Today',
+        paidBy: e.payer_user_id || 'Host',
+        isShared: isShared && splitBetween.length > 1,
+        splitBetween,
+      }
+    })
   } catch (err) {
     console.error('Error fetching expenses from Supabase:', err)
     return []
@@ -371,6 +380,9 @@ export async function saveExpenseToSupabase(expense: Expense, payerUserId: strin
         ? 'usr_000000000001'
         : payerUserId
     
+    const isSharedVal = Boolean(expense.isShared && expense.splitBetween && expense.splitBetween.length > 1)
+    const splitBetweenArr = expense.splitBetween || [validPayerId]
+
     const { error } = await supabase.from('expenses').insert({
       expense_id: expId,
       trip_id: validTripId,
@@ -385,6 +397,8 @@ export async function saveExpenseToSupabase(expense: Expense, payerUserId: strin
       incurred_at: now,
       entry_method: 'manual',
       is_settled: false,
+      is_shared: isSharedVal,
+      split_between: splitBetweenArr,
       status: 'active',
       created_at: now,
       updated_at: now,
@@ -430,6 +444,8 @@ export async function updateExpenseInSupabase(
     if (updates.convertedAmount !== undefined) payload.home_amount = updates.convertedAmount
     if (updates.category !== undefined) payload.category = updates.category.toLowerCase()
     if (updates.date !== undefined) payload.incurred_at = updates.date
+    if (updates.isShared !== undefined) payload.is_shared = updates.isShared
+    if (updates.splitBetween !== undefined) payload.split_between = updates.splitBetween
 
     const { error } = await supabase.from('expenses').update(payload).eq('expense_id', expenseId)
     if (error) {
