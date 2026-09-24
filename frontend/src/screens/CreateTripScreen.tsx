@@ -10,6 +10,7 @@ import {
   subscribeToLiveUsers,
   fetchUsersFromSupabase,
 } from '../services/userRegistry'
+import { getCurrencySymbol, convertCurrency } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -49,8 +50,8 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
     }
   }, [currentUser])
 
-  // Auto-derived currency from Origin/Home Country
-  const autoCurrency = useMemo(() => getCurrencyForCountry(originCountry), [originCountry])
+  // Auto-derived currency from Destination Country
+  const autoCurrency = useMemo(() => getCurrencyForCountry(destinationCountry), [destinationCountry])
 
   // 2. Travellers & Members
   const [adults, setAdults] = useState('1')
@@ -483,57 +484,75 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
           </div>
 
           {/* 1. Host Personal Budget Input Card */}
-          <div className="bg-slate-50/90 rounded-2xl border border-teal-200/80 p-4 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-teal-600 text-white flex items-center justify-center text-xl shadow-xs">
-                  {hostUser.avatar || '👤'}
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-900">{hostUser.name}</span>
-                    <span className="text-[9px] font-bold bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full border border-teal-200">
-                      Host (You)
+          {(() => {
+            const hostHomeCurr = (hostUser.homeCurrency || 'INR').toUpperCase()
+            const hostHomeSymbol = getCurrencySymbol(hostHomeCurr)
+            const destSymbol = getCurrencySymbol(autoCurrency)
+            const convertedDestEquiv = convertCurrency(hostPersonalBudget, hostHomeCurr, autoCurrency)
+
+            return (
+              <div className="bg-slate-50/90 rounded-2xl border border-teal-200/80 p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-2xl bg-teal-600 text-white flex items-center justify-center text-xl shadow-xs">
+                      {hostUser.avatar || '👤'}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-slate-900">{hostUser.name}</span>
+                        <span className="text-[9px] font-bold bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full border border-teal-200">
+                          Host (You)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Contribution in your home currency ({hostHomeCurr})
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-start sm:items-end gap-1">
+                    <div className="flex items-center bg-white border-2 border-teal-600/40 rounded-xl px-3 py-2 shadow-2xs focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-100 self-start sm:self-auto">
+                      <span className="text-xs font-bold text-teal-700 mr-2">{hostHomeSymbol}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="500"
+                        value={hostPersonalBudget}
+                        onChange={(e) => setHostPersonalBudget(Math.max(0, parseFloat(e.target.value) || 0))}
+                        className="w-32 text-sm font-black text-slate-900 outline-none text-right"
+                        required
+                      />
+                    </div>
+                    <span className="text-[11px] text-teal-800 font-bold bg-white px-2 py-0.5 rounded-lg border border-teal-200 shadow-2xs">
+                      ≈ {destSymbol}{convertedDestEquiv.toLocaleString()} {autoCurrency} (Destination)
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500">Your personal budget contribution for this trip</p>
+                </div>
+
+                {/* Quick Presets for Host */}
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 flex-wrap">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Presets:</span>
+                  {(hostHomeCurr === 'EUR' || hostHomeCurr === 'USD' || hostHomeCurr === 'GBP' || hostHomeCurr === 'CHF'
+                    ? [200, 350, 500, 750]
+                    : [15000, 25000, 35000, 50000]
+                  ).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setHostPersonalBudget(preset)}
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition ${
+                        hostPersonalBudget === preset
+                          ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
+                          : 'bg-white text-slate-600 border-slate-200 hover:border-teal-300'
+                      }`}
+                    >
+                      {hostHomeSymbol}{hostHomeCurr === 'INR' ? `${(preset / 1000).toFixed(0)}k` : preset}
+                    </button>
+                  ))}
                 </div>
               </div>
-
-              {/* Personal Budget Input for Host */}
-              <div className="flex items-center bg-white border-2 border-teal-600/40 rounded-xl px-3 py-2 shadow-2xs focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-100 self-start sm:self-auto">
-                <span className="text-xs font-bold text-teal-700 mr-2">{autoCurrency}</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="500"
-                  value={hostPersonalBudget}
-                  onChange={(e) => setHostPersonalBudget(Math.max(0, parseFloat(e.target.value) || 0))}
-                  className="w-32 text-sm font-black text-slate-900 outline-none text-right"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Quick Presets for Host */}
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 flex-wrap">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Presets:</span>
-              {[15000, 25000, 35000, 50000, 75000].map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setHostPersonalBudget(preset)}
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition ${
-                    hostPersonalBudget === preset
-                      ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
-                      : 'bg-white text-slate-600 border-slate-200 hover:border-teal-300'
-                  }`}
-                >
-                  {autoCurrency} {(preset / 1000).toFixed(0)}k
-                </button>
-              ))}
-            </div>
-          </div>
+            )
+          })()}
 
           {/* 2. Invited Friends (Awaiting Acceptance) */}
           <div className="space-y-2">
