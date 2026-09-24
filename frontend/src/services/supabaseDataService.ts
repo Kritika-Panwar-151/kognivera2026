@@ -1,145 +1,13 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import type { Trip, Expense, User } from '../types'
 
-// Baseline initial data fallback (used if Supabase env vars are not set yet)
-export const initialTripsFallback: Trip[] = [
-  {
-    id: 'europe',
-    name: 'Europe Adventure',
-    destination: 'Rome & Paris, Europe',
-    startDate: '12 Sep',
-    endDate: '20 Sep 2026',
-    currency: 'INR',
-    budget: 60000,
-    spent: 26172,
-    adults: 3,
-    children: 0,
-    partySize: 3,
-    members: ['usr_you', 'usr_ravi', 'usr_asha'],
-    memberBudgets: {
-      usr_you: 25000,
-      usr_ravi: 20000,
-      usr_asha: 15000,
-    },
-    personalBudget: 25000,
-    isGroupTrip: true,
-    categoryCaps: {
-      accommodation: 21000,
-      food: 15000,
-      transport: 12000,
-      activities: 6000,
-      misc: 6000,
-    },
-  },
-  {
-    id: 'goa',
-    name: 'Goa Getaway',
-    destination: 'Goa, India',
-    startDate: '2 Oct',
-    endDate: '6 Oct 2026',
-    currency: 'INR',
-    budget: 25000,
-    spent: 8420,
-    adults: 2,
-    children: 1,
-    partySize: 3,
-    members: ['usr_you', 'usr_pooja'],
-    memberBudgets: {
-      usr_you: 15000,
-      usr_pooja: 10000,
-    },
-    personalBudget: 15000,
-    isGroupTrip: true,
-  },
-]
-
-export const initialExpensesFallback: Expense[] = [
-  {
-    id: '1',
-    tripId: 'europe',
-    merchant: 'Trattoria Da Enzo Roma',
-    amount: 136.17,
-    currency: 'EUR',
-    convertedAmount: 12800,
-    category: 'Food',
-    date: '14 Sep',
-    paidBy: 'You (Aisha)',
-    isShared: true,
-    splitBetween: ['You (Aisha)', 'Ravi', 'Asha'],
-    splitType: 'equal',
-  },
-  {
-    id: '1b',
-    tripId: 'europe',
-    merchant: 'Trattoria & Gelato Trastevere',
-    amount: 45,
-    currency: 'EUR',
-    convertedAmount: 4230,
-    category: 'Food',
-    date: '15 Sep',
-    paidBy: 'You (Aisha)',
-    isShared: true,
-    splitBetween: ['You (Aisha)', 'Ravi', 'Asha'],
-    splitType: 'equal',
-  },
-  {
-    id: '2',
-    tripId: 'europe',
-    merchant: 'Hotel Roma',
-    amount: 180,
-    currency: 'EUR',
-    convertedAmount: 16920,
-    category: 'Accommodation',
-    date: '14 Sep',
-    paidBy: 'Ravi',
-    isShared: true,
-    splitBetween: ['You (Aisha)', 'Ravi', 'Asha'],
-    splitType: 'equal',
-  },
-  {
-    id: '3',
-    tripId: 'europe',
-    merchant: 'Metro Pass',
-    amount: 18,
-    currency: 'EUR',
-    convertedAmount: 1692,
-    category: 'Transport',
-    date: '15 Sep',
-    paidBy: 'Asha',
-    isShared: true,
-    splitBetween: ['You (Aisha)', 'Ravi', 'Asha'],
-  },
-  {
-    id: '4',
-    tripId: 'europe',
-    merchant: 'Colosseum Guided Tour',
-    amount: 35,
-    currency: 'EUR',
-    convertedAmount: 3290,
-    category: 'Activities',
-    date: '15 Sep',
-    paidBy: 'You (Aisha)',
-    isShared: true,
-    splitBetween: ['You (Aisha)', 'Ravi', 'Asha'],
-  },
-  {
-    id: '5',
-    tripId: 'europe',
-    merchant: 'Italian Leather Souvenir',
-    amount: 3200,
-    currency: 'INR',
-    convertedAmount: 3200,
-    category: 'Shopping',
-    date: '16 Sep',
-    paidBy: 'You (Aisha)',
-    isShared: false,
-    splitBetween: ['You (Aisha)'],
-  },
-]
+// Clean production fallbacks: zero synthetic data for fresh users
+export const initialTripsFallback: Trip[] = []
+export const initialExpensesFallback: Expense[] = []
 
 // 1. Fetch Trips from Supabase
 export async function fetchTripsFromSupabase(): Promise<Trip[]> {
-  if (!isSupabaseConfigured) return initialTripsFallback
+  if (!isSupabaseConfigured) return []
 
   try {
     const { data: rawTrips, error: tripsErr } = await supabase
@@ -148,8 +16,7 @@ export async function fetchTripsFromSupabase(): Promise<Trip[]> {
       .order('created_at', { ascending: false })
 
     if (tripsErr || !rawTrips || rawTrips.length === 0) {
-      console.warn('Supabase fetch trips notice:', tripsErr?.message)
-      return initialTripsFallback
+      return []
     }
 
     // Fetch corresponding budgets
@@ -260,30 +127,27 @@ export async function fetchExpensesFromSupabase(tripId?: string): Promise<Expens
     const { data: rawExpenses, error } = await query
 
     if (error || !rawExpenses || rawExpenses.length === 0) {
-      return initialExpensesFallback
+      return []
     }
 
     return rawExpenses.map((e) => ({
       id: e.expense_id,
       tripId: e.trip_id,
-      merchant: e.description,
-      amount: Number(e.amount),
-      currency: e.currency,
-      convertedAmount: Number(e.home_amount),
-      category: e.category.charAt(0).toUpperCase() + e.category.slice(1),
+      merchant: e.description || 'Expense',
+      amount: Number(e.amount || 0),
+      currency: e.currency || 'INR',
+      convertedAmount: Number(e.home_amount || e.amount || 0),
+      category: e.category ? e.category.charAt(0).toUpperCase() + e.category.slice(1) : 'Other',
       date: e.incurred_at
         ? new Date(e.incurred_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
         : 'Today',
-      paidBy:
-        e.payer_user_id === 'usr_000000000001' || e.payer_user_id === 'usr_you'
-          ? 'You (Aisha)'
-          : e.payer_user_id,
-      isShared: true,
-      splitBetween: ['You (Aisha)', 'Ravi', 'Asha'],
+      paidBy: e.payer_user_id || 'Host',
+      isShared: Boolean(e.is_shared ?? true),
+      splitBetween: Array.isArray(e.split_between) && e.split_between.length > 0 ? e.split_between : [e.payer_user_id || 'Host'],
     }))
   } catch (err) {
     console.error('Error fetching expenses from Supabase:', err)
-    return initialExpensesFallback
+    return []
   }
 }
 

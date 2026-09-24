@@ -58,12 +58,48 @@ export default function App() {
   const [pendingInviteTrip, setPendingInviteTrip] = useState<Trip | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
 
+  // Helper to filter trips strictly belonging to the logged-in user
+  const filterTripsForUser = (allTrips: Trip[], user: User | null): Trip[] => {
+    if (!user) return []
+    return allTrips.filter((t) => {
+      if (t.ownerId === user.id) return true
+      if (t.members && t.members.includes(user.id)) return true
+      const detail = t.memberDetails?.find((d) => d.userId === user.id)
+      if (detail && (detail.status === 'active' || detail.status === 'accepted')) return true
+      return false
+    })
+  }
+
+  // De-duplicate trips by ID to prevent ghost duplicates
+  const deduplicateTrips = (tripsList: Trip[]): Trip[] => {
+    const seen = new Set<string>()
+    return tripsList.filter((t) => {
+      if (!t.id || seen.has(t.id)) return false
+      seen.add(t.id)
+      return true
+    })
+  }
+
+  // Safe trip updater ensuring user isolation is always preserved
+  const updateTripsSafely = (freshTrips: Trip[], targetUser: User | null) => {
+    const userTrips = deduplicateTrips(filterTripsForUser(freshTrips, targetUser))
+    setTrips(userTrips)
+    setCurrentTrip((prev) => {
+      if (prev) {
+        const updated = userTrips.find((t) => t.id === prev.id)
+        if (updated) return updated
+        return userTrips.length > 0 ? userTrips[0] : null
+      }
+      return userTrips.length > 0 ? userTrips[0] : null
+    })
+  }
+
   // Load Trips & Expenses based on logged-in user
   useEffect(() => {
     async function loadData() {
       try {
-        const loadedTrips = (await fetchTripsFromSupabase()) || initialTripsFallback
-        const loadedExpenses = (await fetchExpensesFromSupabase()) || initialExpensesFallback
+        const loadedTrips = (await fetchTripsFromSupabase()) || []
+        const loadedExpenses = (await fetchExpensesFromSupabase()) || []
 
         if (currentUser) {
           // Check for pending trip invites for current user
@@ -90,31 +126,16 @@ export default function App() {
             console.warn('Pending invites check error:', e)
           }
 
-          // Filter trips where current user is the owner or an active joined member
-          const userTrips = loadedTrips.filter((t) => {
-            if (t.ownerId === currentUser.id) return true
-            if (currentUser.id === 'usr_aisha' || currentUser.id === 'usr_you') return true
-            const detail = t.memberDetails?.find((d) => d.userId === currentUser.id)
-            if (detail) {
-              return detail.status === 'active'
-            }
-            return t.members?.includes(currentUser.id)
-          })
-
-          if (userTrips.length > 0) {
-            setTrips(userTrips)
-            setCurrentTrip(userTrips[0])
-          } else {
-            // Clean empty state for new users
-            setTrips([])
-            setCurrentTrip(null)
-          }
+          // Strict user-filtered trips
+          updateTripsSafely(loadedTrips, currentUser)
 
           if (loadedExpenses && loadedExpenses.length > 0) {
             setExpenses(loadedExpenses)
+          } else {
+            setExpenses([])
           }
         } else {
-          // If no user is logged in, keep state clean
+          // If no user is logged in, keep state completely clean
           setTrips([])
           setCurrentTrip(null)
           setExpenses([])
@@ -187,12 +208,8 @@ export default function App() {
         },
         async () => {
           const freshTrips = await fetchTripsFromSupabase()
-          if (freshTrips && freshTrips.length > 0) {
-            setTrips(freshTrips)
-            if (currentTrip) {
-              const updated = freshTrips.find((t) => t.id === currentTrip.id)
-              if (updated) setCurrentTrip(updated)
-            }
+          if (freshTrips) {
+            updateTripsSafely(freshTrips, currentUser)
           }
         }
       )
@@ -214,12 +231,8 @@ export default function App() {
             fetchTripsFromSupabase(),
           ])
           if (freshExpenses) setExpenses(freshExpenses)
-          if (freshTrips && freshTrips.length > 0) {
-            setTrips(freshTrips)
-            if (currentTrip) {
-              const updated = freshTrips.find((t) => t.id === currentTrip.id)
-              if (updated) setCurrentTrip(updated)
-            }
+          if (freshTrips) {
+            updateTripsSafely(freshTrips, currentUser)
           }
         }
       )
@@ -237,12 +250,8 @@ export default function App() {
         },
         async () => {
           const freshTrips = await fetchTripsFromSupabase()
-          if (freshTrips && freshTrips.length > 0) {
-            setTrips(freshTrips)
-            if (currentTrip) {
-              const updated = freshTrips.find((t) => t.id === currentTrip.id)
-              if (updated) setCurrentTrip(updated)
-            }
+          if (freshTrips) {
+            updateTripsSafely(freshTrips, currentUser)
           }
         }
       )
@@ -252,52 +261,36 @@ export default function App() {
     const syncChannel = supabase.channel('global_trip_sync')
     syncChannel
       .on('broadcast', { event: '*' }, async (payload) => {
-        console.log('⚡ Realtime Broadcast received:', payload)
         const [freshTrips, freshExpenses] = await Promise.all([
           fetchTripsFromSupabase(),
           fetchExpensesFromSupabase(),
         ])
-        if (freshTrips && freshTrips.length > 0) {
-          setTrips(freshTrips)
-          if (currentTrip) {
-            const updated = freshTrips.find((t) => t.id === currentTrip.id)
-            if (updated) setCurrentTrip(updated)
-          }
+        if (freshTrips) {
+          updateTripsSafely(freshTrips, currentUser)
         }
         if (freshExpenses) setExpenses(freshExpenses)
         checkInvites()
       })
       .subscribe()
 
-    // 6. Live Heartbeat Sync (every 3 seconds backup so mobile phones NEVER miss an update)
+    // 6. Live Heartbeat Sync (strictly respects current user filter)
     const syncInterval = setInterval(async () => {
       try {
         const [freshTrips, freshExpenses] = await Promise.all([
           fetchTripsFromSupabase(),
           fetchExpensesFromSupabase(),
         ])
-        if (freshTrips && freshTrips.length > 0) {
-          setTrips(freshTrips)
-          if (currentTrip) {
-            const updated = freshTrips.find((t) => t.id === currentTrip.id)
-            if (
-              updated &&
-              (updated.budget !== currentTrip.budget ||
-                updated.spent !== currentTrip.spent ||
-                updated.members?.length !== currentTrip.members?.length)
-            ) {
-              setCurrentTrip(updated)
-            }
-          }
+        if (freshTrips) {
+          updateTripsSafely(freshTrips, currentUser)
         }
-        if (freshExpenses && freshExpenses.length > 0) {
+        if (freshExpenses) {
           setExpenses(freshExpenses)
         }
         checkInvites()
-      } catch (err) {
-        // silent catch
+      } catch (e) {
+        console.warn('Sync interval error:', e)
       }
-    }, 3000)
+    }, 4000)
 
     return () => {
       clearInterval(syncInterval)
@@ -373,7 +366,7 @@ export default function App() {
   }
 
   const handleCreateTrip = (newTrip: Trip) => {
-    setTrips((prev) => [newTrip, ...prev])
+    setTrips((prev) => deduplicateTrips([newTrip, ...prev]))
     setCurrentTrip(newTrip)
     if (currentUser) {
       saveTripToSupabase(newTrip, currentUser.id).then(() => {
@@ -381,7 +374,7 @@ export default function App() {
           supabase.channel('global_trip_sync').send({
             type: 'broadcast',
             event: 'trip_created',
-            payload: { tripId: newTrip.id, members: newTrip.members },
+            payload: { tripId: newTrip.id, ownerId: currentUser.id, members: newTrip.members },
           })
         }
       })
@@ -524,6 +517,12 @@ export default function App() {
     })
   }
 
+  // Filter expenses strictly belonging to the currently active trip
+  const currentTripExpenses = useMemo(() => {
+    if (!currentTrip?.id) return []
+    return expenses.filter((e) => e.tripId === currentTrip.id)
+  }, [expenses, currentTrip?.id])
+
   const renderScreen = () => {
     switch (screen) {
       case 'login':
@@ -559,7 +558,7 @@ export default function App() {
           <TripDashboard
             navigate={navigate}
             trip={currentTrip}
-            expenses={expenses}
+            expenses={currentTripExpenses}
             currentUser={currentUser}
             onUpdateMemberBudget={handleUpdateMemberBudget}
             onUpdateTrip={handleUpdateTripDetails}
@@ -591,7 +590,7 @@ export default function App() {
         return (
           <ExpenseHistory
             navigate={navigate}
-            expenses={expenses}
+            expenses={currentTripExpenses}
             trips={trips}
             onDeleteExpense={handleDeleteExpense}
             onEditExpense={handleEditExpense}
@@ -620,7 +619,7 @@ export default function App() {
           <GroupSettlement
             navigate={navigate}
             trip={currentTrip}
-            expenses={expenses}
+            expenses={currentTripExpenses}
             currentUser={currentUser}
           />
         )

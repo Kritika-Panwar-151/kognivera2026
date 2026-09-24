@@ -29,8 +29,10 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     const currentUserName = currentUser?.name || 'You (Aisha)'
     const currentUserId = currentUser?.id || 'usr_you'
 
-    if (expenses && expenses.length > 0) {
-      expenses.forEach((exp) => {
+    const tripExpenses = (expenses || []).filter((exp) => !trip?.id || exp.tripId === trip.id)
+
+    if (tripExpenses.length > 0) {
+      tripExpenses.forEach((exp) => {
         if (exp.isShared && exp.splitBetween && exp.splitBetween.length > 1) {
           const getMemberShare = (personName: string) => {
             if (exp.splitBreakdown) {

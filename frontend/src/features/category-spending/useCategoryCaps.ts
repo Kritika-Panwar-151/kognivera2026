@@ -32,6 +32,12 @@ export function useCategoryCaps(trip?: Trip | null, expenses: Expense[] = []) {
   const budget = trip?.budget || 60000
   const currencySymbol = trip?.currency === 'EUR' ? '€' : trip?.currency === 'USD' ? '$' : '₹'
 
+  // Strictly filter expenses belonging only to this trip
+  const tripExpenses = useMemo(() => {
+    if (!trip?.id) return []
+    return (expenses || []).filter((e) => e.tripId === trip.id)
+  }, [trip?.id, expenses])
+
   const categories: CategoryCapItem[] = useMemo(() => {
     const caps = trip?.categoryCaps || {
       accommodation: Math.round(budget * 0.35),
@@ -92,8 +98,8 @@ export function useCategoryCaps(trip?: Trip | null, expenses: Expense[] = []) {
     ]
 
     return configs.map((cfg) => {
-      // Find all expenses belonging to this category
-      const matchedExpenses = expenses.filter((e) => {
+      // Find all expenses belonging to this category strictly from this trip
+      const matchedExpenses = tripExpenses.filter((e) => {
         const cat = (e.category || '').toLowerCase()
         return cfg.aliases.some((a) => cat.includes(a))
       })
@@ -125,7 +131,7 @@ export function useCategoryCaps(trip?: Trip | null, expenses: Expense[] = []) {
         latestForeignExpense: foreignExp || matchedExpenses[matchedExpenses.length - 1],
       }
     })
-  }, [trip, expenses, budget])
+  }, [trip, tripExpenses, budget])
 
   // Active breached categories
   const breachedCategories = useMemo(
