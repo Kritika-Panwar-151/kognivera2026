@@ -702,6 +702,7 @@ export default function App() {
       {pendingInviteTrip && (
         <TripInviteModal
           trip={pendingInviteTrip}
+          currentUser={currentUser}
           isOpen={showInviteModal}
           onClose={() => setShowInviteModal(false)}
           onAccept={handleAcceptInvite}
