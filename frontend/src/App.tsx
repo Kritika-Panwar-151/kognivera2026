@@ -739,6 +739,8 @@ export default function App() {
     return expenses.filter((e) => isTripMatch(e.tripId, currentTrip.id))
   }, [expenses, currentTrip?.id])
 
+  const activeTrip = currentTrip || (trips.length > 0 ? trips[0] : DEFAULT_DEMO_TRIPS[0])
+
   const renderScreen = () => {
     switch (screen) {
       case 'login':
@@ -775,14 +777,14 @@ export default function App() {
         return (
           <TripDashboard
             navigate={navigate}
-            trip={currentTrip}
+            trip={activeTrip}
             expenses={currentTripExpenses}
             currentUser={currentUser}
             onUpdateMemberBudget={handleUpdateMemberBudget}
             onUpdateTrip={handleUpdateTripDetails}
             onUpdateTripName={(tripId, newName) => {
-              if (currentTrip && currentTrip.id === tripId) {
-                handleUpdateTripDetails({ ...currentTrip, name: newName })
+              if (activeTrip && activeTrip.id === tripId) {
+                handleUpdateTripDetails({ ...activeTrip, name: newName })
               }
             }}
             onDeleteExpense={handleDeleteExpense}
@@ -794,7 +796,7 @@ export default function App() {
           <AddExpense
             navigate={navigate}
             onAddExpense={handleAddExpense}
-            trip={currentTrip}
+            trip={activeTrip}
             currentUser={currentUser}
           />
         )
@@ -805,7 +807,7 @@ export default function App() {
           <OCRConfirm
             navigate={navigate}
             onAddExpense={handleAddExpense}
-            trip={currentTrip}
+            trip={activeTrip}
             currentUser={currentUser}
           />
         )
@@ -824,7 +826,7 @@ export default function App() {
         return (
           <AIGuardian
             navigate={navigate}
-            trip={currentTrip}
+            trip={activeTrip}
             currentUser={currentUser}
             onAddExpense={handleAddExpense}
           />
@@ -833,7 +835,7 @@ export default function App() {
         return (
           <WhatIf
             navigate={navigate}
-            trip={currentTrip}
+            trip={activeTrip}
             currentUser={currentUser}
             onAddExpense={handleAddExpense}
           />
@@ -842,7 +844,7 @@ export default function App() {
         return (
           <GroupSettlement
             navigate={navigate}
-            trip={currentTrip}
+            trip={activeTrip}
             expenses={currentTripExpenses}
             currentUser={currentUser}
           />
@@ -851,12 +853,29 @@ export default function App() {
         return (
           <AdaptiveItineraryScreen
             navigate={navigate}
-            trip={currentTrip}
+            trip={activeTrip}
             currentUser={currentUser}
           />
         )
       default:
-        return null
+        return currentUser ? (
+          <TripDashboard
+            navigate={navigate}
+            trip={activeTrip}
+            expenses={currentTripExpenses}
+            currentUser={currentUser}
+            onUpdateMemberBudget={handleUpdateMemberBudget}
+            onUpdateTrip={handleUpdateTripDetails}
+            onDeleteExpense={handleDeleteExpense}
+            onEditExpense={handleEditExpense}
+          />
+        ) : (
+          <LoginScreen
+            navigate={navigate}
+            currentUser={currentUser}
+            onSelectUser={handleUserLogin}
+          />
+        )
     }
   }
 
