@@ -277,18 +277,30 @@ export default function ExpenseHistory({
           const personalExpenses = tripExpenses.filter((e) => !e.isShared)
           const groupExpenses = tripExpenses.filter((e) => e.isShared)
 
-          const personalTotal = personalExpenses.reduce((s, e) => s + e.convertedAmount, 0)
-          const groupTotal = groupExpenses.reduce((s, e) => s + e.convertedAmount, 0)
-          const tripTotalSpent = personalTotal + groupTotal
+          // 1. Calculate Personal and Group Totals in Trip Destination Currency (C_dest)
+          let personalTotalDest = 0
+          personalExpenses.forEach((e) => {
+            personalTotalDest += convertCurrency(e.amount, e.currency || tripDestCurr, tripDestCurr)
+          })
+
+          let groupTotalDest = 0
+          groupExpenses.forEach((e) => {
+            groupTotalDest += convertCurrency(e.amount, e.currency || tripDestCurr, tripDestCurr)
+          })
+
+          const tripTotalSpentDest = personalTotalDest + groupTotalDest
+
+          // 2. Group Budget in Destination Currency (C_dest)
+          const tripBudgetDest = convertCurrency(trip.budget || 0, trip.currency || tripDestCurr, tripDestCurr)
 
           const groupCount = trip.partySize || trip.members?.length || 3
-          const pct = Math.round((tripTotalSpent / (trip.budget || 1)) * 100)
+          const pct = tripBudgetDest > 0 ? Math.round((tripTotalSpentDest / tripBudgetDest) * 100) : 0
 
-          // Dual Currency formatting for trip summary
-          const budgetDual = formatUserDualCurrency(trip.budget || 0, userHomeCurr, userHomeCurr, tripDestCurr)
-          const spentDual = formatUserDualCurrency(tripTotalSpent, userHomeCurr, userHomeCurr, tripDestCurr)
-          const personalTotalDual = formatUserDualCurrency(personalTotal, userHomeCurr, userHomeCurr, tripDestCurr)
-          const groupTotalDual = formatUserDualCurrency(groupTotal, userHomeCurr, userHomeCurr, tripDestCurr)
+          // 3. Format Dual Currency for active userHomeCurr and tripDestCurr
+          const budgetDual = formatUserDualCurrency(tripBudgetDest, tripDestCurr, userHomeCurr, tripDestCurr)
+          const spentDual = formatUserDualCurrency(tripTotalSpentDest, tripDestCurr, userHomeCurr, tripDestCurr)
+          const personalTotalDual = formatUserDualCurrency(personalTotalDest, tripDestCurr, userHomeCurr, tripDestCurr)
+          const groupTotalDual = formatUserDualCurrency(groupTotalDest, tripDestCurr, userHomeCurr, tripDestCurr)
 
           return (
             <div
@@ -414,7 +426,10 @@ export default function ExpenseHistory({
                     ) : (
                       <div className="space-y-2.5">
                         {personalExpenses.map((exp) => {
+                          const expDestAmount = convertCurrency(exp.amount, exp.currency || tripDestCurr, tripDestCurr)
+                          const expUserAmount = convertCurrency(expDestAmount, tripDestCurr, userHomeCurr)
                           const secText = getSecondarySubtext(exp, tripDestCurr)
+
                           return (
                             <div
                               key={exp.id}
@@ -445,7 +460,7 @@ export default function ExpenseHistory({
                                 <div className="flex items-center gap-2">
                                   <div className="text-right shrink-0">
                                     <p className="font-bold text-slate-900 text-base">
-                                      {getCurrencySymbol(userHomeCurr)}{exp.convertedAmount.toLocaleString('en-IN')} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
+                                      {getCurrencySymbol(userHomeCurr)}{expUserAmount.toLocaleString('en-IN')} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
                                     </p>
                                     {secText && (
                                       <p className="text-[11px] font-bold text-indigo-700 font-mono">
@@ -526,9 +541,10 @@ export default function ExpenseHistory({
                     ) : (
                       <div className="space-y-2.5">
                         {groupExpenses.map((exp) => {
-                          const splitAmountInr = (exp.convertedAmount / groupCount).toFixed(2)
+                          const expDestAmount = convertCurrency(exp.amount, exp.currency || tripDestCurr, tripDestCurr)
+                          const expUserAmount = convertCurrency(expDestAmount, tripDestCurr, userHomeCurr)
+                          const expUserShare = Math.round((expUserAmount / groupCount) * 100) / 100
                           const secText = getSecondarySubtext(exp, tripDestCurr)
-                          const perPersonShareDual = formatUserDualCurrency(parseFloat(splitAmountInr), userHomeCurr, userHomeCurr, tripDestCurr)
 
                           return (
                             <div
@@ -560,7 +576,7 @@ export default function ExpenseHistory({
                                 <div className="flex items-center gap-2">
                                   <div className="text-right shrink-0">
                                     <p className="font-extrabold text-slate-900 text-base">
-                                      {getCurrencySymbol(userHomeCurr)}{exp.convertedAmount.toLocaleString('en-IN')} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
+                                      {getCurrencySymbol(userHomeCurr)}{expUserAmount.toLocaleString('en-IN')} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
                                     </p>
                                     {secText && (
                                       <p className="text-xs font-bold text-teal-700 font-mono">
@@ -598,20 +614,15 @@ export default function ExpenseHistory({
                                   <span className="text-[10px] font-bold bg-teal-600 text-white px-1.5 py-0.5 rounded">
                                     Split by {groupCount}
                                   </span>
-                                  <span className="text-teal-900 text-xs font-medium">
-                                    {trip.members ? trip.members.map((m) => resolveMemberName(m)).join(', ') : 'All Group Members'}
+                                  <span className="text-slate-600 font-semibold text-[11px]">
+                                    Each owes {getCurrencySymbol(userHomeCurr)}{expUserShare.toLocaleString('en-IN')} {userHomeCurr}
                                   </span>
                                 </div>
-
-                                <div className="text-right">
-                                  <span className="text-[10px] text-teal-600 block leading-none font-medium">Per Member</span>
-                                  <span className="text-xs font-extrabold text-teal-900">
-                                    {getCurrencySymbol(userHomeCurr)}{parseFloat(splitAmountInr).toLocaleString('en-IN')} {userHomeCurr}
-                                    {tripDestCurr !== userHomeCurr && (
-                                      <span className="text-[10px] font-mono text-teal-700 font-semibold ml-1">({perPersonShareDual.secondary})</span>
-                                    )}
+                                {tripDestCurr !== userHomeCurr && (
+                                  <span className="text-[10px] font-bold text-teal-700 font-mono">
+                                    ≈ {getCurrencySymbol(tripDestCurr)}{(expDestAmount / groupCount).toFixed(2)} {tripDestCurr}
                                   </span>
-                                </div>
+                                )}
                               </div>
                             </div>
                           )
