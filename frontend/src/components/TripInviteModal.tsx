@@ -27,22 +27,40 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
   const [food, setFood] = useState(Math.round(defaultBudget * 0.25))
   const [transport, setTransport] = useState(Math.round(defaultBudget * 0.2))
   const [activities, setActivities] = useState(Math.round(defaultBudget * 0.1))
-  const [misc, setMisc] = useState(Math.round(defaultBudget * 0.1))
+  const [misc, setMisc] = useState(Math.max(0, defaultBudget - (Math.round(defaultBudget * 0.35) + Math.round(defaultBudget * 0.25) + Math.round(defaultBudget * 0.2) + Math.round(defaultBudget * 0.1))))
 
   if (!isOpen || !trip) return null
 
   const handleBudgetChange = (amount: number) => {
     const val = Math.max(0, amount)
     setPersonalBudget(val)
-    setAccommodation(Math.round(val * 0.35))
-    setFood(Math.round(val * 0.25))
-    setTransport(Math.round(val * 0.2))
-    setActivities(Math.round(val * 0.1))
-    setMisc(Math.round(val * 0.1))
+    const acc = Math.round(val * 0.35)
+    const fd = Math.round(val * 0.25)
+    const tr = Math.round(val * 0.2)
+    const act = Math.round(val * 0.1)
+    const ms = Math.max(0, val - (acc + fd + tr + act))
+    setAccommodation(acc)
+    setFood(fd)
+    setTransport(tr)
+    setActivities(act)
+    setMisc(ms)
+  }
+
+  const categorySum = accommodation + food + transport + activities + misc
+  const isBalanced = categorySum === personalBudget
+
+  const handleAutoBalance = () => {
+    const sum4 = accommodation + food + transport + activities
+    if (personalBudget >= sum4) {
+      setMisc(personalBudget - sum4)
+    } else {
+      handleBudgetChange(personalBudget)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isBalanced) return
     setSubmitting(true)
     try {
       const caps: CategoryCaps = {
@@ -78,33 +96,39 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
     : [15000, 20000, 30000, 50000]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-teal-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-teal-700 to-emerald-800 p-6 text-white relative">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl border border-teal-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
+        {/* Header - Fixed top */}
+        <div className="bg-gradient-to-r from-teal-700 to-emerald-800 p-5 text-white relative shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-4 right-4 text-white/70 hover:text-white text-xl font-bold"
+            className="absolute top-4 right-4 text-white/70 hover:text-white text-xl font-bold p-1 rounded-lg hover:bg-white/10 transition"
+            title="Close"
           >
             ✕
           </button>
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-1">
             <span className="text-2xl">🎉</span>
             <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full">
               Trip Invitation
             </span>
           </div>
           <h2 className="text-xl md:text-2xl font-black">{trip.name}</h2>
-          <p className="text-xs text-teal-100 mt-1">
+          <p className="text-xs text-teal-100 mt-0.5">
             📍 {trip.destination} · {trip.startDate} to {trip.endDate}
           </p>
         </div>
 
-        {/* Content Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {/* Content Form - Scrollable body */}
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1">
           <div>
-            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
               1. Your Personal Contribution ({userHomeCurr})
             </label>
             <p className="text-xs text-slate-500 mb-2 leading-relaxed">
@@ -120,7 +144,7 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
                 step="50"
                 value={personalBudget}
                 onChange={(e) => handleBudgetChange(Number(e.target.value))}
-                className="w-full pl-14 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-black text-lg focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition"
+                className="w-full pl-14 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-black text-lg focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition"
                 required
               />
             </div>
@@ -134,7 +158,7 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
             </div>
 
             {/* Quick Presets */}
-            <div className="flex items-center gap-2 mt-2.5">
+            <div className="flex items-center gap-2 mt-2">
               {presets.map((preset) => (
                 <button
                   key={preset}
@@ -154,35 +178,142 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
 
           {/* Category Allocation */}
           <div>
-            <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1.5">
-              2. Your Category Breakdown Preferences ({userHomeCurr})
-            </label>
-            <div className="grid grid-cols-2 gap-2.5 text-xs">
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-                <span className="text-slate-500 font-medium block">🏨 Stay (35%)</span>
-                <span className="font-black text-slate-900">{homeSymbol}{accommodation.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(accommodation, userHomeCurr, tripDestCurr).toLocaleString()}</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                2. Editable Category Breakdown ({userHomeCurr})
+              </label>
+              <button
+                type="button"
+                onClick={() => handleBudgetChange(personalBudget)}
+                className="text-[10px] font-semibold text-teal-700 hover:underline"
+              >
+                Reset Defaults
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              {/* Accommodation */}
+              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
+                <label className="text-slate-600 font-bold block text-[11px]">🏨 Stay (35%)</label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={accommodation}
+                    onChange={(e) => setAccommodation(Math.max(0, Number(e.target.value)))}
+                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                  />
+                </div>
+                <span className="text-[10px] text-teal-700 block font-mono">
+                  ≈ {destSymbol}{convertCurrency(accommodation, userHomeCurr, tripDestCurr).toLocaleString()}
+                </span>
               </div>
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-                <span className="text-slate-500 font-medium block">🍽️ Food (25%)</span>
-                <span className="font-black text-slate-900">{homeSymbol}{food.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(food, userHomeCurr, tripDestCurr).toLocaleString()}</span>
+
+              {/* Food */}
+              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
+                <label className="text-slate-600 font-bold block text-[11px]">🍽️ Food (25%)</label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={food}
+                    onChange={(e) => setFood(Math.max(0, Number(e.target.value)))}
+                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                  />
+                </div>
+                <span className="text-[10px] text-teal-700 block font-mono">
+                  ≈ {destSymbol}{convertCurrency(food, userHomeCurr, tripDestCurr).toLocaleString()}
+                </span>
               </div>
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-                <span className="text-slate-500 font-medium block">🚕 Transport (20%)</span>
-                <span className="font-black text-slate-900">{homeSymbol}{transport.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(transport, userHomeCurr, tripDestCurr).toLocaleString()}</span>
+
+              {/* Transport */}
+              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
+                <label className="text-slate-600 font-bold block text-[11px]">🚕 Transport (20%)</label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={transport}
+                    onChange={(e) => setTransport(Math.max(0, Number(e.target.value)))}
+                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                  />
+                </div>
+                <span className="text-[10px] text-teal-700 block font-mono">
+                  ≈ {destSymbol}{convertCurrency(transport, userHomeCurr, tripDestCurr).toLocaleString()}
+                </span>
               </div>
-              <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
-                <span className="text-slate-500 font-medium block">🎟️ Activities (10%)</span>
-                <span className="font-black text-slate-900">{homeSymbol}{activities.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(activities, userHomeCurr, tripDestCurr).toLocaleString()}</span>
+
+              {/* Activities */}
+              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
+                <label className="text-slate-600 font-bold block text-[11px]">🎟️ Activities (10%)</label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={activities}
+                    onChange={(e) => setActivities(Math.max(0, Number(e.target.value)))}
+                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                  />
+                </div>
+                <span className="text-[10px] text-teal-700 block font-mono">
+                  ≈ {destSymbol}{convertCurrency(activities, userHomeCurr, tripDestCurr).toLocaleString()}
+                </span>
               </div>
+
+              {/* Misc */}
+              <div className="col-span-2 bg-slate-50 p-2 rounded-xl border border-slate-200/70 space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-slate-600 font-bold block text-[11px]">🧩 Misc / Buffer (10%)</label>
+                  <span className="text-[10px] text-slate-400">Flexible fund</span>
+                </div>
+                <div className="relative flex items-center">
+                  <span className="absolute left-2 text-slate-400 font-bold text-xs">{homeSymbol}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={misc}
+                    onChange={(e) => setMisc(Math.max(0, Number(e.target.value)))}
+                    className="w-full pl-6 pr-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-900 font-bold text-xs focus:border-teal-500 focus:ring-1 focus:ring-teal-200 outline-none"
+                  />
+                </div>
+                <span className="text-[10px] text-teal-700 block font-mono">
+                  ≈ {destSymbol}{convertCurrency(misc, userHomeCurr, tripDestCurr).toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Validation Balance Card */}
+            <div className={`mt-2 p-2.5 rounded-xl text-xs flex items-center justify-between border ${
+              isBalanced 
+                ? 'bg-emerald-50 border-emerald-200/80 text-emerald-800' 
+                : 'bg-amber-50 border-amber-200/80 text-amber-900'
+            }`}>
+              <div className="flex items-center gap-1.5 font-semibold">
+                <span>{isBalanced ? '✅' : '⚠️'}</span>
+                <span>
+                  {isBalanced
+                    ? `Allocated: ${homeSymbol}${categorySum.toLocaleString()} (100%)`
+                    : `Sum (${homeSymbol}${categorySum.toLocaleString()}) ≠ Budget (${homeSymbol}${personalBudget.toLocaleString()})`}
+                </span>
+              </div>
+              {!isBalanced && (
+                <button
+                  type="button"
+                  onClick={handleAutoBalance}
+                  className="text-[11px] font-bold bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 rounded-lg transition shadow-2xs"
+                >
+                  Auto-Balance
+                </button>
+              )}
             </div>
           </div>
 
           {/* Group Budget Impact Card */}
-          <div className="bg-teal-50/90 border border-teal-200/80 rounded-2xl p-4 text-xs space-y-1.5">
+          <div className="bg-teal-50/90 border border-teal-200/80 rounded-2xl p-3.5 text-xs space-y-1.5">
             <div className="flex items-center justify-between text-teal-900 font-bold">
               <span>Current Group Budget:</span>
               <div className="text-right">
@@ -207,7 +338,7 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex items-center gap-3 pt-1">
             <button
               type="button"
               onClick={onClose}
@@ -217,10 +348,14 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
             </button>
             <button
               type="submit"
-              disabled={submitting || personalBudget <= 0}
+              disabled={submitting || personalBudget <= 0 || !isBalanced}
               className="flex-2 py-3 px-4 bg-teal-600 hover:bg-teal-700 active:scale-98 text-white font-bold text-xs rounded-2xl shadow-md transition disabled:opacity-50 text-center"
             >
-              {submitting ? 'Joining Trip...' : 'Accept & Join Group'}
+              {submitting
+                ? 'Joining Trip...'
+                : !isBalanced
+                ? 'Please Balance Categories'
+                : 'Accept & Join Group'}
             </button>
           </div>
         </form>
