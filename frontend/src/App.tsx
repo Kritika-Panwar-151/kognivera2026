@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { Screen, Trip, Expense, User } from './types'
 import TopBar from './components/TopBar'
 import BottomNav from './components/BottomNav'
