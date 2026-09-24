@@ -134,12 +134,15 @@ export async function fetchExpensesFromSupabase(tripId?: string): Promise<Expens
     }
 
     return rawExpenses.map((e) => {
-      const payerId = e.payer_user_id || 'usr_000000000001'
+      const payerId = e.payer_user_id || 'usr_aisha'
       const rawSplit = Array.isArray(e.split_between) && e.split_between.length > 0
         ? e.split_between
         : [payerId]
       
-      const isShared = Boolean(e.is_shared) && rawSplit.length > 1
+      const isShared = e.is_shared !== undefined && e.is_shared !== null
+        ? Boolean(e.is_shared) && rawSplit.length > 1
+        : rawSplit.length > 1
+
       const splitBetween = isShared ? rawSplit : [payerId]
 
       return {
@@ -381,17 +384,14 @@ export async function fetchPendingTripInvites(userId: string): Promise<any[]> {
 }
 
 // 4. Save New Expense into Supabase
-export async function saveExpenseToSupabase(expense: Expense, payerUserId: string = 'usr_000000000001'): Promise<void> {
+export async function saveExpenseToSupabase(expense: Expense, payerUserId: string = 'usr_aisha'): Promise<void> {
   if (!isSupabaseConfigured) return
 
   try {
     const expId = expense.id.startsWith('exp_') ? expense.id : `exp_${Date.now()}`
     const now = new Date().toISOString()
     const validTripId = expense.tripId === 'europe' ? 'trp_000000000001' : expense.tripId
-    const validPayerId =
-      payerUserId === 'usr_you' || payerUserId === 'usr_aisha'
-        ? 'usr_000000000001'
-        : payerUserId
+    const validPayerId = expense.paidBy || payerUserId || 'usr_aisha'
     
     const isSharedVal = Boolean(expense.isShared && expense.splitBetween && expense.splitBetween.length > 1)
     const splitBetweenArr = isSharedVal ? (expense.splitBetween || [validPayerId]) : [validPayerId]
