@@ -96,7 +96,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
     trip?.personalBudget ??
     Math.round(budget / Math.max(trip?.members?.length || 1, 1))
 
-  // Calculate personal spend for currentUser using 2-Tier expense split logic
+  // Calculate personal spend for currentUser using Upfront Cash Flow & Settlement Reimbursement
   let personalSpent = 0
 
   if (tripExpenses.length > 0) {
@@ -106,16 +106,23 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
         e.splitBetween && e.splitBetween.some((m) => isUserMatch(m, currentUser))
       const eAmountDest = convertCurrency(e.amount, e.currency || destCurr, destCurr)
 
-      if (e.isShared && isSplitWithMe) {
+      if (isPaidByMe) {
+        // Payer paid the full amount upfront out of pocket -> deduct full amount initially
+        const fullAmountHome = convertCurrency(eAmountDest, destCurr, userHomeCurr)
+        personalSpent += fullAmountHome
+
+        // If shared and settled by co-travelers, subtract non-payer settled shares (reimbursement)
+        if (e.isShared && e.isSettled && e.splitBetween && e.splitBetween.length > 1) {
+          const nonPayerCount = e.splitBetween.length - 1
+          const reimbursedDest = (eAmountDest / e.splitBetween.length) * nonPayerCount
+          const reimbursedHome = convertCurrency(reimbursedDest, destCurr, userHomeCurr)
+          personalSpent -= reimbursedHome
+        }
+      } else if (e.isShared && isSplitWithMe && e.isSettled) {
+        // Co-traveler only has their share deducted AFTER settling
         const shareCount = e.splitBetween ? e.splitBetween.length : (trip?.members?.length || 1)
         const shareDest = eAmountDest / shareCount
         const shareHome = convertCurrency(shareDest, destCurr, userHomeCurr)
-        personalSpent += shareHome
-      } else if (!e.isShared && isPaidByMe) {
-        const shareHome = convertCurrency(eAmountDest, destCurr, userHomeCurr)
-        personalSpent += shareHome
-      } else if (isPaidByMe) {
-        const shareHome = convertCurrency(eAmountDest, destCurr, userHomeCurr)
         personalSpent += shareHome
       }
     })
