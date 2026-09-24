@@ -266,23 +266,19 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     }
   }
 
-  // Live calculations
-  const theyOweYouList = debts.filter((d) => d.direction === 'they_owe_you')
-  const youOweList = debts.filter((d) => d.direction === 'you_owe_them')
+  // Live calculations: separate active pending debts from settled completed transactions
+  const activeTheyOweYouList = debts.filter((d) => d.direction === 'they_owe_you' && !d.isSettled)
+  const activeYouOweList = debts.filter((d) => d.direction === 'you_owe_them' && !d.isSettled)
+  const completedSettlementsList = debts.filter((d) => d.isSettled)
 
-  const totalOwedToYou = theyOweYouList
-    .filter((d) => !d.isSettled)
-    .reduce((sum, d) => sum + d.amount, 0)
-
-  const totalYouOwe = youOweList
-    .filter((d) => !d.isSettled)
-    .reduce((sum, d) => sum + d.amount, 0)
-
+  const totalOwedToYou = activeTheyOweYouList.reduce((sum, d) => sum + d.amount, 0)
+  const totalYouOwe = activeYouOweList.reduce((sum, d) => sum + d.amount, 0)
   const netBalance = totalOwedToYou - totalYouOwe
 
   const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false)
   const [confirmModalTarget, setConfirmModalTarget] = useState<SettlingTarget | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [showCompletedHistory, setShowCompletedHistory] = useState(false)
 
   const promptSettleConfirm = (item: DebtItem) => {
     if (item.isSettled) return
@@ -402,7 +398,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       </div>
 
       {/* =========================================================================
-          SECTION 1: PEOPLE WHO OWE YOU (WITH ONE-TIME CONFIRMED SETTLE)
+          SECTION 1: PEOPLE WHO OWE YOU (ACTIVE UNSETTLED DEBTS ONLY)
       ========================================================================= */}
       <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm p-5 md:p-6 space-y-3.5">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -416,20 +412,16 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
         </div>
 
         <div className="space-y-2.5">
-          {theyOweYouList.length === 0 ? (
+          {activeTheyOweYouList.length === 0 ? (
             <div className="text-center py-6 text-slate-400 text-xs">
               <span className="text-xl block mb-1">🎉</span>
               <span>No one currently owes you money. You are completely settled up!</span>
             </div>
           ) : (
-            theyOweYouList.map((item) => (
+            activeTheyOweYouList.map((item) => (
               <div
                 key={item.id}
-                className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 ${
-                  item.isSettled
-                    ? 'bg-slate-50/70 border-slate-200 opacity-60'
-                    : 'bg-emerald-50/40 border-emerald-200/80 hover:bg-emerald-50'
-                }`}
+                className="p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 bg-emerald-50/40 border-emerald-200/80 hover:bg-emerald-50"
               >
                 {/* Person Info */}
                 <div className="flex items-center gap-3 min-w-0">
@@ -450,15 +442,10 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                 {/* INLINE SETTLE BUTTON */}
                 <button
                   type="button"
-                  disabled={item.isSettled}
                   onClick={() => promptSettleConfirm(item)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-2xs ${
-                    item.isSettled
-                      ? 'bg-emerald-100 text-emerald-800 opacity-80 cursor-not-allowed'
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'
-                  }`}
+                  className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-2xs"
                 >
-                  <span>{item.isSettled ? '✓ Settled (Received)' : 'Acknowledge Settle'}</span>
+                  <span>Acknowledge Settle</span>
                 </button>
               </div>
             ))
@@ -467,7 +454,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       </div>
 
       {/* =========================================================================
-          SECTION 2: PEOPLE YOU OWE (WITH ONE-TIME CONFIRMED SETTLE)
+          SECTION 2: PEOPLE YOU OWE (ACTIVE UNSETTLED DEBTS ONLY)
       ========================================================================= */}
       <div className="bg-white rounded-3xl border border-rose-100 shadow-sm p-5 md:p-6 space-y-3.5">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -481,20 +468,16 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
         </div>
 
         <div className="space-y-2.5">
-          {youOweList.length === 0 ? (
+          {activeYouOweList.length === 0 ? (
             <div className="text-center py-6 text-slate-400 text-xs">
               <span className="text-xl block mb-1">✨</span>
               <span>You have zero debts to others. All shared expenses are settled!</span>
             </div>
           ) : (
-            youOweList.map((item) => (
+            activeYouOweList.map((item) => (
               <div
                 key={item.id}
-                className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 ${
-                  item.isSettled
-                    ? 'bg-slate-50/70 border-slate-200 opacity-60'
-                    : 'bg-rose-50/40 border-rose-200/80 hover:bg-rose-50'
-                }`}
+                className="p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 bg-rose-50/40 border-rose-200/80 hover:bg-rose-50"
               >
                 {/* Person Info */}
                 <div className="flex items-center gap-3 min-w-0">
@@ -505,9 +488,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-slate-900 text-sm truncate">{item.person}</p>
                       <span className="text-xs font-extrabold text-rose-800">
-                        {item.isSettled
-                          ? `Settled ${homeSymbol}${item.amount.toLocaleString()} with ${item.person}`
-                          : `You owe ${homeSymbol}${item.amount.toLocaleString()} to ${item.person}`}
+                        You owe {homeSymbol}{item.amount.toLocaleString()} to {item.person}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 truncate">{item.reason}</p>
@@ -517,21 +498,57 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                 {/* INLINE SETTLE BUTTON */}
                 <button
                   type="button"
-                  disabled={item.isSettled}
                   onClick={() => promptSettleConfirm(item)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-2xs ${
-                    item.isSettled
-                      ? 'bg-emerald-100 text-emerald-800 opacity-80 cursor-not-allowed'
-                      : 'bg-rose-600 hover:bg-rose-700 text-white active:scale-95'
-                  }`}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white active:scale-95 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-2xs"
                 >
-                  <span>{item.isSettled ? '✓ Settled (Paid)' : `Pay & Settle ${homeSymbol}${item.amount.toLocaleString()}`}</span>
+                  <span>Pay & Settle {homeSymbol}{item.amount.toLocaleString()}</span>
                 </button>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {/* =========================================================================
+          SECTION 3: COMPLETED / SETTLED TRANSACTIONS HISTORY (COLLAPSIBLE)
+      ========================================================================= */}
+      {completedSettlementsList.length > 0 && (
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-4 md:p-5 space-y-3">
+          <button
+            type="button"
+            onClick={() => setShowCompletedHistory((prev) => !prev)}
+            className="w-full flex items-center justify-between text-left text-xs font-extrabold text-slate-700 hover:text-slate-900"
+          >
+            <div className="flex items-center gap-2">
+              <span>✓</span>
+              <span>Completed Settlements ({completedSettlementsList.length})</span>
+            </div>
+            <span>{showCompletedHistory ? '▲ Hide' : '▼ View History'}</span>
+          </button>
+
+          {showCompletedHistory && (
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              {completedSettlementsList.map((item) => (
+                <div
+                  key={item.id}
+                  className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between text-xs opacity-75"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span>{item.avatar}</span>
+                    <div>
+                      <p className="font-bold text-slate-800">{item.person}</p>
+                      <p className="text-[10px] text-slate-400">{item.reason}</p>
+                    </div>
+                  </div>
+                  <span className="bg-emerald-100 text-emerald-800 font-extrabold text-[10px] px-2.5 py-1 rounded-full border border-emerald-200">
+                    ✓ Settled ({homeSymbol}{item.amount.toLocaleString()})
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Split Integrity Footer Note */}
       <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-2 text-xs text-slate-500">
