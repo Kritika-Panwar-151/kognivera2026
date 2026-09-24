@@ -278,9 +278,17 @@ export default function ExpenseHistory({
             (e) => (isTripMatch(e.tripId, trip.id) || (!e.tripId && isCurrentTrip)) && filterExpense(e)
           )
 
-          const personalExpenses = tripExpenses.filter(
-            (e) => !e.isShared || !e.splitBetween || e.splitBetween.length <= 1
-          )
+          const personalExpenses = tripExpenses.filter((e) => {
+            const isPersonal = !e.isShared || !e.splitBetween || e.splitBetween.length <= 1
+            if (!isPersonal) return false
+            if (currentUser && selectedMember === 'All Members') {
+              return (
+                isUserMatch(e.paidBy, currentUser) ||
+                (e.splitBetween && e.splitBetween.some((m) => isUserMatch(m, currentUser)))
+              )
+            }
+            return true
+          })
           const groupExpenses = tripExpenses.filter(
             (e) => Boolean(e.isShared) && Array.isArray(e.splitBetween) && e.splitBetween.length > 1
           )
