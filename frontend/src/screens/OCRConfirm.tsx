@@ -3,7 +3,7 @@ import type { NavigateFn, Expense, Trip, User } from '../types'
 import type { ReceiptOCRResult } from '../services/geminiService'
 import { saveExpenseToSupabase } from '../services/supabaseDataService'
 import { getRegisteredUsers } from '../services/userRegistry'
-import { convertCurrency, getCurrencySymbol } from '../services/currencyService'
+import { convertCurrency, getCurrencySymbol, getTripDestinationCurrency } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -13,16 +13,7 @@ interface Props {
 }
 
 const categories = ['Food', 'Transport', 'Accommodation', 'Activities', 'Shopping', 'Other']
-const currencies = ['EUR', 'INR', 'USD', 'GBP', 'JPY', 'SGD']
-
-const FX_RATES: Record<string, number> = {
-  EUR: 94.0,
-  USD: 86.5,
-  GBP: 112.4,
-  SGD: 65.2,
-  JPY: 0.58,
-  INR: 1.0,
-}
+const currencies = ['EUR', 'INR', 'USD', 'GBP', 'THB', 'CHF', 'JPY', 'SGD', 'AED', 'AUD', 'CAD', 'MYR', 'CNY']
 
 export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }: Props) {
   const registered = getRegisteredUsers()
@@ -85,8 +76,9 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
     setFields((f) => ({ ...f, [field]: e.target.value }))
 
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const tripDestCurr = getTripDestinationCurrency(trip)
   const numAmount = parseFloat(fields.amount || '0')
-  const converted = Math.round(convertCurrency(numAmount, fields.currency, userHomeCurr))
+  const converted = Math.round(convertCurrency(numAmount, fields.currency, tripDestCurr))
 
   const activeMembersCount = Math.max(selectedMembers.length, 1)
   const equalSharePerPerson = (converted / activeMembersCount).toFixed(2)
