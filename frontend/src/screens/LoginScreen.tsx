@@ -8,6 +8,9 @@ import {
   saveUserCredentials,
   verifyUserCredentials,
   userExists,
+  checkLoginLockout,
+  recordFailedLogin,
+  clearFailedLogins,
 } from '../services/userRegistry'
 import {
   CANONICAL_COUNTRIES,
@@ -227,6 +230,7 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
         }
 
         // Persist profile and credentials
+        clearFailedLogins(email)
         registerUser(newUser)
         saveUserCredentials(email.trim(), password)
         localStorage.setItem('tripwallet_auth_user', JSON.stringify(newUser))
@@ -235,9 +239,22 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
         setMessage({ text: 'Account created successfully in database! Opening your dashboard...', type: 'success' })
         setTimeout(() => navigate('trip-dashboard'), 700)
       } else {
-        // ================= SIGN IN =================
+        // ================= SIGN IN WITH 5-ATTEMPT LOCKOUT =================
         if (!email.trim() || !password.trim()) {
           setMessage({ text: 'Please enter both your email address and password', type: 'error' })
+          setLoading(false)
+          return
+        }
+
+        // Check if user is locked out
+        const lockout = checkLoginLockout(email)
+        if (lockout.isLocked) {
+          const hours = Math.floor((lockout.remainingMinutes || 120) / 60)
+          const mins = (lockout.remainingMinutes || 120) % 60
+          setMessage({
+            text: `🔒 Account temporarily locked. You entered the wrong password 5 times. Please wait ${hours}h ${mins}m before trying again (2-hour security block).`,
+            type: 'error',
+          })
           setLoading(false)
           return
         }
@@ -250,10 +267,22 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
 
           if (error) {
             console.warn('Supabase signin error:', error.message)
-            setMessage({ text: error.message || 'Invalid email or password', type: 'error' })
+            const failure = recordFailedLogin(email)
+            if (failure.isLocked) {
+              setMessage({
+                text: '🔒 Account locked! You entered the wrong password 5 times. Your account is blocked for 2 hours.',
+                type: 'error',
+              })
+            } else {
+              setMessage({
+                text: `Incorrect credentials. Attempt ${5 - failure.attemptsLeft} of 5. After 5 failed attempts, your account will be locked for 2 hours.`,
+                type: 'error',
+              })
+            }
             setLoading(false)
             return
           } else if (data?.user) {
+            clearFailedLogins(email)
             const registered = getRegisteredUsers()
             const matched = registered.find((u) => u.email.toLowerCase() === email.toLowerCase())
             const authUser: User = matched || {
@@ -276,14 +305,30 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
         // Validate strictly against registered database
         const result = verifyUserCredentials(email, password)
         if (!result.success || !result.user) {
-          setMessage({
-            text: result.error || 'Account not found. Please click "Create Account" first.',
-            type: 'error',
-          })
+          if (result.error?.includes('Incorrect password')) {
+            const failure = recordFailedLogin(email)
+            if (failure.isLocked) {
+              setMessage({
+                text: '🔒 Account locked! You entered the wrong password 5 times. Your account is blocked for 2 hours.',
+                type: 'error',
+              })
+            } else {
+              setMessage({
+                text: `Incorrect password. Attempt ${5 - failure.attemptsLeft} of 5. After 5 failed attempts, your account will be locked for 2 hours.`,
+                type: 'error',
+              })
+            }
+          } else {
+            setMessage({
+              text: result.error || 'Account not found. Please click "Create Account" first.',
+              type: 'error',
+            })
+          }
           setLoading(false)
           return
         }
 
+        clearFailedLogins(email)
         localStorage.setItem('tripwallet_auth_user', JSON.stringify(result.user))
         onSelectUser(result.user)
         setMessage({ text: `Welcome back, ${result.user.name}!`, type: 'success' })
