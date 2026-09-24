@@ -33,7 +33,7 @@ import {
 import { enqueueOfflineAction } from './services/offlineQueueService'
 import type { CategoryCaps } from './types'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { syncActiveCurrencies, getTripDestinationCurrency } from './services/currencyService'
+import { syncActiveCurrencies, getTripDestinationCurrency, convertCurrency } from './services/currencyService'
 
 const DEFAULT_DEMO_TRIPS: Trip[] = [
   {
@@ -277,8 +277,18 @@ export default function App() {
           // Strict user-filtered trips
           updateTripsSafely(loadedTrips, currentUser)
 
-          if (loadedExpenses && loadedExpenses.length > 0) {
-            setExpenses(loadedExpenses)
+          const homeCurr = (currentUser.homeCurrency || 'INR').toUpperCase()
+          const normalized = (loadedExpenses || []).map((e) => {
+            const origCurr = (e.currency || 'INR').toUpperCase()
+            const freshConv = convertCurrency(e.amount || 0, origCurr, homeCurr)
+            return {
+              ...e,
+              convertedAmount: freshConv > 0 ? freshConv : (e.convertedAmount || e.amount || 0),
+            }
+          })
+
+          if (normalized.length > 0) {
+            setExpenses(normalized)
           } else {
             setExpenses([])
           }

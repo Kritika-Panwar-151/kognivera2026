@@ -122,9 +122,13 @@ export function convertCurrency(
   fromCurrency: string,
   toCurrency: string = 'INR'
 ): number {
+  const fromCode = (fromCurrency || 'INR').toUpperCase()
+  const toCode = (toCurrency || 'INR').toUpperCase()
+  if (fromCode === toCode) return Math.round(amount * 100) / 100
+
   const state = getStoredFxRates()
-  const fromRate = state.rates[fromCurrency.toUpperCase()] || 1.0
-  const toRate = state.rates[toCurrency.toUpperCase()] || 1.0
+  const fromRate = state.rates[fromCode] || BASELINE_FX_RATES[fromCode] || 1.0
+  const toRate = state.rates[toCode] || BASELINE_FX_RATES[toCode] || 1.0
 
   const amountInInr = amount * fromRate
   return Math.round((amountInInr / toRate) * 100) / 100
