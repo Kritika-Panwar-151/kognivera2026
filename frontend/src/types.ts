@@ -103,6 +103,11 @@ export interface ItineraryItem {
   currency: string
   note: string
   location?: string
+  mapsUrl?: string // Universal Google Maps Search & Navigation Link
+  rating?: number // Google star rating (e.g. 4.8)
+  reviewCount?: number | string // Google review count (e.g. 24000 or '24k+')
+  isFamous?: boolean // Top-tier famous landmark in the destination
+  distance?: string // Proximity / walking distance from current location
   isLocked?: boolean // Cannot be adapted (e.g. flight, prepaid hotel)
   isAdapted?: boolean // Swapped or modified by AI
   originalTitle?: string

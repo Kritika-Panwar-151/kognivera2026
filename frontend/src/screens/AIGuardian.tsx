@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import type { NavigateFn } from '../types'
+import { queryGuardianCopilotWithLLM } from '../services/geminiService'
 
 interface Props {
   navigate: NavigateFn
@@ -11,16 +12,17 @@ interface ChatMessage {
   text: string
   timestamp: string
   tags?: { label: string; color: string }[]
-  itineraryCards?: { time: string; title: string; type: string; cost: string; note: string }[]
+  itineraryCards?: { time: string; title: string; type: string; cost: string; note: string; mapsUrl?: string }[]
   metrics?: { label: string; value: string; sub?: string }[]
 }
 
 const suggestedPrompts = [
-  '🗓️ What is my itinerary plan for today & tomorrow?',
-  '💰 What is my total spending this month across all trips?',
+  '🗓️ What is my itinerary plan for today?',
+  '🇮🇳 5000 kharche me jodo (Dinner)',
+  '💰 Add 5000 to expense',
   '🍕 Can I afford a ₹3,000 dinner tonight in Rome?',
-  '🏨 How much budget is left for food & hotels?',
   '🇮🇳 Mera total budget aur kharcha batao',
+  '🇮🇹 Aggiungi 45€ per trattoria cena',
   '✈️ When is my return flight and departure?',
 ]
 
@@ -171,7 +173,7 @@ export default function AIGuardian({ navigate }: Props) {
     }
   }
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const text = (textToSend || input).trim()
     if (!text) return
 
@@ -186,11 +188,44 @@ export default function AIGuardian({ navigate }: Props) {
     setInput('')
     setIsTyping(true)
 
-    setTimeout(() => {
+    try {
+      const hours = new Date().getHours()
+      const slot: 'Morning' | 'Afternoon' | 'Evening' | 'Night' =
+        hours < 12 ? 'Morning' : hours < 17 ? 'Afternoon' : hours < 21 ? 'Evening' : 'Night'
+      const timeStr = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+
+      const res = await queryGuardianCopilotWithLLM(text, {
+        userId: 'usr_000000000001',
+        displayName: 'Aisha Patel',
+        tripTitle: 'Europe Adventure',
+        destinationCity: 'Rome',
+        currentLocalTime: timeStr,
+        currentTimeSlot: slot,
+        currentDayNumber: 4,
+        totalDays: 8,
+        daysRemaining: 4,
+        totalTripBudget: 60000,
+        totalSpentSoFar: 26172,
+        safeDailyAllowance: 6765,
+        currency: 'INR',
+      })
+
+      const reply: ChatMessage = {
+        id: `bot_${Date.now()}`,
+        sender: 'assistant',
+        text: res.answer,
+        timestamp: 'Just now',
+        tags: res.tags,
+        itineraryCards: res.itineraryCards,
+        metrics: res.metrics,
+      }
+      setMessages((prev) => [...prev, reply])
+    } catch {
       const reply = generateAIResponse(text)
       setMessages((prev) => [...prev, reply])
+    } finally {
       setIsTyping(false)
-    }, 600)
+    }
   }
 
   return (
@@ -227,6 +262,27 @@ export default function AIGuardian({ navigate }: Props) {
             <span className="text-[10px] text-slate-400 font-bold uppercase block">Sept Total Spend</span>
             <span className="text-sm font-extrabold text-indigo-900">₹37,792</span>
           </div>
+        </div>
+      </div>
+
+      {/* Dynamic Temporal Destination Clock Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-gradient-to-r from-teal-50/80 via-emerald-50/70 to-slate-50 border border-teal-100 rounded-2xl text-xs">
+        <div className="flex items-center gap-2">
+          <span className="p-1.5 bg-white text-teal-800 rounded-lg shadow-2xs font-extrabold flex items-center gap-1">
+            <span>⏰</span> Rome Clock
+          </span>
+          <span className="font-bold text-slate-800">
+            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} CET
+          </span>
+          <span className="bg-teal-200/60 text-teal-900 font-semibold px-2 py-0.5 rounded-full text-[10px]">
+            {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 17 ? 'Afternoon' : new Date().getHours() < 21 ? 'Evening' : 'Night'} Slot
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-slate-400 font-medium">Trip Progress:</span>
+          <span className="font-extrabold text-teal-900 bg-white px-2 py-0.5 rounded-md border border-teal-100">
+            Day 4 of 8 · 4 Days Left
+          </span>
         </div>
       </div>
 
@@ -328,6 +384,18 @@ export default function AIGuardian({ navigate }: Props) {
                           </div>
                           {item.note && (
                             <p className="text-[10px] text-slate-500 italic">“{item.note}”</p>
+                          )}
+                          {item.mapsUrl && (
+                            <div className="pt-1">
+                              <a
+                                href={item.mapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-2.5 py-1 rounded-lg transition"
+                              >
+                                🗺️ Open in Google Maps ↗
+                              </a>
+                            </div>
                           )}
                         </div>
                       ))}

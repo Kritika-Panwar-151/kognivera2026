@@ -221,7 +221,14 @@ export function getDefaultItinerary(trip: Trip): ItineraryItem[] {
       location: 'Jazz Cellar Club',
       isLocked: false,
     },
-  ]
+  ].map((item) => ({
+    ...item,
+    mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.title + ', ' + (item.location || dest))}`,
+    rating: 4.8,
+    reviewCount: 1420,
+    isFamous: true,
+    distance: '1.2 km away',
+  }))
 }
 
 /**
@@ -301,11 +308,20 @@ TASK:
         const returnedAdapted: ItineraryItem[] = parsed.adaptedItems
 
         // Merge back into the full itinerary
-        const fullMerged = currentItems.map((item) => {
-          if (item.dayIndex !== selectedDay) return item
-          const match = returnedAdapted.find((a) => a.id === item.id)
-          return match ? { ...item, ...match } : item
-        })
+        const dest = resolveCityName(trip.destination, trip.name)
+        const fullMerged = currentItems
+          .map((item) => {
+            if (item.dayIndex !== selectedDay) return item
+            const match = returnedAdapted.find((a) => a.id === item.id)
+            return match ? { ...item, ...match } : item
+          })
+          .map((i) => ({
+            ...i,
+            mapsUrl: i.mapsUrl || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(i.title + ', ' + (i.location || dest))}`,
+            rating: i.rating || 4.8,
+            reviewCount: i.reviewCount || 1350,
+            isFamous: i.isFamous ?? true,
+          }))
 
         const beforeCost = dayItems.reduce((s, i) => s + i.cost, 0)
         const afterCost = returnedAdapted.reduce((s, i) => s + i.cost, 0)
@@ -433,11 +449,20 @@ TASK:
   }
 
   // Merge adapted items into full itinerary
-  const fullMerged = currentItems.map((item) => {
-    if (item.dayIndex !== selectedDay) return item
-    const match = adaptedDayItems.find((a) => a.id === item.id)
-    return match ? { ...item, ...match } : item
-  })
+  const dest = resolveCityName(trip.destination, trip.name)
+  const fullMerged = currentItems
+    .map((item) => {
+      if (item.dayIndex !== selectedDay) return item
+      const match = adaptedDayItems.find((a) => a.id === item.id)
+      return match ? { ...item, ...match } : item
+    })
+    .map((i) => ({
+      ...i,
+      mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(i.title + ', ' + (i.location || dest))}`,
+      rating: i.rating || 4.8,
+      reviewCount: i.reviewCount || 1420,
+      isFamous: true,
+    }))
 
   const beforeCost = dayItems.reduce((s, i) => s + i.cost, 0)
   const afterCost = adaptedDayItems.reduce((s, i) => s + i.cost, 0)
