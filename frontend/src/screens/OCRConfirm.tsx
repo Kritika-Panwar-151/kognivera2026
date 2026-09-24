@@ -3,6 +3,7 @@ import type { NavigateFn, Expense, Trip, User } from '../types'
 import type { ReceiptOCRResult } from '../services/geminiService'
 import { saveExpenseToSupabase } from '../services/supabaseDataService'
 import { getRegisteredUsers } from '../services/userRegistry'
+import { convertCurrency, getCurrencySymbol } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -83,9 +84,9 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
   const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setFields((f) => ({ ...f, [field]: e.target.value }))
 
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
   const numAmount = parseFloat(fields.amount || '0')
-  const rate = FX_RATES[fields.currency] || 1.0
-  const converted = Math.round(numAmount * rate)
+  const converted = Math.round(convertCurrency(numAmount, fields.currency, userHomeCurr))
 
   const activeMembersCount = Math.max(selectedMembers.length, 1)
   const equalSharePerPerson = (converted / activeMembersCount).toFixed(2)

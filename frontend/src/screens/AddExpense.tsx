@@ -6,7 +6,7 @@ import {
   type ReceiptOCRResult,
 } from '../services/geminiService'
 import { getRegisteredUsers } from '../services/userRegistry'
-import { formatUserDualCurrency } from '../services/currencyService'
+import { formatUserDualCurrency, convertCurrency, getCurrencySymbol } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -59,9 +59,10 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
     ? `${currentUser.homeCurrency.toUpperCase()} (${currentUser.homeCurrency.toUpperCase() === 'EUR' ? '€' : currentUser.homeCurrency.toUpperCase() === 'USD' ? '$' : currentUser.homeCurrency.toUpperCase() === 'GBP' ? '£' : '₹'})`
     : 'INR (₹)'
   const [currency, setCurrency] = useState(defaultUserCurrency)
+  const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('Food')
   const [merchant, setMerchant] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+  const [date, setDate] = useState(new Date().toLocaleDateString('sv-SE'))
   const [paidBy, setPaidBy] = useState(currentUserName)
   const [notes, setNotes] = useState('')
 
@@ -89,10 +90,10 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   const [aiWarning, setAiWarning] = useState<string | null>(null)
 
   // Currency & Math calculations
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
   const currCode = currency.split(' ')[0]
   const numAmount = parseFloat(amount) || 0
-  const rate = FX_RATES[currCode] || 1.0
-  const convertedAmount = Math.round(numAmount * rate)
+  const convertedAmount = Math.round(convertCurrency(numAmount, currCode, userHomeCurr))
 
   const activeMembersCount = Math.max(selectedMembers.length, 1)
   const equalSharePerPerson = (convertedAmount / activeMembersCount).toFixed(2)

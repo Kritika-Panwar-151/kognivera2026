@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import type { NavigateFn, Expense, Trip, User } from '../types'
+import { formatUserDualCurrency, getTripDestinationCurrency, convertCurrency, getCurrencySymbol } from '../services/currencyService'
+import { useBudget } from '../features/overall-budget/useBudget'
 
 interface Props {
   navigate: NavigateFn
@@ -17,21 +17,32 @@ const categories = [
   { name: 'Other', icon: '📦' },
 ]
 
-const currencies = ['EUR (€)', 'INR (₹)', 'USD ($)', 'GBP (£)']
-
-const FX_RATES: Record<string, number> = {
-  EUR: 94.0,
-  USD: 86.5,
-  GBP: 112.4,
-  INR: 1.0,
-}
-
 export default function WhatIf({ navigate, trip, currentUser, onAddExpense }: Props) {
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const tripDestCurr = getTripDestinationCurrency(trip)
+
+  const defaultUserCurrency = `${userHomeCurr} (${getCurrencySymbol(userHomeCurr)})`
+  const defaultTripCurrency = `${tripDestCurr} (${getCurrencySymbol(tripDestCurr)})`
+  
+  const currencyOptions = Array.from(new Set([
+    defaultUserCurrency,
+    defaultTripCurrency,
+    'EUR (€)',
+    'USD ($)',
+    'GBP (£)',
+    'INR (₹)',
+    'JPY (¥)',
+    'SGD (S$)',
+    'CHF (CHF)',
+  ]))
+
   const [amount, setAmount] = useState('80')
-  const [currency, setCurrency] = useState('EUR (€)')
+  const [currency, setCurrency] = useState(defaultTripCurrency)
   const [category, setCategory] = useState('Activities')
-  const [description, setDescription] = useState('Sunset boat tour in Rome')
+  const [description, setDescription] = useState(`Sunset tour in ${trip?.destination || 'Destination'}`)
   const [simulated, setSimulated] = useState(false)
+
+  const { budget: tripBudget, spent: currentSpent, remaining: currentRemaining, daysLeft, projectedTotal: beforeProjected } = useBudget(trip, currentUser || undefined, [])
 
   // 1-Click Simulation Pre-Fill from AI Budget Rescue on Dashboard
   useEffect(() => {
@@ -52,37 +63,30 @@ export default function WhatIf({ navigate, trip, currentUser, onAddExpense }: Pr
   }, [])
 
   const currCode = currency.split(' ')[0]
-  const rate = FX_RATES[currCode] || 1.0
   const numAmount = parseFloat(amount) || 0
-  const convertedAmount = Math.round(numAmount * rate)
+  const convertedAmount = Math.round(convertCurrency(numAmount, currCode, userHomeCurr))
 
-  const tripBudget = trip?.budget || 60000
-  const currentSpent = trip?.spent || 26172
-  const daysLeft = 5
-
-  const beforeProjected = 64872
   const afterProjected = beforeProjected + convertedAmount
   const canAfford = afterProjected <= tripBudget
-  const extraOver = afterProjected - beforeProjected
 
   // Recalculated safe daily limit if purchase is made
-  const newRemaining = Math.max(0, tripBudget - currentSpent - convertedAmount)
-  const newSafeDaily = Math.round(newRemaining / daysLeft)
+  const newRemaining = Math.max(0, currentRemaining - convertedAmount)
+  const newSafeDaily = Math.round(newRemaining / Math.max(1, daysLeft))
 
   const handleCommitToLedger = () => {
     const expenseId = `exp_whatif_${Date.now()}`
     const newExpense: Expense = {
       id: expenseId,
+      tripId: trip?.id || 'trip',
       merchant: description || `${category} (Simulated)`,
       amount: numAmount,
       currency: currCode,
       convertedAmount: convertedAmount,
       category: category,
-      date: new Date().toISOString().split('T')[0],
-      paidBy: currentUser?.name || 'Aisha Patel',
+      date: new Date().toLocaleDateString('sv-SE'),
+      paidBy: currentUser?.name || 'You',
       isShared: true,
-      personalSplitMembers: [currentUser?.name || 'Aisha Patel'],
-      source: 'what_if_simulator',
+      splitBetween: [currentUser?.name || 'You'],
     }
     if (onAddExpense) {
       onAddExpense(newExpense)
@@ -126,7 +130,7 @@ export default function WhatIf({ navigate, trip, currentUser, onAddExpense }: Pr
               onChange={(e) => { setCurrency(e.target.value); setSimulated(false) }}
               className="border border-slate-200 rounded-2xl px-3 text-xs font-bold bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shrink-0"
             >
-              {currencies.map((c) => (
+              {currencyOptions.map((c) => (
                 <option key={c}>{c}</option>
               ))}
             </select>
@@ -138,9 +142,9 @@ export default function WhatIf({ navigate, trip, currentUser, onAddExpense }: Pr
               className="w-full border border-slate-200 rounded-2xl px-4 py-3 text-xl font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
             />
           </div>
-          {currCode !== 'INR' && numAmount > 0 && (
+          {currCode !== userHomeCurr && numAmount > 0 && (
             <p className="text-xs text-amber-800 font-medium mt-1.5 bg-amber-50 px-3 py-1 rounded-xl border border-amber-200/60 inline-block">
-              ≈ ₹{convertedAmount.toLocaleString()} INR (Rate: 1 {currCode} = ₹{rate})
+              ≈ {getCurrencySymbol(userHomeCurr)}{convertedAmount.toLocaleString()} {userHomeCurr}
             </p>
           )}
         </div>
@@ -217,10 +221,10 @@ export default function WhatIf({ navigate, trip, currentUser, onAddExpense }: Pr
               Simulated Outlay
             </span>
             <span className="text-xl font-extrabold text-slate-900">
-              {currCode === 'EUR' ? '€' : currCode === 'USD' ? '$' : '₹'}{numAmount.toLocaleString()}
+              {getCurrencySymbol(currCode)}{numAmount.toLocaleString()} {currCode}
             </span>
             <span className="text-xs font-bold text-amber-700 block mt-0.5">
-              ≈ ₹{convertedAmount.toLocaleString()} INR
+              ≈ {formatUserDualCurrency(convertedAmount, userHomeCurr, userHomeCurr, tripDestCurr).primary} ({userHomeCurr})
             </span>
           </div>
 
@@ -228,8 +232,9 @@ export default function WhatIf({ navigate, trip, currentUser, onAddExpense }: Pr
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
               <span className="text-[10px] font-bold text-slate-400 uppercase block">Before Purchase</span>
-              <span className="text-sm font-bold text-slate-700 block mt-0.5">Safe Daily: ₹6,765</span>
-              <span className="text-xs text-slate-500 block mt-0.5">Projected: ₹{beforeProjected.toLocaleString()}</span>
+              <span className="text-sm font-bold text-slate-700 block mt-0.5">
+                Projected: {getCurrencySymbol(userHomeCurr)}{beforeProjected.toLocaleString()}
+              </span>
             </div>
 
             <div className={`p-3 rounded-2xl border ${canAfford ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
@@ -237,10 +242,10 @@ export default function WhatIf({ navigate, trip, currentUser, onAddExpense }: Pr
                 After Purchase
               </span>
               <span className={`text-sm font-extrabold block mt-0.5 ${canAfford ? 'text-emerald-800' : 'text-rose-800'}`}>
-                Safe Daily: ₹{newSafeDaily.toLocaleString()}
+                Safe Daily: {getCurrencySymbol(userHomeCurr)}{newSafeDaily.toLocaleString()}
               </span>
               <span className={`text-xs block mt-0.5 ${canAfford ? 'text-emerald-700' : 'text-rose-700'}`}>
-                Projected: ₹{afterProjected.toLocaleString()}
+                Projected: {getCurrencySymbol(userHomeCurr)}{afterProjected.toLocaleString()}
               </span>
             </div>
           </div>
@@ -252,8 +257,8 @@ export default function WhatIf({ navigate, trip, currentUser, onAddExpense }: Pr
             </p>
             <p className="leading-relaxed">
               {canAfford
-                ? `This expense fits comfortably inside your budget. You still retain ₹${newRemaining.toLocaleString()} reserve for the rest of the trip.`
-                : `Adding this increases your projected overspend to +₹${(afterProjected - tripBudget).toLocaleString()} INR. To compensate, keep daily spend below ₹${newSafeDaily.toLocaleString()}/day.`}
+                ? `This expense fits comfortably inside your budget. You still retain ${getCurrencySymbol(userHomeCurr)}${newRemaining.toLocaleString()} ${userHomeCurr} reserve for the rest of your trip.`
+                : `Adding this increases your projected spend to ${getCurrencySymbol(userHomeCurr)}${afterProjected.toLocaleString()} ${userHomeCurr} (exceeding ${getCurrencySymbol(userHomeCurr)}${tripBudget.toLocaleString()}). To compensate, keep daily spend below ${getCurrencySymbol(userHomeCurr)}${newSafeDaily.toLocaleString()}/day.`}
             </p>
           </div>
 
