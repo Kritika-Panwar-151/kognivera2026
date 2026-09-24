@@ -288,12 +288,12 @@ export default function ExpenseHistory({
           // 1. Calculate Personal and Group Totals in Trip Destination Currency (C_dest)
           let personalTotalDest = 0
           personalExpenses.forEach((e) => {
-            personalTotalDest += convertCurrency(e.amount, e.currency || tripDestCurr, tripDestCurr)
+            personalTotalDest += convertCurrency(e.amount, e.currency || userHomeCurr, tripDestCurr)
           })
 
           let groupTotalDest = 0
           groupExpenses.forEach((e) => {
-            groupTotalDest += convertCurrency(e.amount, e.currency || tripDestCurr, tripDestCurr)
+            groupTotalDest += convertCurrency(e.amount, e.currency || userHomeCurr, tripDestCurr)
           })
 
           const tripTotalSpentDest = personalTotalDest + groupTotalDest
@@ -434,8 +434,8 @@ export default function ExpenseHistory({
                     ) : (
                       <div className="space-y-2.5">
                         {personalExpenses.map((exp) => {
-                          const expDestAmount = convertCurrency(exp.amount, exp.currency || tripDestCurr, tripDestCurr)
-                          const expUserAmount = convertCurrency(expDestAmount, tripDestCurr, userHomeCurr)
+                          const expUserAmount = convertCurrency(exp.amount, exp.currency || userHomeCurr, userHomeCurr)
+                          const expDestAmount = convertCurrency(exp.amount, exp.currency || userHomeCurr, tripDestCurr)
                           const secText = getSecondarySubtext(exp, tripDestCurr)
 
                           return (
@@ -549,8 +549,8 @@ export default function ExpenseHistory({
                     ) : (
                       <div className="space-y-2.5">
                         {groupExpenses.map((exp) => {
-                          const expDestAmount = convertCurrency(exp.amount, exp.currency || tripDestCurr, tripDestCurr)
-                          const expUserAmount = convertCurrency(expDestAmount, tripDestCurr, userHomeCurr)
+                          const expUserAmount = convertCurrency(exp.amount, exp.currency || userHomeCurr, userHomeCurr)
+                          const expDestAmount = convertCurrency(exp.amount, exp.currency || userHomeCurr, tripDestCurr)
                           const expUserShare = Math.round((expUserAmount / groupCount) * 100) / 100
                           const secText = getSecondarySubtext(exp, tripDestCurr)
 

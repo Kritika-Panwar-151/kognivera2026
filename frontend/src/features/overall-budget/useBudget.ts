@@ -41,7 +41,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
   // 2. Calculate Group Spent in Destination Currency (S_dest)
   let totalSpentDest = 0
   tripExpenses.forEach((e) => {
-    const eAmountDest = convertCurrency(e.amount, e.currency || destCurr, destCurr)
+    const eAmountDest = convertCurrency(e.amount, e.currency || userHomeCurr, destCurr)
     totalSpentDest += eAmountDest
   })
 
@@ -104,7 +104,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
       const isPaidByMe = isUserMatch(e.paidBy, currentUser)
       const isSplitWithMe =
         e.splitBetween && e.splitBetween.some((m) => isUserMatch(m, currentUser))
-      const eAmountDest = convertCurrency(e.amount, e.currency || destCurr, destCurr)
+      const eAmountDest = convertCurrency(e.amount, e.currency || userHomeCurr, destCurr)
 
       if (isPaidByMe) {
         // Payer paid the full amount upfront out of pocket -> deduct full amount initially
