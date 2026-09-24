@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Expense } from '../types'
+import { convertCurrency, getCurrencySymbol } from '../services/currencyService'
 
 interface Props {
   expense: Expense
@@ -9,14 +10,7 @@ interface Props {
 }
 
 const categories = ['Food', 'Transport', 'Accommodation', 'Activities', 'Shopping', 'Other']
-const currencies = ['INR', 'EUR', 'USD', 'GBP']
-
-const FX_RATES: Record<string, number> = {
-  EUR: 94.0,
-  USD: 86.5,
-  GBP: 112.4,
-  INR: 1.0,
-}
+const currencies = ['INR', 'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'SGD', 'AED', 'THB']
 
 export default function EditExpenseModal({ expense, isOpen, onClose, onSave }: Props) {
   if (!isOpen) return null
@@ -29,8 +23,7 @@ export default function EditExpenseModal({ expense, isOpen, onClose, onSave }: P
   const [paidBy, setPaidBy] = useState(expense.paidBy || 'You (Aisha)')
 
   const numAmount = parseFloat(amount) || 0
-  const rate = FX_RATES[currency] || 1.0
-  const convertedAmount = Math.round(numAmount * rate)
+  const convertedAmount = Math.round(convertCurrency(numAmount, currency, 'INR'))
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
