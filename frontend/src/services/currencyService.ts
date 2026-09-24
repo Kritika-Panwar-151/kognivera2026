@@ -187,13 +187,8 @@ export function formatUserDualCurrency(
   const primaryCode = (userHomeCurrency || 'INR').toUpperCase()
   const secondaryCode = (tripDestinationCurrency || 'JPY').toUpperCase()
 
-  const primaryText = primarySymbol.trim() === primaryCode
-    ? `${primarySymbol}${primaryAmount.toLocaleString('en-IN')}`
-    : `${primarySymbol}${primaryAmount.toLocaleString('en-IN')} ${primaryCode}`
-
-  const secondaryText = secondarySymbol.trim() === secondaryCode
-    ? `≈ ${secondarySymbol}${secondaryAmount.toLocaleString('en-IN')}`
-    : `≈ ${secondarySymbol}${secondaryAmount.toLocaleString('en-IN')} ${secondaryCode}`
+  const primaryText = `${primarySymbol}${primaryAmount.toLocaleString('en-IN')}`
+  const secondaryText = `≈ ${secondarySymbol}${secondaryAmount.toLocaleString('en-IN')}`
 
   return {
     primary: primaryText,

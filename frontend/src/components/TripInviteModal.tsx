@@ -161,22 +161,22 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
                 <span className="text-slate-500 font-medium block">🏨 Stay (35%)</span>
                 <span className="font-black text-slate-900">{homeSymbol}{accommodation.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(accommodation, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
+                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(accommodation, userHomeCurr, tripDestCurr).toLocaleString()}</span>
               </div>
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
                 <span className="text-slate-500 font-medium block">🍽️ Food (25%)</span>
                 <span className="font-black text-slate-900">{homeSymbol}{food.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(food, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
+                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(food, userHomeCurr, tripDestCurr).toLocaleString()}</span>
               </div>
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
                 <span className="text-slate-500 font-medium block">🚕 Transport (20%)</span>
                 <span className="font-black text-slate-900">{homeSymbol}{transport.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(transport, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
+                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(transport, userHomeCurr, tripDestCurr).toLocaleString()}</span>
               </div>
               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/70">
                 <span className="text-slate-500 font-medium block">🎟️ Activities (10%)</span>
                 <span className="font-black text-slate-900">{homeSymbol}{activities.toLocaleString()}</span>
-                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(activities, userHomeCurr, tripDestCurr).toLocaleString()} {tripDestCurr}</span>
+                <span className="text-[10px] text-teal-700 block font-mono">≈ {destSymbol}{convertCurrency(activities, userHomeCurr, tripDestCurr).toLocaleString()}</span>
               </div>
             </div>
           </div>
