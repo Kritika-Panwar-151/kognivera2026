@@ -106,6 +106,44 @@ export function getRegisteredUsers(): User[] {
 }
 
 /**
+ * Resolves any user ID, UUID, or identifier to a human-readable display name.
+ */
+export function resolveMemberName(idOrName: string, registeredUsers?: User[], currentUserId?: string): string {
+  if (!idOrName) return 'Member'
+  const clean = idOrName.trim()
+  if (currentUserId && (clean === currentUserId || clean === 'usr_you')) return 'You'
+
+  const users = registeredUsers && registeredUsers.length > 0 ? registeredUsers : getRegisteredUsers()
+  const found = users.find((u) => u.id === clean || (u as any).user_id === clean || u.name.toLowerCase() === clean.toLowerCase())
+  if (found) return found.name
+
+  if (clean === 'usr_you' || clean.toLowerCase() === 'you') return 'You'
+  if (clean === 'usr_ravi') return 'Ravi Sharma'
+  if (clean === 'usr_asha') return 'Asha Patel'
+  if (clean === 'usr_aisha') return 'Aisha Rossi'
+
+  // Format UUID gracefully
+  if (clean.length > 20 && clean.includes('-')) {
+    return `User (${clean.slice(0, 6)})`
+  }
+  return clean
+}
+
+/**
+ * Robustly checks if a given member string matches the target user.
+ */
+export function isUserMatch(memberIdOrName: string | undefined, user: User | null): boolean {
+  if (!memberIdOrName || !user) return false
+  const target = memberIdOrName.toLowerCase().trim()
+  const uid = user.id.toLowerCase().trim()
+  const uname = (user.name || '').toLowerCase().trim()
+
+  if (target === uid || target === uname) return true
+  if (target === 'usr_you' || target === 'you') return true
+  return false
+}
+
+/**
  * Subscribes to live user updates across all simultaneous devices & browser tabs.
  */
 export function subscribeToLiveUsers(listener: (users: User[]) => void): () => void {

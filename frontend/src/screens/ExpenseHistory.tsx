@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { NavigateFn, Expense, Trip } from '../types'
 import EditExpenseModal from '../components/EditExpenseModal'
+import { resolveMemberName } from '../services/userRegistry'
 
 interface Props {
   navigate: NavigateFn
@@ -97,12 +98,12 @@ export default function ExpenseHistory({
       `"${e.date}"`,
       `"${e.merchant.replace(/"/g, '""')}"`,
       `"${e.category}"`,
-      `"${e.paidBy}"`,
+      `"${resolveMemberName(e.paidBy)}"`,
       `"${e.currency || 'INR'}"`,
       e.amount,
       e.convertedAmount,
       `"${e.isShared ? 'Group Shared' : 'Personal'}"`,
-      `"${(e.splitBetween || [e.paidBy]).join('; ')}"`,
+      `"${(e.splitBetween || [e.paidBy]).map((m) => resolveMemberName(m)).join('; ')}"`,
     ])
 
     const csvContent =
@@ -287,7 +288,7 @@ export default function ExpenseHistory({
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          {exp.date} · Logged by <strong className="text-slate-700">{exp.paidBy}</strong>
+                          {exp.date} · Logged by <strong className="text-slate-700">{resolveMemberName(exp.paidBy)}</strong>
                         </p>
                       </div>
                     </div>
@@ -334,7 +335,7 @@ export default function ExpenseHistory({
                         {isMultiSplit ? `👥 Split with ${splitMembers.length} people:` : '👤 Individual:'}
                       </span>
                       <span className="text-slate-700 font-medium truncate">
-                        {splitMembers.join(', ')}
+                        {splitMembers.map((m) => resolveMemberName(m)).join(', ')}
                       </span>
                     </div>
 
@@ -466,7 +467,7 @@ export default function ExpenseHistory({
                                 </span>
                               </div>
                               <p className="text-[11px] text-slate-400 mt-0.5">
-                                {exp.date} · Paid by <strong className="text-teal-900">{exp.paidBy}</strong>
+                                {exp.date} · Paid by <strong className="text-teal-900">{resolveMemberName(exp.paidBy)}</strong>
                               </p>
                             </div>
                           </div>
@@ -513,7 +514,7 @@ export default function ExpenseHistory({
                               Split by {groupCount}
                             </span>
                             <span className="text-teal-900 text-xs">
-                              {trip.members ? trip.members.join(', ') : 'All Group Members'}
+                              {trip.members ? trip.members.map((m) => resolveMemberName(m)).join(', ') : 'All Group Members'}
                             </span>
                           </div>
 

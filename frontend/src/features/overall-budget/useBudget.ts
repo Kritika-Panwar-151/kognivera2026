@@ -1,4 +1,5 @@
 import type { Trip, User, Expense } from '../common/types'
+import { isUserMatch } from '../../services/userRegistry'
 
 export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Expense[]) {
   // Filter expenses strictly belonging to this trip
@@ -60,33 +61,20 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
 
   // Calculate personal spend from trip expenses
   let personalSpent = 0
-  const isCurrentUserOwner =
-    !currentUser ||
-    currentUser.id === 'usr_you' ||
-    currentUser.id === 'usr_aisha' ||
-    currentUser.name?.toLowerCase().includes('you')
 
   if (tripExpenses.length > 0) {
     tripExpenses.forEach((e) => {
-      const isPaidByMe =
-        e.paidBy === currentUser?.name ||
-        e.paidBy === currentUser?.id ||
-        (isCurrentUserOwner && e.paidBy.toLowerCase().includes('you'))
-
+      const isPaidByMe = isUserMatch(e.paidBy, currentUser)
       const isSplitWithMe =
-        e.splitBetween &&
-        e.splitBetween.some(
-          (m) =>
-            m === currentUser?.name ||
-            m === currentUser?.id ||
-            (isCurrentUserOwner && m.toLowerCase().includes('you'))
-        )
+        e.splitBetween && e.splitBetween.some((m) => isUserMatch(m, currentUser))
 
       if (e.isShared && isSplitWithMe) {
-        const shareCount = e.splitBetween ? e.splitBetween.length : 1
-        personalSpent += Math.round(e.convertedAmount / shareCount)
+        const shareCount = e.splitBetween ? e.splitBetween.length : (trip?.members?.length || 1)
+        personalSpent += Math.round((e.convertedAmount || 0) / shareCount)
+      } else if (!e.isShared && isPaidByMe) {
+        personalSpent += (e.convertedAmount || 0)
       } else if (isPaidByMe) {
-        personalSpent += e.convertedAmount
+        personalSpent += (e.convertedAmount || 0)
       }
     })
   } else {

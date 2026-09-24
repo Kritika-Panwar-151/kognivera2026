@@ -98,9 +98,12 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
   const customRemaining = Math.round((converted - totalAllocatedCustom) * 100) / 100
 
   const toggleMemberSelection = (memberName: string) => {
+    if (memberName === currentUserName || memberName.toLowerCase().includes('you')) {
+      return // Lock 'You' as fixed / selected
+    }
     setSelectedMembers((prev) => {
       if (prev.includes(memberName)) {
-        return prev.length > 1 ? prev.filter((m) => m !== memberName) : prev
+        return prev.filter((m) => m !== memberName)
       } else {
         return [...prev, memberName]
       }
@@ -430,20 +433,23 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
               {tripMemberNames.map((m) => {
                 const isSelected = selectedMembers.includes(m)
                 const avatar = getMemberAvatar(m)
-                const isMe = m === currentUserName
+                const isMe = m === currentUserName || m.toLowerCase().includes('you')
                 return (
                   <button
                     key={m}
                     type="button"
                     onClick={() => toggleMemberSelection(m)}
+                    title={isMe ? 'You are fixed as a split member' : `Toggle ${m}`}
                     className={`px-3 py-1.5 text-xs font-bold border rounded-xl transition shadow-2xs flex items-center gap-1.5 ${
-                      isSelected
+                      isMe
+                        ? 'bg-teal-700 text-white border-teal-700 cursor-default opacity-95'
+                        : isSelected
                         ? 'bg-teal-600 text-white border-teal-600'
                         : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-600'
                     }`}
                   >
                     <span>{avatar}</span>
-                    <span>{isMe ? 'You' : m}</span>
+                    <span>{isMe ? 'You (Fixed)' : m}</span>
                   </button>
                 )
               })}
@@ -455,12 +461,15 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
             {tripMemberNames.map((member) => {
               const isSelected = selectedMembers.includes(member)
               const avatar = getMemberAvatar(member)
+              const isMe = member === currentUserName || member.toLowerCase().includes('you')
 
               return (
                 <div
                   key={member}
                   onClick={() => toggleMemberSelection(member)}
-                  className={`cursor-pointer p-2.5 rounded-xl border transition flex items-center justify-between ${
+                  className={`p-2.5 rounded-xl border transition flex items-center justify-between ${
+                    isMe ? 'cursor-default' : 'cursor-pointer'
+                  } ${
                     isSelected
                       ? 'border-teal-500 bg-white shadow-2xs ring-1 ring-teal-200'
                       : 'border-slate-200 bg-white/50 text-slate-400 hover:bg-white'
@@ -474,7 +483,7 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
                           isSelected ? 'text-slate-900' : 'text-slate-400'
                         }`}
                       >
-                        {member}
+                        {isMe ? 'You (Fixed)' : member}
                       </p>
                       {member === paidBy && (
                         <span className="text-[9px] font-bold text-teal-700 bg-teal-50 px-1.5 py-0.2 rounded-full">
