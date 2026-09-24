@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import type { NavigateFn, Expense, Trip } from '../types'
+import type { NavigateFn, Expense, Trip, User } from '../types'
 import EditExpenseModal from '../components/EditExpenseModal'
 import { resolveMemberName } from '../services/userRegistry'
+import { formatUserDualCurrency, getTripDestinationCurrency, getCurrencySymbol } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
   expenses: Expense[]
   trips?: Trip[]
+  currentUser?: User | null
   onDeleteExpense?: (expenseId: string) => void
   onEditExpense?: (updated: Expense) => void
 }
@@ -64,12 +66,15 @@ export default function ExpenseHistory({
   navigate,
   expenses,
   trips = defaultTrips,
+  currentUser,
   onDeleteExpense,
   onEditExpense,
 }: Props) {
   const [selectedMember, setSelectedMember] = useState('All Members')
   const [search, setSearch] = useState('')
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
 
   // Current trip (trips[0]) is expanded by default
   const defaultExpanded = trips.length > 0 ? [trips[0].id] : ['europe']
@@ -200,7 +205,7 @@ export default function ExpenseHistory({
       </div>
 
       {/* =========================================================================
-          PROMINENT QUICK ACTION BAR (DIRECTLY BELOW PAGE HEADER)
+          MAIN QUICK ACTION BAR (DIRECTLY BELOW PAGE HEADER ONLY)
           Defaults to adding expenses to the active current trip
       ========================================================================= */}
       <div className="bg-white border border-teal-200/90 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 ring-1 ring-teal-50">
@@ -241,12 +246,14 @@ export default function ExpenseHistory({
 
       {/* =========================================================================
           TRIP-WISE PRESENTATION (CURRENT TRIP EXPANDED BY DEFAULT)
-          Each trip contains BOTH Personal & Group Shared expenses inside it!
+          Each trip card displays Home Currency & Destination Currency dual values
       ========================================================================= */}
       <div className="space-y-6">
         {trips.map((trip, tripIdx) => {
           const isCurrentTrip = tripIdx === 0
           const isExpanded = expandedTripIds.includes(trip.id)
+
+          const tripDestCurr = getTripDestinationCurrency(trip)
 
           // Expenses belonging to this trip
           const tripExpenses = richExpenses.filter(
@@ -262,6 +269,12 @@ export default function ExpenseHistory({
 
           const groupCount = trip.partySize || trip.members?.length || 3
           const pct = Math.round((tripTotalSpent / (trip.budget || 1)) * 100)
+
+          // Dual Currency formatting for trip summary
+          const budgetDual = formatUserDualCurrency(trip.budget || 0, userHomeCurr, userHomeCurr, tripDestCurr)
+          const spentDual = formatUserDualCurrency(tripTotalSpent, userHomeCurr, userHomeCurr, tripDestCurr)
+          const personalTotalDual = formatUserDualCurrency(personalTotal, userHomeCurr, userHomeCurr, tripDestCurr)
+          const groupTotalDual = formatUserDualCurrency(groupTotal, userHomeCurr, userHomeCurr, tripDestCurr)
 
           return (
             <div
@@ -295,12 +308,15 @@ export default function ExpenseHistory({
                     </p>
                   </div>
 
-                  {/* Right Header Status & Expand Toggle */}
+                  {/* Right Header Dual Currency Status & Expand Toggle */}
                   <div className="flex items-center gap-3">
                     <div className="text-right hidden sm:block">
                       <p className="text-xs text-slate-500 font-medium">Total Spent</p>
                       <p className="text-sm font-extrabold text-slate-900">
-                        ₹{tripTotalSpent.toLocaleString()} INR
+                        {spentDual.primary}
+                      </p>
+                      <p className="text-[10px] text-teal-700 font-mono font-semibold">
+                        {spentDual.secondary}
                       </p>
                     </div>
 
@@ -317,12 +333,16 @@ export default function ExpenseHistory({
                   </div>
                 </div>
 
-                {/* Progress Bar Summary */}
+                {/* Progress Bar Summary with Dual Currency Labels */}
                 <div className="mt-4 bg-white p-3 rounded-2xl border border-teal-100 flex items-center justify-between gap-3 text-xs">
                   <div className="flex-1 space-y-1">
-                    <div className="flex justify-between font-medium text-slate-600">
-                      <span>Spent: <strong>₹{tripTotalSpent.toLocaleString()}</strong> of ₹{trip.budget.toLocaleString()}</span>
-                      <span className="font-extrabold text-teal-800">{pct}% Used</span>
+                    <div className="flex justify-between items-center font-medium text-slate-600">
+                      <span>
+                        Spent: <strong className="text-slate-900">{spentDual.primary}</strong>{' '}
+                        <span className="text-[10px] text-teal-700 font-mono">({spentDual.secondary})</span> of{' '}
+                        <strong>{budgetDual.primary}</strong> <span className="text-[10px] text-teal-700 font-mono">({budgetDual.secondary})</span>
+                      </span>
+                      <span className="font-extrabold text-teal-800 shrink-0">{pct}% Used</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
                       <div
@@ -334,35 +354,14 @@ export default function ExpenseHistory({
                 </div>
               </div>
 
-              {/* EXPANDED CONTENT: CONTAINS BOTH PERSONAL & GROUP EXPENSES FOR THIS TRIP */}
+              {/* EXPANDED CONTENT: NO REDUNDANT INTERNAL QUICK BAR, JUST CLEAN PERSONAL & GROUP EXPENSES */}
               {isExpanded && (
                 <div className="p-5 md:p-6 space-y-6 bg-slate-50/40">
-                  {/* Quick Action Bar inside Trip View */}
-                  <div className="flex items-center justify-between p-3.5 bg-white rounded-2xl border border-slate-200/90 shadow-2xs flex-wrap gap-2">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                      <span>⚡ Quick Entry for {trip.name}:</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => navigate('receipt-scanner')}
-                        className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-teal-200 text-teal-800 rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-2xs"
-                      >
-                        <span>📸 Scan Receipt</span>
-                      </button>
-                      <button
-                        onClick={() => navigate('add-expense')}
-                        className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-extrabold transition flex items-center gap-1.5 shadow-xs"
-                      >
-                        <span>+ Add Expense</span>
-                      </button>
-                    </div>
-                  </div>
-
                   {/* =========================================================================
                       SECTION A: PERSONAL EXPENSES FOR THIS TRIP
                   ========================================================================= */}
                   <div className="bg-white rounded-2xl p-4 md:p-5 border border-indigo-100 shadow-2xs space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-indigo-50">
+                    <div className="flex items-center justify-between pb-2 border-b border-indigo-50 flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-xl">👤</span>
                         <div>
@@ -374,9 +373,14 @@ export default function ExpenseHistory({
                           </p>
                         </div>
                       </div>
-                      <span className="text-xs font-extrabold text-indigo-800 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-200">
-                        Personal Total: ₹{personalTotal.toLocaleString()} INR ({personalExpenses.length} items)
-                      </span>
+                      <div className="text-right">
+                        <span className="text-xs font-extrabold text-indigo-800 bg-indigo-50 px-3 py-1 rounded-xl border border-indigo-200 inline-block">
+                          Personal Total: {personalTotalDual.primary} ({personalExpenses.length} items)
+                        </span>
+                        <span className="text-[10px] text-indigo-600 font-mono font-semibold block mt-0.5">
+                          {personalTotalDual.secondary}
+                        </span>
+                      </div>
                     </div>
 
                     {personalExpenses.length === 0 ? (
@@ -385,76 +389,78 @@ export default function ExpenseHistory({
                       </div>
                     ) : (
                       <div className="space-y-2.5">
-                        {personalExpenses.map((exp) => (
-                          <div
-                            key={exp.id}
-                            className="bg-slate-50/80 border border-indigo-100/90 rounded-2xl p-3.5 transition hover:bg-white hover:shadow-2xs"
-                          >
-                            <div className="flex items-start justify-between gap-3 mb-2">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl shrink-0 font-bold">
-                                  {catIcons[exp.category] || '🛍️'}
-                                </div>
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    <h5 className="font-bold text-slate-900 text-sm">{exp.merchant}</h5>
-                                    <span
-                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                        catColors[exp.category] || 'bg-slate-100 text-slate-600'
-                                      }`}
-                                    >
-                                      {exp.category}
-                                    </span>
+                        {personalExpenses.map((exp) => {
+                          const expDual = formatUserDualCurrency(exp.convertedAmount, userHomeCurr, userHomeCurr, tripDestCurr)
+                          return (
+                            <div
+                              key={exp.id}
+                              className="bg-slate-50/80 border border-indigo-100/90 rounded-2xl p-3.5 transition hover:bg-white hover:shadow-2xs"
+                            >
+                              <div className="flex items-start justify-between gap-3 mb-2">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl shrink-0 font-bold">
+                                    {catIcons[exp.category] || '🛍️'}
                                   </div>
-                                  <p className="text-[11px] text-slate-400 mt-0.5">
-                                    {exp.date} · Logged by <strong className="text-slate-700">{resolveMemberName(exp.paidBy)}</strong>
-                                  </p>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <h5 className="font-bold text-slate-900 text-sm">{exp.merchant}</h5>
+                                      <span
+                                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                          catColors[exp.category] || 'bg-slate-100 text-slate-600'
+                                        }`}
+                                      >
+                                        {exp.category}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mt-0.5">
+                                      {exp.date} · Logged by <strong className="text-slate-700">{resolveMemberName(exp.paidBy)}</strong>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <div className="text-right shrink-0">
+                                    <p className="font-bold text-slate-900 text-base">
+                                      {getCurrencySymbol(userHomeCurr)}{exp.convertedAmount.toLocaleString('en-IN')}
+                                    </p>
+                                    <p className="text-[11px] font-bold text-indigo-700 font-mono">
+                                      {expDual.secondary}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingExpense(exp)}
+                                      className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                                      title="Edit expense"
+                                    >
+                                      ✏️
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (window.confirm(`Delete expense "${exp.merchant}"?`)) {
+                                          onDeleteExpense?.(exp.id)
+                                        }
+                                      }}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                      title="Delete expense"
+                                    >
+                                      🗑️
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-2">
-                                <div className="text-right shrink-0">
-                                  <p className="font-bold text-slate-900 text-base">
-                                    {exp.currency === 'EUR' ? '€' : exp.currency === 'USD' ? '$' : '₹'}
-                                    {exp.amount.toLocaleString()}
-                                  </p>
-                                  <p className="text-[11px] font-bold text-indigo-700">
-                                    ≈ ₹{exp.convertedAmount.toLocaleString()} INR
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingExpense(exp)}
-                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
-                                    title="Edit expense"
-                                  >
-                                    ✏️
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (window.confirm(`Delete expense "${exp.merchant}"?`)) {
-                                        onDeleteExpense?.(exp.id)
-                                      }
-                                    }}
-                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                                    title="Delete expense"
-                                  >
-                                    🗑️
-                                  </button>
-                                </div>
+                              <div className="p-2 bg-white rounded-xl border border-indigo-100 flex items-center justify-between text-xs">
+                                <span className="text-indigo-600 font-bold text-[11px]">👤 Individual Spend</span>
+                                <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-md border border-indigo-200">
+                                  100% Personal Share
+                                </span>
                               </div>
                             </div>
-
-                            <div className="p-2 bg-white rounded-xl border border-indigo-100 flex items-center justify-between text-xs">
-                              <span className="text-indigo-600 font-bold text-[11px]">👤 Individual Spend</span>
-                              <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-md border border-indigo-200">
-                                100% Personal Share
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -463,7 +469,7 @@ export default function ExpenseHistory({
                       SECTION B: GROUP SHARED EXPENSES FOR THIS TRIP
                   ========================================================================= */}
                   <div className="bg-white rounded-2xl p-4 md:p-5 border border-teal-100 shadow-2xs space-y-3">
-                    <div className="flex items-center justify-between pb-2 border-b border-teal-50">
+                    <div className="flex items-center justify-between pb-2 border-b border-teal-50 flex-wrap gap-2">
                       <div className="flex items-center gap-2">
                         <span className="text-xl">👥</span>
                         <div>
@@ -475,9 +481,14 @@ export default function ExpenseHistory({
                           </p>
                         </div>
                       </div>
-                      <span className="text-xs font-extrabold text-teal-800 bg-teal-50 px-3 py-1 rounded-xl border border-teal-200">
-                        Group Total: ₹{groupTotal.toLocaleString()} INR ({groupExpenses.length} items)
-                      </span>
+                      <div className="text-right">
+                        <span className="text-xs font-extrabold text-teal-800 bg-teal-50 px-3 py-1 rounded-xl border border-teal-200 inline-block">
+                          Group Total: {groupTotalDual.primary} ({groupExpenses.length} items)
+                        </span>
+                        <span className="text-[10px] text-teal-700 font-mono font-semibold block mt-0.5">
+                          {groupTotalDual.secondary}
+                        </span>
+                      </div>
                     </div>
 
                     {groupExpenses.length === 0 ? (
@@ -487,7 +498,10 @@ export default function ExpenseHistory({
                     ) : (
                       <div className="space-y-2.5">
                         {groupExpenses.map((exp) => {
-                          const splitAmount = (exp.convertedAmount / groupCount).toFixed(2)
+                          const splitAmountInr = (exp.convertedAmount / groupCount).toFixed(2)
+                          const expDual = formatUserDualCurrency(exp.convertedAmount, userHomeCurr, userHomeCurr, tripDestCurr)
+                          const perPersonShareDual = formatUserDualCurrency(parseFloat(splitAmountInr), userHomeCurr, userHomeCurr, tripDestCurr)
+
                           return (
                             <div
                               key={exp.id}
@@ -518,11 +532,10 @@ export default function ExpenseHistory({
                                 <div className="flex items-center gap-2">
                                   <div className="text-right shrink-0">
                                     <p className="font-extrabold text-slate-900 text-base">
-                                      {exp.currency === 'EUR' ? '€' : exp.currency === 'USD' ? '$' : '₹'}
-                                      {exp.amount.toLocaleString()}
+                                      {getCurrencySymbol(userHomeCurr)}{exp.convertedAmount.toLocaleString('en-IN')}
                                     </p>
-                                    <p className="text-xs font-bold text-teal-700">
-                                      ≈ ₹{exp.convertedAmount.toLocaleString()} INR
+                                    <p className="text-xs font-bold text-teal-700 font-mono">
+                                      {expDual.secondary}
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
@@ -555,15 +568,15 @@ export default function ExpenseHistory({
                                   <span className="text-[10px] font-bold bg-teal-600 text-white px-1.5 py-0.5 rounded">
                                     Split by {groupCount}
                                   </span>
-                                  <span className="text-teal-900 text-xs">
+                                  <span className="text-teal-900 text-xs font-medium">
                                     {trip.members ? trip.members.map((m) => resolveMemberName(m)).join(', ') : 'All Group Members'}
                                   </span>
                                 </div>
 
                                 <div className="text-right">
-                                  <span className="text-[10px] text-teal-600 block leading-none">Per Member</span>
+                                  <span className="text-[10px] text-teal-600 block leading-none font-medium">Per Member</span>
                                   <span className="text-xs font-extrabold text-teal-900">
-                                    ₹{splitAmount}
+                                    ₹{splitAmountInr} <span className="text-[10px] font-mono text-teal-700 font-semibold">({perPersonShareDual.secondary})</span>
                                   </span>
                                 </div>
                               </div>
