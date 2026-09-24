@@ -485,11 +485,16 @@ export async function saveExpenseToSupabase(expense: Expense, payerUserId: strin
   try {
     const expId = expense.id.startsWith('exp_') ? expense.id : `exp_${Date.now()}`
     const now = new Date().toISOString()
+    const validTripId = expense.tripId === 'europe' ? 'trp_000000000001' : expense.tripId
+    const validPayerId =
+      payerUserId === 'usr_you' || payerUserId === 'usr_aisha'
+        ? 'usr_000000000001'
+        : payerUserId
     
     const { error } = await supabase.from('expenses').insert({
       expense_id: expId,
-      trip_id: expense.tripId === 'europe' ? 'trp_000000000001' : expense.tripId,
-      payer_user_id: payerUserId,
+      trip_id: validTripId,
+      payer_user_id: validPayerId,
       category: expense.category.toLowerCase(),
       description: expense.merchant,
       amount: expense.amount,
@@ -508,5 +513,88 @@ export async function saveExpenseToSupabase(expense: Expense, payerUserId: strin
     if (error) console.error('Supabase expense insert error:', error.message)
   } catch (err) {
     console.error('Failed to save expense to Supabase:', err)
+  }
+}
+
+// 6. Update Member Personal Budget in Supabase & Recalculate Group Budget
+export async function updateMemberPersonalBudgetInSupabase(
+  tripId: string,
+  userId: string,
+  newBudget: number
+): Promise<{ success: boolean; newGroupBudget?: number }> {
+  if (!isSupabaseConfigured) return { success: true }
+
+  try {
+    const now = new Date().toISOString()
+    const targetTripId = tripId === 'europe' ? 'trp_000000000001' : tripId
+
+    // 1. Update personal budget in trip_members
+    const { error: memberErr } = await supabase
+      .from('trip_members')
+      .update({
+        personal_budget: newBudget,
+        updated_at: now,
+      })
+      .eq('trip_id', targetTripId)
+      .eq('user_id', userId)
+
+    if (memberErr) {
+      console.warn('Member personal budget update notice:', memberErr.message)
+    }
+
+    // 2. Query all active members to recompute the new Group Budget total
+    const { data: allActiveMembers } = await supabase
+      .from('trip_members')
+      .select('personal_budget, category_caps')
+      .eq('trip_id', targetTripId)
+      .eq('status', 'active')
+
+    const newGroupBudget = (allActiveMembers || []).reduce(
+      (sum, m) => sum + Number(m.personal_budget || 0),
+      0
+    )
+
+    // 3. Update the budgets table with the new group total & category caps
+    await supabase
+      .from('budgets')
+      .update({
+        total_amount: newGroupBudget,
+        accommodation_cap: Math.round(newGroupBudget * 0.35),
+        food_cap: Math.round(newGroupBudget * 0.25),
+        transport_cap: Math.round(newGroupBudget * 0.2),
+        activities_cap: Math.round(newGroupBudget * 0.1),
+        misc_cap: Math.round(newGroupBudget * 0.1),
+        updated_at: now,
+      })
+      .eq('trip_id', targetTripId)
+
+    return { success: true, newGroupBudget }
+  } catch (err) {
+    console.error('updateMemberPersonalBudgetInSupabase error:', err)
+    return { success: false }
+  }
+}
+
+// 7. Toggle Settlement Status for an Expense in Supabase
+export async function toggleSettleExpenseInSupabase(
+  expenseId: string,
+  isSettled: boolean
+): Promise<void> {
+  if (!isSupabaseConfigured) return
+  try {
+    const now = new Date().toISOString()
+    const { error } = await supabase
+      .from('expenses')
+      .update({
+        is_settled: isSettled,
+        updated_at: now,
+      })
+      .eq('expense_id', expenseId)
+
+    if (error) {
+      console.warn('Supabase toggle settle notice:', error.message)
+    }
+  } catch (err) {
+    console.warn('toggleSettleExpenseInSupabase error:', err)
   }
 }

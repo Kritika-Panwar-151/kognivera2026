@@ -22,6 +22,7 @@ import {
   saveExpenseToSupabase,
   acceptTripInvite,
   fetchPendingTripInvites,
+  updateMemberPersonalBudgetInSupabase,
   initialTripsFallback,
   initialExpensesFallback,
 } from './services/supabaseDataService'
@@ -152,7 +153,7 @@ export default function App() {
       }
     }
 
-    // When someone invites this user on another laptop, pop up invite banner instantly
+    // 1. Invites for current user: When someone invites this user on another device, pop up banner instantly
     const inviteChannel = supabase
       .channel(`realtime_invites_${currentUser.id}`)
       .on(
@@ -169,13 +170,63 @@ export default function App() {
       )
       .subscribe()
 
-    // When any member accepts and group budget updates, update all screens live
+    // 2. When ANY friend accepts an invite or updates membership across the trip
+    const membersChannel = supabase
+      .channel('realtime_all_members_channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'trip_members',
+        },
+        async () => {
+          const freshTrips = await fetchTripsFromSupabase()
+          if (freshTrips && freshTrips.length > 0) {
+            setTrips(freshTrips)
+            if (currentTrip) {
+              const updated = freshTrips.find((t) => t.id === currentTrip.id)
+              if (updated) setCurrentTrip(updated)
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    // 3. When ANY user adds an expense or scans a receipt on another phone
+    const expensesChannel = supabase
+      .channel('realtime_all_expenses_channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'expenses',
+        },
+        async () => {
+          const [freshExpenses, freshTrips] = await Promise.all([
+            fetchExpensesFromSupabase(),
+            fetchTripsFromSupabase(),
+          ])
+          if (freshExpenses) setExpenses(freshExpenses)
+          if (freshTrips && freshTrips.length > 0) {
+            setTrips(freshTrips)
+            if (currentTrip) {
+              const updated = freshTrips.find((t) => t.id === currentTrip.id)
+              if (updated) setCurrentTrip(updated)
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    // 4. When ANY budget or category cap updates on any device
     const budgetChannel = supabase
       .channel('realtime_budgets_channel')
       .on(
         'postgres_changes',
         {
-          event: 'UPDATE',
+          event: '*',
           schema: 'public',
           table: 'budgets',
         },
@@ -194,6 +245,8 @@ export default function App() {
 
     return () => {
       supabase.removeChannel(inviteChannel)
+      supabase.removeChannel(membersChannel)
+      supabase.removeChannel(expensesChannel)
       supabase.removeChannel(budgetChannel)
     }
   }, [currentUser, currentTrip?.id])
@@ -293,6 +346,9 @@ export default function App() {
 
     setTrips((prev) => prev.map((t) => (t.id === tripId ? updateTripState(t) : t)))
     setCurrentTrip((prev) => (prev && prev.id === tripId ? updateTripState(prev) : prev))
+
+    // Persist to Supabase so other phones receive the updated group budget in real time
+    updateMemberPersonalBudgetInSupabase(tripId, userId, newBudget)
   }
 
   const renderScreen = () => {
@@ -358,7 +414,14 @@ export default function App() {
       case 'what-if':
         return <WhatIf navigate={navigate} />
       case 'group-settlement':
-        return <GroupSettlement navigate={navigate} />
+        return (
+          <GroupSettlement
+            navigate={navigate}
+            trip={currentTrip}
+            expenses={expenses}
+            currentUser={currentUser}
+          />
+        )
       default:
         return null
     }

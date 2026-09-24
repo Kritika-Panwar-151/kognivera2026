@@ -1,8 +1,13 @@
-import { useState } from 'react'
-import type { NavigateFn } from '../types'
+import { useState, useEffect, useMemo } from 'react'
+import type { NavigateFn, Trip, Expense, User } from '../types'
+import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { toggleSettleExpenseInSupabase } from '../services/supabaseDataService'
 
 interface Props {
   navigate: NavigateFn
+  trip?: Trip | null
+  expenses?: Expense[]
+  currentUser?: User | null
 }
 
 interface DebtItem {
@@ -49,14 +54,133 @@ const initialDebts: DebtItem[] = [
   },
 ]
 
-export default function GroupSettlement({ navigate }: Props) {
-  const [debts, setDebts] = useState<DebtItem[]>(initialDebts)
+export default function GroupSettlement({ navigate, trip, expenses, currentUser }: Props) {
+  // Compute debts from real trip expenses dynamically + baseline demo debts
+  const computedDebts = useMemo(() => {
+    const list: DebtItem[] = [...initialDebts]
+    const currentUserName = currentUser?.name || 'You (Aisha)'
+    const currentUserId = currentUser?.id || 'usr_you'
 
-  // Toggle settled status directly for a person
-  const toggleSettle = (id: string) => {
+    if (expenses && expenses.length > 0) {
+      expenses.forEach((exp) => {
+        if (exp.isShared && exp.splitBetween && exp.splitBetween.length > 1) {
+          const splitAmount = Math.round(exp.convertedAmount / exp.splitBetween.length)
+          const isPayer =
+            exp.paidBy.toLowerCase().includes(currentUserName.toLowerCase()) ||
+            exp.paidBy === currentUserId ||
+            (exp.paidBy.toLowerCase().includes('you') &&
+              (currentUserId === 'usr_aisha' || currentUserId === 'usr_you'))
+
+          if (isPayer) {
+            exp.splitBetween.forEach((person, idx) => {
+              if (
+                !person.toLowerCase().includes('you') &&
+                !person.toLowerCase().includes(currentUserName.toLowerCase())
+              ) {
+                list.push({
+                  id: `exp_debt_${exp.id}_${idx}`,
+                  person,
+                  avatar: person.toLowerCase().includes('ravi')
+                    ? '👨🏽'
+                    : person.toLowerCase().includes('asha')
+                    ? '👩🏻'
+                    : '👤',
+                  direction: 'they_owe_you',
+                  amount: splitAmount,
+                  currency: exp.currency || 'INR',
+                  reason: `${exp.category}: ${exp.merchant}`,
+                  isSettled: Boolean(exp.isSettled),
+                })
+              }
+            })
+          } else {
+            const userIsInSplit = exp.splitBetween.some(
+              (p) =>
+                p.toLowerCase().includes('you') ||
+                p.toLowerCase().includes(currentUserName.toLowerCase())
+            )
+            if (userIsInSplit) {
+              list.push({
+                id: `exp_debt_${exp.id}_me`,
+                person: exp.paidBy,
+                avatar: exp.paidBy.toLowerCase().includes('ravi')
+                  ? '👨🏽'
+                  : exp.paidBy.toLowerCase().includes('asha')
+                  ? '👩🏻'
+                  : '👤',
+                direction: 'you_owe_them',
+                amount: splitAmount,
+                currency: exp.currency || 'INR',
+                reason: `${exp.category}: ${exp.merchant}`,
+                isSettled: Boolean(exp.isSettled),
+              })
+            }
+          }
+        }
+      })
+    }
+
+    return list
+  }, [expenses, currentUser])
+
+  const [debts, setDebts] = useState<DebtItem[]>(computedDebts)
+
+  useEffect(() => {
+    setDebts(computedDebts)
+  }, [computedDebts])
+
+  // Realtime subscription: When ANY user on ANY phone toggles settlement, sync immediately
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+
+    const settleChannel = supabase
+      .channel('realtime_settlement_channel')
+      .on('broadcast', { event: 'settle_toggle' }, (payload: any) => {
+        if (payload?.payload?.id) {
+          const { id, isSettled } = payload.payload
+          setDebts((prev) =>
+            prev.map((d) => (d.id === id ? { ...d, isSettled } : d))
+          )
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(settleChannel)
+    }
+  }, [])
+
+  // Toggle settled status directly for a person and broadcast live
+  const toggleSettle = async (id: string) => {
+    let nextStatus = false
     setDebts((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, isSettled: !d.isSettled } : d))
+      prev.map((d) => {
+        if (d.id === id) {
+          nextStatus = !d.isSettled
+          return { ...d, isSettled: nextStatus }
+        }
+        return d
+      })
     )
+
+    // Broadcast to other phones live over WebSockets
+    if (isSupabaseConfigured) {
+      const channel = supabase.channel('realtime_settlement_channel')
+      channel.send({
+        type: 'broadcast',
+        event: 'settle_toggle',
+        payload: { id, isSettled: nextStatus },
+      })
+
+      // If this was a real expense, update database status
+      if (id.startsWith('exp_debt_')) {
+        const parts = id.split('_')
+        const expenseId = parts[2]
+        if (expenseId) {
+          toggleSettleExpenseInSupabase(expenseId, nextStatus)
+        }
+      }
+    }
   }
 
   // Live calculations
