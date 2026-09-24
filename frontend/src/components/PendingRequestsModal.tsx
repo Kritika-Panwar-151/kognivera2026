@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Trip, Expense, User } from '../types'
+import { resolveMemberName } from '../services/userRegistry'
 
 export interface PendingDebtItem {
   id: string
@@ -53,10 +54,11 @@ export default function PendingRequestsModal({
       if (isPayer) {
         exp.splitBetween.forEach((person, idx) => {
           if (!person.toLowerCase().includes('you') && !person.toLowerCase().includes(currentUserName.toLowerCase())) {
+            const resolved = resolveMemberName(person)
             pendingDebts.push({
               id: `req_${exp.id}_${idx}`,
-              person,
-              avatar: person.toLowerCase().includes('ravi') ? '👨🏽' : person.toLowerCase().includes('asha') ? '👩🏻' : '👤',
+              person: resolved,
+              avatar: resolved.toLowerCase().includes('ravi') ? '👨🏽' : resolved.toLowerCase().includes('asha') ? '👩🏻' : '👤',
               direction: 'they_owe_you',
               amount: splitAmount,
               currency: exp.currency || 'INR',
@@ -86,14 +88,17 @@ export default function PendingRequestsModal({
   const pendingInvites = isHost
     ? (trip?.memberDetails || [])
         .filter((d) => d.status === 'pending')
-        .map((d) => ({
-          id: d.userId,
-          name: d.userId === 'usr_asha' ? 'Asha Patel' : d.userId === 'usr_ravi' ? 'Ravi Sharma' : d.userId,
-          email: `${d.userId}@example.invalid`,
-          avatar: d.userId === 'usr_asha' ? '👩🏻' : d.userId === 'usr_ravi' ? '👨🏽' : '👤',
-          role: 'Member',
-          date: 'Invite Sent',
-        }))
+        .map((d) => {
+          const resolvedName = resolveMemberName(d.userId)
+          return {
+            id: d.userId,
+            name: resolvedName,
+            email: d.email || `${d.userId}@example.invalid`,
+            avatar: resolvedName.toLowerCase().includes('asha') ? '👩🏻' : resolvedName.toLowerCase().includes('ravi') ? '👨🏽' : '👤',
+            role: 'Member',
+            date: 'Invite Sent',
+          }
+        })
     : []
 
   const handleSettle = (id: string) => {

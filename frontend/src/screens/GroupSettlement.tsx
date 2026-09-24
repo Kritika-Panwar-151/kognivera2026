@@ -3,6 +3,7 @@ import type { NavigateFn, Trip, Expense, User } from '../types'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { toggleSettleExpenseInSupabase } from '../services/supabaseDataService'
 import PendingRequestsModal from '../components/PendingRequestsModal'
+import { resolveMemberName } from '../services/userRegistry'
 
 interface Props {
   navigate: NavigateFn
@@ -62,12 +63,13 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                 !person.toLowerCase().includes('you') &&
                 !person.toLowerCase().includes(currentUserName.toLowerCase())
               ) {
+                const resolvedName = resolveMemberName(person)
                 list.push({
                   id: `exp_debt_${exp.id}_${idx}`,
-                  person,
-                  avatar: person.toLowerCase().includes('ravi')
+                  person: resolvedName,
+                  avatar: resolvedName.toLowerCase().includes('ravi')
                     ? '👨🏽'
-                    : person.toLowerCase().includes('asha')
+                    : resolvedName.toLowerCase().includes('asha')
                     ? '👩🏻'
                     : '👤',
                   direction: 'they_owe_you',
@@ -85,12 +87,13 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                 p.toLowerCase().includes(currentUserName.toLowerCase())
             )
             if (userIsInSplit) {
+              const resolvedPayer = resolveMemberName(exp.paidBy)
               list.push({
                 id: `exp_debt_${exp.id}_me`,
-                person: exp.paidBy,
-                avatar: exp.paidBy.toLowerCase().includes('ravi')
+                person: resolvedPayer,
+                avatar: resolvedPayer.toLowerCase().includes('ravi')
                   ? '👨🏽'
-                  : exp.paidBy.toLowerCase().includes('asha')
+                  : resolvedPayer.toLowerCase().includes('asha')
                   ? '👩🏻'
                   : '👤',
                 direction: 'you_owe_them',
