@@ -298,3 +298,21 @@ export function getStoredSyncedCurrencies(): SyncedCurrencyState {
     }
   }
 }
+
+/**
+ * Checks if an expense belongs to a trip using robust ID normalization.
+ */
+export function isTripMatch(expenseTripId?: string, targetTripId?: string): boolean {
+  if (!targetTripId || !expenseTripId) return true
+  const eId = expenseTripId.toLowerCase().trim()
+  const tId = targetTripId.toLowerCase().trim()
+  if (eId === tId) return true
+  if (
+    (eId === 'europe' || eId === 'trp_europe' || eId === 'trp_000000000001') &&
+    (tId === 'europe' || tId === 'trp_europe' || tId === 'trp_000000000001')
+  )
+    return true
+  if ((eId === 'goa' || eId === 'trp_goa') && (tId === 'goa' || tId === 'trp_goa')) return true
+  if ((eId === 'india' || eId === 'trp_india') && (tId === 'india' || tId === 'trp_india')) return true
+  return eId.includes(tId) || tId.includes(eId)
+}

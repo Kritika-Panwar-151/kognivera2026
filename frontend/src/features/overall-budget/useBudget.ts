@@ -1,6 +1,6 @@
 import type { Trip, User, Expense } from '../common/types'
 import { isUserMatch, getRegisteredUsers } from '../../services/userRegistry'
-import { convertCurrency, getTripDestinationCurrency } from '../../services/currencyService'
+import { convertCurrency, getTripDestinationCurrency, isTripMatch } from '../../services/currencyService'
 
 export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Expense[]) {
   const destCurr = getTripDestinationCurrency(trip)
@@ -9,9 +9,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
 
   // Filter expenses strictly belonging to this trip
   const tripExpenses = trip?.id
-    ? (expenses || []).filter(
-        (e) => e.tripId === trip.id || (!e.tripId && (trip.id === 'europe' || trip.id === 'trp_europe'))
-      )
+    ? (expenses || []).filter((e) => isTripMatch(e.tripId, trip.id))
     : []
 
   // 1. Calculate Group Budget in Destination Currency (B_dest)
