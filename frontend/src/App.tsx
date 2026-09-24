@@ -815,6 +815,7 @@ export default function App() {
             navigate={navigate}
             expenses={currentTripExpenses}
             trips={trips}
+            currentUser={currentUser}
             onDeleteExpense={handleDeleteExpense}
             onEditExpense={handleEditExpense}
           />
