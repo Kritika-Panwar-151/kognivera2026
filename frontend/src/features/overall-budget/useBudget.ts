@@ -1,9 +1,13 @@
 import type { Trip, User, Expense } from '../common/types'
 
 export function useBudget(trip: Trip, currentUser?: User, expenses?: Expense[]) {
+  // Filter expenses strictly belonging to this trip
+  const tripExpenses = (expenses || []).filter((e) => e.tripId === trip.id)
+  const tripExpenseSum = tripExpenses.reduce((sum, e) => sum + (e.convertedAmount || 0), 0)
+
   // Group Budget Metrics
   const budget = trip.budget || 60000
-  const spent = trip.spent || 0
+  const spent = trip.spent && trip.spent > 0 ? trip.spent : tripExpenseSum
   const remaining = Math.max(0, budget - spent)
   const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0
 
@@ -23,21 +27,28 @@ export function useBudget(trip: Trip, currentUser?: User, expenses?: Expense[]) 
     trip.personalBudget ??
     Math.round(budget / Math.max(trip.members?.length || 1, 1))
 
-  // Calculate personal spend from expenses
+  // Calculate personal spend from trip expenses
   let personalSpent = 0
-  if (expenses && expenses.length > 0) {
-    expenses.forEach((e) => {
+  const isCurrentUserOwnerOrDemo =
+    !currentUser ||
+    currentUser.id === 'usr_you' ||
+    currentUser.id === 'usr_aisha' ||
+    currentUser.name?.toLowerCase().includes('you')
+
+  if (tripExpenses.length > 0) {
+    tripExpenses.forEach((e) => {
       const isPaidByMe =
-        e.paidBy.toLowerCase().includes('you') ||
         e.paidBy === currentUser?.name ||
-        e.paidBy === currentUser?.id
+        e.paidBy === currentUser?.id ||
+        (isCurrentUserOwnerOrDemo && e.paidBy.toLowerCase().includes('you'))
+
       const isSplitWithMe =
         e.splitBetween &&
         e.splitBetween.some(
           (m) =>
-            m.toLowerCase().includes('you') ||
             m === currentUser?.name ||
-            m === currentUser?.id
+            m === currentUser?.id ||
+            (isCurrentUserOwnerOrDemo && m.toLowerCase().includes('you'))
         )
 
       if (e.isShared && isSplitWithMe) {
@@ -48,8 +59,8 @@ export function useBudget(trip: Trip, currentUser?: User, expenses?: Expense[]) 
       }
     })
   } else {
-    // Proportional fallback
-    personalSpent = Math.round(spent / Math.max(trip.members?.length || 1, 1))
+    // If no expenses logged for this trip, personal spend is 0 (or proportional if trip.spent exists)
+    personalSpent = spent > 0 ? Math.round(spent / Math.max(trip.members?.length || 1, 1)) : 0
   }
 
   const personalRemaining = Math.max(0, personalBudget - personalSpent)

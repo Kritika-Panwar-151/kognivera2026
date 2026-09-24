@@ -1,0 +1,13 @@
+{
+  "name": "tripwallet-ps08",
+  "version": "2.0.0",
+  "private": true,
+  "description": "TripWallet - PS-08 KogniVera Hackathon 2026",
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "build": "npm run build --prefix frontend && npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:backend": "npm run build --prefix backend"
+  }
+}

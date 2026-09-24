@@ -13,7 +13,7 @@ const expensesScreens: Screen[] = [
   'receipt-scanner',
   'ocr-confirm',
 ]
-const guardianScreens: Screen[] = ['ai-guardian', 'what-if']
+const guardianScreens: Screen[] = ['ai-guardian', 'what-if', 'adaptive-itinerary']
 
 export default function BottomNav({ currentScreen, navigate }: Props) {
   if (currentScreen === 'login') return null

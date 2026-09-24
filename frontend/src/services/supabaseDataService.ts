@@ -598,3 +598,18 @@ export async function toggleSettleExpenseInSupabase(
     console.warn('toggleSettleExpenseInSupabase error:', err)
   }
 }
+
+// 8. Broadcast general trip changes live over global WebSockets
+export function broadcastTripChange(payload: Record<string, any>): void {
+  if (!isSupabaseConfigured) return
+  try {
+    const channel = supabase.channel('global_trip_sync')
+    channel.send({
+      type: 'broadcast',
+      event: payload.action || 'trip_updated',
+      payload,
+    })
+  } catch (err) {
+    console.warn('broadcastTripChange error:', err)
+  }
+}

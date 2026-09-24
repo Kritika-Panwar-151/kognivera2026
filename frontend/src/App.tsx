@@ -13,6 +13,7 @@ import ExpenseHistory from './screens/ExpenseHistory'
 import AIGuardian from './screens/AIGuardian'
 import WhatIf from './screens/WhatIf'
 import GroupSettlement from './screens/GroupSettlement'
+import AdaptiveItineraryScreen from './screens/AdaptiveItineraryScreen'
 import LoginScreen from './screens/LoginScreen'
 import TripInviteModal from './components/TripInviteModal'
 import {
@@ -506,6 +507,14 @@ export default function App() {
             navigate={navigate}
             trip={currentTrip}
             expenses={expenses}
+            currentUser={currentUser}
+          />
+        )
+      case 'adaptive-itinerary':
+        return (
+          <AdaptiveItineraryScreen
+            navigate={navigate}
+            trip={currentTrip}
             currentUser={currentUser}
           />
         )

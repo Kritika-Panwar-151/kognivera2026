@@ -270,7 +270,14 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
               </p>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <button
+                onClick={() => navigate('adaptive-itinerary')}
+                className="px-4 py-3 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white rounded-xl font-bold text-sm transition shadow-lg flex items-center gap-2 border border-white/25"
+              >
+                <span>🗺️</span>
+                Adaptive Itinerary
+              </button>
               <button
                 onClick={() => navigate('add-expense')}
                 className="px-5 py-3 bg-teal-500 hover:bg-teal-400 text-slate-900 rounded-xl font-bold text-sm transition shadow-lg flex items-center gap-2"
@@ -638,8 +645,8 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
             </div>
           </div>
 
-          {/* DUAL ACTION BUTTONS: 1) ASK GUARDIAN 2) WHAT-IF SIMULATION */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          {/* TRIPLE ACTION BUTTONS: 1) ASK GUARDIAN 2) WHAT-IF SIMULATION 3) ADAPTIVE ITINERARY */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             <button
               onClick={() => navigate('ai-guardian')}
               className="group p-3.5 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-2xl shadow-sm hover:shadow-md transition text-left flex flex-col justify-between"
@@ -649,13 +656,13 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
                   💬
                 </div>
                 <span className="text-[11px] font-bold bg-white/25 px-2 py-0.5 rounded-full group-hover:translate-x-0.5 transition-transform">
-                  Open Chatbot →
+                  Chatbot →
                 </span>
               </div>
               <div>
                 <p className="font-bold text-sm">Ask AI Guardian</p>
                 <p className="text-[11px] text-amber-100 mt-0.5">
-                  Ask questions about daily itinerary, total monthly spend & budget runway
+                  Itinerary, monthly spend & budget runway
                 </p>
               </div>
             </button>
@@ -669,13 +676,33 @@ export default function TripDashboard({ navigate, trip, expenses, currentUser, o
                   🔮
                 </div>
                 <span className="text-[11px] font-bold text-amber-800 group-hover:translate-x-0.5 transition-transform">
-                  Run Simulator →
+                  Simulator →
                 </span>
               </div>
               <div>
-                <p className="font-bold text-sm text-slate-900">What-If Simulation & Statistics</p>
+                <p className="font-bold text-sm text-slate-900">What-If Simulator</p>
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  Test hypothetical purchases & simulate how expenses impact your trip runway
+                  Test hypothetical purchases & runway
+                </p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => navigate('adaptive-itinerary')}
+              className="group p-3.5 bg-gradient-to-br from-teal-700 to-emerald-800 hover:from-teal-800 hover:to-emerald-900 text-white rounded-2xl shadow-sm hover:shadow-md transition text-left flex flex-col justify-between"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-base">
+                  🗺️
+                </div>
+                <span className="text-[11px] font-bold bg-white/25 px-2 py-0.5 rounded-full group-hover:translate-x-0.5 transition-transform">
+                  Adapt Plan →
+                </span>
+              </div>
+              <div>
+                <p className="font-bold text-sm">Adaptive Itinerary</p>
+                <p className="text-[11px] text-teal-100 mt-0.5">
+                  Re-plan on rain, delays & budget cuts
                 </p>
               </div>
             </button>

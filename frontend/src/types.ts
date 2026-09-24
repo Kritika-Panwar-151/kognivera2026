@@ -10,6 +10,7 @@ export type Screen =
   | 'ai-guardian'
   | 'what-if'
   | 'group-settlement'
+  | 'adaptive-itinerary'
 
 export interface User {
   id: string
@@ -89,6 +90,24 @@ export interface SettlementDebt {
   amount: number
   currency: string
   status: 'outstanding' | 'settled'
+}
+
+export interface ItineraryItem {
+  id: string
+  tripId?: string
+  dayIndex: number // 1-based (Day 1, Day 2...)
+  time: string
+  title: string
+  category: 'activity' | 'meal' | 'lodging' | 'transit'
+  cost: number
+  currency: string
+  note: string
+  location?: string
+  isLocked?: boolean // Cannot be adapted (e.g. flight, prepaid hotel)
+  isAdapted?: boolean // Swapped or modified by AI
+  originalTitle?: string
+  originalCost?: number
+  adaptationReason?: string
 }
 
 export type NavigateFn = (screen: Screen) => void
