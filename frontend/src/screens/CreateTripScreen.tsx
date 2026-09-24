@@ -28,20 +28,32 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
     role: 'Owner',
   }
 
-  // 1. Trip Basic Info
-  const [name, setName] = useState('Switzerland Expedition')
-  const [originCountry, setOriginCountry] = useState('India')
-  const [originCity, setOriginCity] = useState('Bengaluru')
+  // 1. Trip Basic Info (Auto-filled from user's account profile)
+  const [name, setName] = useState('')
+  const [originCountry, setOriginCountry] = useState(currentUser?.homeCountry || 'India')
+  const [originCity, setOriginCity] = useState(currentUser?.homeCity || 'Bengaluru')
   const [destinationCountry, setDestinationCountry] = useState('Switzerland')
   const [destinationCity, setDestinationCity] = useState('Zurich')
-  const [startDate, setStartDate] = useState('2026-10-15')
-  const [endDate, setEndDate] = useState('2026-10-22')
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
+  const [endDate, setEndDate] = useState(
+    new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0]
+  )
+
+  // Sync with current user profile whenever loaded
+  useEffect(() => {
+    if (currentUser?.homeCountry) {
+      setOriginCountry(currentUser.homeCountry)
+    }
+    if (currentUser?.homeCity) {
+      setOriginCity(currentUser.homeCity)
+    }
+  }, [currentUser])
 
   // Auto-derived currency from Origin/Home Country
   const autoCurrency = useMemo(() => getCurrencyForCountry(originCountry), [originCountry])
 
   // 2. Travellers & Members
-  const [adults, setAdults] = useState('3')
+  const [adults, setAdults] = useState('1')
   const [children, setChildren] = useState('0')
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearchFocused, setIsSearchFocused] = useState(false)
@@ -81,37 +93,8 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
     [selectedMembers, hostUser.id]
   )
 
-  // Total Group Budget initially equals the Host's personal budget
-  // (Friends will add their own personal balance when accepting the invite)
   const totalGroupBudget = hostPersonalBudget
-
   const totalParty = (parseInt(adults) || 1) + (parseInt(children) || 0)
-  const targetAdults = Math.max(1, parseInt(adults) || 1)
-  const missingRequests = Math.max(0, targetAdults - selectedMembers.length)
-
-  const handleQuickSendRemainingInvites = () => {
-    const available = allRegisteredUsers.filter((u) => !selectedMembers.some((m) => m.id === u.id))
-    const needed = Math.max(0, targetAdults - selectedMembers.length)
-    const toAdd: User[] = []
-
-    for (let i = 0; i < needed; i++) {
-      if (available[i]) {
-        toAdd.push(available[i])
-      } else {
-        const num = selectedMembers.length + i + 1
-        toAdd.push({
-          id: `usr_guest_${num}_${Date.now()}`,
-          name: num === 2 ? 'Asha Patel' : num === 3 ? 'Ravi Sharma' : num === 4 ? 'David Chen' : `Adult Traveller ${num}`,
-          email: `traveller${num}@tripwallet.app`,
-          homeCurrency: autoCurrency,
-          avatar: num % 2 === 0 ? '👩🏻' : '👨🏽',
-          role: 'Member',
-        })
-      }
-    }
-
-    setSelectedMembers((prev) => [...prev, ...toAdd])
-  }
 
   const handleOriginCountryChange = (cName: string) => {
     setOriginCountry(cName)
@@ -144,37 +127,15 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
   }
 
   const handleCreate = () => {
-    let finalMembers = [...selectedMembers]
-    // If user has not sent requests for all adults entered (e.g. 5 adults entered but only 1 host)
-    if (finalMembers.length < targetAdults) {
-      const available = allRegisteredUsers.filter((u) => !finalMembers.some((m) => m.id === u.id))
-      const needed = targetAdults - finalMembers.length
-      const toAdd: User[] = []
-      for (let i = 0; i < needed; i++) {
-        if (available[i]) {
-          toAdd.push(available[i])
-        } else {
-          const num = finalMembers.length + i + 1
-          toAdd.push({
-            id: `usr_guest_${num}_${Date.now()}`,
-            name: num === 2 ? 'Asha Patel' : num === 3 ? 'Ravi Sharma' : num === 4 ? 'David Chen' : `Adult Traveller ${num}`,
-            email: `traveller${num}@tripwallet.app`,
-            homeCurrency: autoCurrency,
-            avatar: num % 2 === 0 ? '👩🏻' : '👨🏽',
-            role: 'Member',
-          })
-        }
-      }
-      finalMembers = [...finalMembers, ...toAdd]
-      setSelectedMembers(finalMembers)
-    }
+    // Only real invited members + host
+    const finalMembers = [...selectedMembers]
 
     const destinationString = `${destinationCity}, ${destinationCountry}`
     const originString = `${originCity}, ${originCountry}`
 
     const newTrip: Trip = {
       id: `trp_${Date.now().toString(36)}`,
-      name: name.trim() || 'My Group Trip',
+      name: name.trim() || `${destinationCity || 'New'} Trip`,
       destination: destinationString,
       startDate,
       endDate,
@@ -412,39 +373,18 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
               </span>
             </div>
 
-            {/* PARTY INVITE REQUIREMENT BANNER */}
-            {missingRequests > 0 ? (
-              <div className="mb-3 p-3.5 bg-amber-50 border-2 border-amber-300 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                <div className="flex items-start gap-2.5">
-                  <span className="text-xl">⚠️</span>
-                  <div>
-                    <p className="text-xs font-black text-amber-900">
-                      {targetAdults} Adults Entered · {missingRequests} Invite Request{missingRequests > 1 ? 's' : ''} Required
-                    </p>
-                    <p className="text-[11px] text-amber-700 mt-0.5">
-                      You have {selectedMembers.length} member{selectedMembers.length > 1 ? 's' : ''} in party. Send {missingRequests} more request{missingRequests > 1 ? 's' : ''} before creating trip.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleQuickSendRemainingInvites}
-                  className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 shrink-0"
-                >
-                  <span>🚀</span>
-                  <span>Send {missingRequests} Invite{missingRequests > 1 ? 's' : ''} Now</span>
-                </button>
-              </div>
-            ) : (
-              <div className="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs text-emerald-800 font-bold">
-                <span className="flex items-center gap-2">
-                  <span>✅</span> All {targetAdults} Adult Party Requests Active & Verified
-                </span>
-                <span className="text-[10px] bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full">
-                  Ready to Create
+            {/* Party Overview Status */}
+            <div className="mb-3 p-3 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-base">👥</span>
+                <span className="text-slate-700 font-medium">
+                  Party: <strong>{totalParty} traveller{totalParty > 1 ? 's' : ''}</strong> ({selectedMembers.length} on app · {invitedMembers.length} invited)
                 </span>
               </div>
-            )}
+              <span className="text-[10px] bg-teal-100 text-teal-800 font-bold px-2.5 py-0.5 rounded-full">
+                {invitedMembers.length > 0 ? `${invitedMembers.length} Friend${invitedMembers.length > 1 ? 's' : ''} Invited` : 'Host Only'}
+              </span>
+            </div>
 
             <div className="relative mb-2">
               <input
