@@ -801,21 +801,39 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
             </div>
 
             {/* Quick 1-Tap Select Buttons */}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 type="button"
                 onClick={handleSelectAllMembers}
-                className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg transition shadow-2xs"
+                className={`px-3 py-1.5 text-xs font-bold border rounded-xl transition shadow-2xs ${
+                  selectedMembers.length === tripMemberNames.length
+                    ? 'bg-teal-700 text-white border-teal-700'
+                    : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700'
+                }`}
               >
                 👥 Select All ({tripMemberNames.length})
               </button>
-              <button
-                type="button"
-                onClick={handleSelectOnlyMe}
-                className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg transition shadow-2xs"
-              >
-                👤 Only Me
-              </button>
+
+              {tripMemberNames.map((m) => {
+                const isSelected = selectedMembers.includes(m)
+                const avatar = getMemberAvatar(m)
+                const isMe = m === currentUserName
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => toggleMemberSelection(m)}
+                    className={`px-3 py-1.5 text-xs font-bold border rounded-xl transition shadow-2xs flex items-center gap-1.5 ${
+                      isSelected
+                        ? 'bg-teal-600 text-white border-teal-600'
+                        : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <span>{avatar}</span>
+                    <span>{isMe ? 'You' : m}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
