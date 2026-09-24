@@ -6,6 +6,7 @@ import PendingRequestsModal from '../components/PendingRequestsModal'
 import { resolveMemberName } from '../services/userRegistry'
 import { getCurrencySymbol, isTripMatch } from '../services/currencyService'
 import { calculateHareMemberBreakdown, calculateLargestRemainderSplit } from '../features/group-settlement/largestRemainder'
+import SettleConfirmationModal, { SettlingTarget } from '../components/SettleConfirmationModal'
 
 interface Props {
   navigate: NavigateFn
@@ -277,11 +278,52 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     .filter((d) => !d.isSettled)
     .reduce((sum, d) => sum + d.amount, 0)
 
-  const netBalance = totalOwedToYou - totalYouOwe
   const [isPendingRequestsOpen, setIsPendingRequestsOpen] = useState(false)
+  const [confirmModalTarget, setConfirmModalTarget] = useState<SettlingTarget | null>(null)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+
+  const promptSettleConfirm = (item: DebtItem) => {
+    if (item.isSettled) return
+    setConfirmModalTarget({
+      id: item.id,
+      person: item.person,
+      avatar: item.avatar,
+      amount: item.amount,
+      currency: item.currency,
+      direction: item.direction,
+      reason: item.reason,
+    })
+  }
+
+  const handleExecuteConfirmedSettle = () => {
+    if (!confirmModalTarget) return
+    const target = confirmModalTarget
+    toggleSettle(target.id)
+    setToastMsg(
+      `✓ Successfully settled ${homeSymbol}${target.amount.toLocaleString()} with ${target.person}!`
+    )
+    setTimeout(() => setToastMsg(null), 4000)
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-6">
+      {/* Toast Confirmation Notification */}
+      {toastMsg && (
+        <div className="bg-emerald-600 text-white px-4 py-3 rounded-2xl shadow-lg font-extrabold text-xs flex items-center justify-between animate-in fade-in slide-in-from-top-3">
+          <div className="flex items-center gap-2">
+            <span>🎉</span>
+            <span>{toastMsg}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastMsg(null)}
+            className="text-white/80 hover:text-white font-bold text-sm ml-2"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Back Button */}
       <button
         onClick={() => navigate('trip-dashboard')}
@@ -299,7 +341,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Who Owes Whom</h1>
           <p className="text-slate-500 text-xs md:text-sm mt-0.5">
-            Person-wise balances with instant 1-tap settlement
+            Person-wise balances with one-time confirmed settlement transfer
           </p>
         </div>
 
@@ -357,7 +399,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       </div>
 
       {/* =========================================================================
-          SECTION 1: PEOPLE WHO OWE YOU (WITH INLINE SETTLE BUTTON)
+          SECTION 1: PEOPLE WHO OWE YOU (WITH ONE-TIME CONFIRMED SETTLE)
       ========================================================================= */}
       <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm p-5 md:p-6 space-y-3.5">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -378,7 +420,6 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             </div>
           ) : (
             theyOweYouList.map((item) => (
-              /* PERSON ROW: PERSON DETAILS ON LEFT, SETTLED BUTTON RIGHT NEXT TO IT ON RIGHT */
               <div
                 key={item.id}
                 className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 ${
@@ -403,16 +444,18 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                   </div>
                 </div>
 
-                {/* INLINE SETTLE BUTTON RIGHT NEXT TO THE PERSON */}
+                {/* INLINE SETTLE BUTTON */}
                 <button
-                  onClick={() => toggleSettle(item.id)}
+                  type="button"
+                  disabled={item.isSettled}
+                  onClick={() => promptSettleConfirm(item)}
                   className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-2xs ${
                     item.isSettled
-                      ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                      : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      ? 'bg-emerald-100 text-emerald-800 opacity-80 cursor-not-allowed'
+                      : 'bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95'
                   }`}
                 >
-                  <span>{item.isSettled ? '✓ Settled' : 'Settle'}</span>
+                  <span>{item.isSettled ? '✓ Settled (Received)' : 'Acknowledge Settle'}</span>
                 </button>
               </div>
             ))
@@ -421,7 +464,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       </div>
 
       {/* =========================================================================
-          SECTION 2: PEOPLE YOU OWE (WITH INLINE SETTLE BUTTON)
+          SECTION 2: PEOPLE YOU OWE (WITH ONE-TIME CONFIRMED SETTLE)
       ========================================================================= */}
       <div className="bg-white rounded-3xl border border-rose-100 shadow-sm p-5 md:p-6 space-y-3.5">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
@@ -442,7 +485,6 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             </div>
           ) : (
             youOweList.map((item) => (
-              /* PERSON ROW: PERSON DETAILS ON LEFT, SETTLED BUTTON RIGHT NEXT TO IT ON RIGHT */
               <div
                 key={item.id}
                 className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 ${
@@ -460,23 +502,27 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-slate-900 text-sm truncate">{item.person}</p>
                       <span className="text-xs font-extrabold text-rose-800">
-                        Settle {homeSymbol}{item.amount.toLocaleString()} with {item.person}
+                        {item.isSettled
+                          ? `Settled ${homeSymbol}${item.amount.toLocaleString()} with ${item.person}`
+                          : `You owe ${homeSymbol}${item.amount.toLocaleString()} to ${item.person}`}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 truncate">{item.reason}</p>
                   </div>
                 </div>
 
-                {/* INLINE SETTLE BUTTON RIGHT NEXT TO THE PERSON */}
+                {/* INLINE SETTLE BUTTON */}
                 <button
-                  onClick={() => toggleSettle(item.id)}
+                  type="button"
+                  disabled={item.isSettled}
+                  onClick={() => promptSettleConfirm(item)}
                   className={`px-3.5 py-2 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-2xs ${
                     item.isSettled
-                      ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                      : 'bg-rose-600 text-white hover:bg-rose-700'
+                      ? 'bg-emerald-100 text-emerald-800 opacity-80 cursor-not-allowed'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white active:scale-95'
                   }`}
                 >
-                  <span>{item.isSettled ? '✓ Settled' : 'Settle'}</span>
+                  <span>{item.isSettled ? '✓ Settled (Paid)' : `Pay & Settle ${homeSymbol}${item.amount.toLocaleString()}`}</span>
                 </button>
               </div>
             ))
@@ -488,7 +534,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-2 text-xs text-slate-500">
         <span>💡</span>
         <span>
-          Split via Largest Remainder method ensuring zero decimal discrepancy across all group members.
+          Split via Largest Remainder method ensuring zero decimal discrepancy across all group members. Settlement transfer is recorded as a one-time final transaction.
         </span>
       </div>
 
@@ -500,6 +546,15 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
         expenses={expenses}
         currentUser={currentUser}
         onSettleExpense={(debtId) => toggleSettle(debtId)}
+      />
+
+      {/* ONE-TIME SETTLEMENT CONFIRMATION MODAL */}
+      <SettleConfirmationModal
+        isOpen={Boolean(confirmModalTarget)}
+        onClose={() => setSettleConfirmTarget(null)}
+        onConfirm={handleExecuteConfirmedSettle}
+        item={confirmModalTarget}
+        homeSymbol={homeSymbol}
       />
     </div>
   )
