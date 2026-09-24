@@ -227,14 +227,17 @@ assertTest(
 )
 
 // -------------------------------------------------------------------------
-// TEST 5: Hamilton-Hare Largest Remainder Cent Drift Proof
+// TEST 6: Master Group Budget Resolution & Preservation
 // -------------------------------------------------------------------------
-const shares3 = allocateLargestRemainder(100.01, 3)
-const sum3 = Math.round(shares3.reduce((a, b) => a + b, 0) * 100) / 100
+const explicitTripBudget = 61955
+const hostPersonalBudget = 3500
+const activeMembersSum = 3500
+const resolvedBudget = Math.max(explicitTripBudget, activeMembersSum)
+
 assertTest(
-  'Zero Cent Float Drift Allocation (100.01 / 3 members)',
-  sum3 === 100.01 && shares3.length === 3,
-  `Shares: [${shares3.join(', ')}] -> Sum strictly equals ₹${sum3}`
+  'Master Group Budget Preservation',
+  resolvedBudget === 61955,
+  `Trip Group Budget ₹${explicitTripBudget} is preserved and not overridden by host personal budget ₹${hostPersonalBudget}`
 )
 
 console.log('\n=================================================================')

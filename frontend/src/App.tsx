@@ -707,7 +707,7 @@ export default function App() {
       }
       return {
         ...t,
-        budget: newTotal > 0 ? newTotal : t.budget,
+        budget: Math.max(t.budget || 0, newTotal),
         memberBudgets: updatedBudgets,
         personalBudget: isCurrentUser ? newBudget : t.personalBudget,
         categoryCaps: updatedCaps,

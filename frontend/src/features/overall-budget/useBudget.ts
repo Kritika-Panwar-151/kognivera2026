@@ -13,8 +13,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
     : []
 
   // 1. Calculate Group Budget in Destination Currency (B_dest)
-  // Convert each member's personal budget from their Home Currency to Trip Destination Currency
-  let groupBudgetDest = 0
+  let activeMembersSumDest = 0
   const activeMembers = (trip?.memberDetails || []).filter((m) => m.status === 'active' || !m.status)
 
   if (activeMembers.length > 0 && activeMembers.some((m) => (m.personalBudget || 0) > 0)) {
@@ -22,18 +21,18 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
       const mUser = registeredUsers.find((u) => u.id === m.userId || u.name === m.userId)
       const mHomeCurr = (mUser?.homeCurrency || 'INR').toUpperCase()
       const mHomeBudget = m.personalBudget || 0
-      groupBudgetDest += convertCurrency(mHomeBudget, mHomeCurr, destCurr)
+      activeMembersSumDest += convertCurrency(mHomeBudget, mHomeCurr, destCurr)
     })
   } else if (trip?.memberBudgets && Object.keys(trip.memberBudgets).length > 0) {
     Object.entries(trip.memberBudgets).forEach(([mId, mHomeBudget]) => {
       const mUser = registeredUsers.find((u) => u.id === mId || u.name === mId)
       const mHomeCurr = (mUser?.homeCurrency || 'INR').toUpperCase()
-      groupBudgetDest += convertCurrency(mHomeBudget || 0, mHomeCurr, destCurr)
+      activeMembersSumDest += convertCurrency(mHomeBudget || 0, mHomeCurr, destCurr)
     })
-  } else {
-    // Fallback: trip.budget converted to destCurr
-    groupBudgetDest = convertCurrency(trip?.budget || 0, trip?.currency || destCurr, destCurr)
   }
+
+  const rawTripBudgetDest = convertCurrency(trip?.budget || 0, trip?.currency || destCurr, destCurr)
+  const groupBudgetDest = Math.max(rawTripBudgetDest, activeMembersSumDest)
 
   // Convert Group Budget in Destination Currency (B_dest) to viewing user's Home Currency
   const budget = convertCurrency(groupBudgetDest, destCurr, userHomeCurr)
