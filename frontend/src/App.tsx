@@ -243,17 +243,80 @@ export default function App() {
       )
       .subscribe()
 
+    // 5. Global Instant Realtime Broadcast (Direct WebSocket messages between phones, 0 delay)
+    const syncChannel = supabase.channel('global_trip_sync')
+    syncChannel
+      .on('broadcast', { event: '*' }, async (payload) => {
+        console.log('⚡ Realtime Broadcast received:', payload)
+        const [freshTrips, freshExpenses] = await Promise.all([
+          fetchTripsFromSupabase(),
+          fetchExpensesFromSupabase(),
+        ])
+        if (freshTrips && freshTrips.length > 0) {
+          setTrips(freshTrips)
+          if (currentTrip) {
+            const updated = freshTrips.find((t) => t.id === currentTrip.id)
+            if (updated) setCurrentTrip(updated)
+          }
+        }
+        if (freshExpenses) setExpenses(freshExpenses)
+        checkInvites()
+      })
+      .subscribe()
+
+    // 6. Live Heartbeat Sync (every 3 seconds backup so mobile phones NEVER miss an update)
+    const syncInterval = setInterval(async () => {
+      try {
+        const [freshTrips, freshExpenses] = await Promise.all([
+          fetchTripsFromSupabase(),
+          fetchExpensesFromSupabase(),
+        ])
+        if (freshTrips && freshTrips.length > 0) {
+          setTrips(freshTrips)
+          if (currentTrip) {
+            const updated = freshTrips.find((t) => t.id === currentTrip.id)
+            if (
+              updated &&
+              (updated.budget !== currentTrip.budget ||
+                updated.spent !== currentTrip.spent ||
+                updated.members?.length !== currentTrip.members?.length)
+            ) {
+              setCurrentTrip(updated)
+            }
+          }
+        }
+        if (freshExpenses && freshExpenses.length > 0) {
+          setExpenses(freshExpenses)
+        }
+        checkInvites()
+      } catch (err) {
+        // silent catch
+      }
+    }, 3000)
+
     return () => {
+      clearInterval(syncInterval)
       supabase.removeChannel(inviteChannel)
       supabase.removeChannel(membersChannel)
       supabase.removeChannel(expensesChannel)
       supabase.removeChannel(budgetChannel)
+      supabase.removeChannel(syncChannel)
     }
   }, [currentUser, currentTrip?.id])
 
   const handleAcceptInvite = async (tripId: string, personalBudget: number, categoryCaps: CategoryCaps) => {
     if (!currentUser) return
     await acceptTripInvite(tripId, currentUser.id, personalBudget, categoryCaps)
+
+    // Broadcast live over WebSockets so host's phone updates instantly
+    if (isSupabaseConfigured) {
+      supabase.channel('global_trip_sync').send({
+        type: 'broadcast',
+        event: 'member_joined',
+        payload: { tripId, userId: currentUser.id, personalBudget },
+      })
+    }
+
     const freshTrips = await fetchTripsFromSupabase()
     setTrips(freshTrips)
     const joined = freshTrips.find((t) => t.id === tripId)
@@ -308,7 +371,15 @@ export default function App() {
     setTrips((prev) => [newTrip, ...prev])
     setCurrentTrip(newTrip)
     if (currentUser) {
-      saveTripToSupabase(newTrip, currentUser.id)
+      saveTripToSupabase(newTrip, currentUser.id).then(() => {
+        if (isSupabaseConfigured) {
+          supabase.channel('global_trip_sync').send({
+            type: 'broadcast',
+            event: 'trip_created',
+            payload: { tripId: newTrip.id, members: newTrip.members },
+          })
+        }
+      })
     }
   }
 
@@ -324,7 +395,15 @@ export default function App() {
           : null
       )
       if (currentUser) {
-        saveExpenseToSupabase(newExpense, currentUser.id)
+        saveExpenseToSupabase(newExpense, currentUser.id).then(() => {
+          if (isSupabaseConfigured) {
+            supabase.channel('global_trip_sync').send({
+              type: 'broadcast',
+              event: 'expense_added',
+              payload: { tripId: currentTrip.id },
+            })
+          }
+        })
       }
     }
   }
@@ -348,7 +427,15 @@ export default function App() {
     setCurrentTrip((prev) => (prev && prev.id === tripId ? updateTripState(prev) : prev))
 
     // Persist to Supabase so other phones receive the updated group budget in real time
-    updateMemberPersonalBudgetInSupabase(tripId, userId, newBudget)
+    updateMemberPersonalBudgetInSupabase(tripId, userId, newBudget).then(() => {
+      if (isSupabaseConfigured) {
+        supabase.channel('global_trip_sync').send({
+          type: 'broadcast',
+          event: 'budget_updated',
+          payload: { tripId, userId, newBudget },
+        })
+      }
+    })
   }
 
   const renderScreen = () => {
