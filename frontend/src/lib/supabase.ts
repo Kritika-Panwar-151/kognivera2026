@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder_anon_key'
+const rawUrl = import.meta.env.VITE_SUPABASE_URL || ''
+const rawKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
 const isPlaceholder = (val?: string) =>
   !val ||
@@ -11,11 +11,19 @@ const isPlaceholder = (val?: string) =>
   val === 'https://placeholder.supabase.co'
 
 export const isSupabaseConfigured = Boolean(
-  import.meta.env.VITE_SUPABASE_URL &&
-  import.meta.env.VITE_SUPABASE_ANON_KEY &&
-  !isPlaceholder(import.meta.env.VITE_SUPABASE_URL) &&
-  !isPlaceholder(import.meta.env.VITE_SUPABASE_ANON_KEY)
+  rawUrl &&
+  rawKey &&
+  !isPlaceholder(rawUrl) &&
+  !isPlaceholder(rawKey)
 )
+
+const supabaseUrl = isSupabaseConfigured
+  ? rawUrl
+  : 'https://rbqyutgvenkzcoiieiik.supabase.co'
+
+const supabaseAnonKey = isSupabaseConfigured
+  ? rawKey
+  : 'sb_publishable_rrgFTjpfdQKcJ2LCm_CjLw_jhfyf-3K'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -23,4 +31,3 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
   },
 })
-

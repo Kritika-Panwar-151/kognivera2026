@@ -7,7 +7,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
 
   // Group Budget Metrics
   const budget = trip?.budget || 0
-  const spent = trip?.spent && trip.spent > 0 ? trip.spent : tripExpenseSum
+  const spent = trip?.spent && trip?.spent > 0 ? trip.spent : tripExpenseSum
   const remaining = Math.max(0, budget - spent)
   const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0
 
