@@ -29,24 +29,19 @@ export default function SettleConfirmationModal({
 
   const isDebtor = item.direction === 'you_owe_them'
 
-  const handleConfirm = (e: React.MouseEvent) => {
-    e.preventDefault()
-    onConfirm()
-    onClose()
-  }
-
-  const handleCancel = (e: React.MouseEvent) => {
-    e.preventDefault()
-    onClose()
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose()
+    }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
-      {/* Backdrop click layer */}
-      <div className="absolute inset-0" onClick={handleCancel} />
-
+    <div
+      onClick={handleOverlayClick}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+    >
       {/* Dialog content */}
-      <div className="relative z-10 bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
+      <div className="relative z-50 bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
@@ -64,7 +59,7 @@ export default function SettleConfirmationModal({
           </div>
           <button
             type="button"
-            onClick={handleCancel}
+            onClick={onClose}
             className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm transition cursor-pointer"
           >
             ✕
@@ -110,14 +105,17 @@ export default function SettleConfirmationModal({
         <div className="flex items-center gap-3 pt-2">
           <button
             type="button"
-            onClick={handleCancel}
+            onClick={onClose}
             className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="button"
-            onClick={handleConfirm}
+            onClick={() => {
+              onConfirm()
+              onClose()
+            }}
             className={`flex-1 py-3 text-white font-black rounded-2xl text-xs shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer ${
               isDebtor
                 ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20'
