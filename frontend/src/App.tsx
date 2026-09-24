@@ -62,8 +62,9 @@ export default function App() {
   const filterTripsForUser = (allTrips: Trip[], user: User | null): Trip[] => {
     if (!user) return []
     return allTrips.filter((t) => {
+      // 1. User is the trip owner
       if (t.ownerId === user.id) return true
-      if (t.members && t.members.includes(user.id)) return true
+      // 2. User is an active/accepted member (pending invites belong exclusively in PendingRequestsModal)
       const detail = t.memberDetails?.find((d) => d.userId === user.id)
       if (detail && (detail.status === 'active' || detail.status === 'accepted')) return true
       return false
