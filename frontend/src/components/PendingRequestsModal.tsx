@@ -42,35 +42,100 @@ export default function PendingRequestsModal({
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
   const currencySymbol = getCurrencySymbol(userHomeCurr)
 
-  // 1. Pending Debts / Split Claims (derived strictly from real logged expenses)
-  const pendingDebts: PendingDebtItem[] = []
+  // 1. Pending Debts / Split Claims (user-wise aggregated net debts derived strictly from real logged expenses)
+  const memberMap = new Map<
+    string,
+    {
+      personName: string
+      owedToMe: number
+      iOweThem: number
+      expenseIds: string[]
+    }
+  >()
 
-  // Add any dynamic unsettled expenses
+  const getMemberShare = (exp: Expense, personName: string) => {
+    const expAmount = exp.convertedAmount || exp.amount
+    if (exp.splitBreakdown) {
+      const keys = Object.keys(exp.splitBreakdown)
+      const matchedKey = keys.find(
+        (k) =>
+          k.toLowerCase() === personName.toLowerCase() ||
+          (personName.toLowerCase().includes('you') &&
+            (k.toLowerCase().includes('you') || k.toLowerCase().includes(currentUserName.toLowerCase())))
+      )
+      if (matchedKey && exp.splitBreakdown[matchedKey] !== undefined) {
+        return Math.round(exp.splitBreakdown[matchedKey])
+      }
+    }
+    const count = exp.splitBetween ? exp.splitBetween.length : 1
+    return Math.round(expAmount / count)
+  }
+
   expenses.forEach((exp) => {
-    if (exp.isShared && exp.splitBetween && exp.splitBetween.length > 1) {
-      const splitAmount = Math.round((exp.convertedAmount || exp.amount) / exp.splitBetween.length)
+    if (exp.isShared && exp.splitBetween && exp.splitBetween.length > 1 && !exp.isSettled) {
       const isPayer =
         exp.paidBy.toLowerCase().includes(currentUserName.toLowerCase()) ||
         exp.paidBy.toLowerCase().includes('you')
 
       if (isPayer) {
-        exp.splitBetween.forEach((person, idx) => {
+        exp.splitBetween.forEach((person) => {
           if (!person.toLowerCase().includes('you') && !person.toLowerCase().includes(currentUserName.toLowerCase())) {
             const resolved = resolveMemberName(person)
-            pendingDebts.push({
-              id: `req_${exp.id}_${idx}`,
-              person: resolved,
-              avatar: resolved.toLowerCase().includes('ravi') ? '👨🏽' : resolved.toLowerCase().includes('asha') ? '👩🏻' : '👤',
-              direction: 'they_owe_you',
-              amount: splitAmount,
-              currency: exp.currency || 'INR',
-              reason: `${exp.category}: ${exp.merchant}`,
-              isSettled: false,
-              expenseId: exp.id,
-            })
+            const share = getMemberShare(exp, person)
+            if (!memberMap.has(resolved)) {
+              memberMap.set(resolved, { personName: resolved, owedToMe: 0, iOweThem: 0, expenseIds: [] })
+            }
+            const rec = memberMap.get(resolved)!
+            rec.owedToMe += share
+            rec.expenseIds.push(exp.id)
           }
         })
+      } else {
+        const userIsInSplit = exp.splitBetween.some(
+          (p) => p.toLowerCase().includes('you') || p.toLowerCase().includes(currentUserName.toLowerCase())
+        )
+        if (userIsInSplit) {
+          const resolvedPayer = resolveMemberName(exp.paidBy)
+          const myShare = getMemberShare(exp, currentUserName)
+          if (!memberMap.has(resolvedPayer)) {
+            memberMap.set(resolvedPayer, { personName: resolvedPayer, owedToMe: 0, iOweThem: 0, expenseIds: [] })
+          }
+          const rec = memberMap.get(resolvedPayer)!
+          rec.iOweThem += myShare
+          rec.expenseIds.push(exp.id)
+        }
       }
+    }
+  })
+
+  const pendingDebts: PendingDebtItem[] = []
+  memberMap.forEach((rec, personName) => {
+    const net = rec.owedToMe - rec.iOweThem
+    const avatar = personName.toLowerCase().includes('ravi') ? '👨🏽' : personName.toLowerCase().includes('asha') ? '👩🏻' : '👤'
+    if (net > 0) {
+      pendingDebts.push({
+        id: `req_net_${personName.replace(/\s+/g, '_')}`,
+        person: personName,
+        avatar,
+        direction: 'they_owe_you',
+        amount: Math.round(net),
+        currency: userHomeCurr,
+        reason: `Net balance across shared trip expenses`,
+        isSettled: false,
+        expenseId: rec.expenseIds[0],
+      })
+    } else if (net < 0) {
+      pendingDebts.push({
+        id: `req_net_${personName.replace(/\s+/g, '_')}`,
+        person: personName,
+        avatar,
+        direction: 'you_owe_them',
+        amount: Math.abs(Math.round(net)),
+        currency: userHomeCurr,
+        reason: `Settle ${currencySymbol}${Math.abs(Math.round(net))} with ${personName}`,
+        isSettled: false,
+        expenseId: rec.expenseIds[0],
+      })
     }
   })
 

@@ -22,69 +22,88 @@ interface DebtItem {
   currency: string
   reason: string
   isSettled: boolean
+  expenseIds?: string[]
 }
 
 export default function GroupSettlement({ navigate, trip, expenses, currentUser }: Props) {
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
   const homeSymbol = getCurrencySymbol(userHomeCurr)
 
-  // Compute debts strictly from real trip expenses
+  // Compute user-wise aggregated net bilateral settlement debts
   const computedDebts = useMemo(() => {
-    const list: DebtItem[] = []
     const currentUserName = currentUser?.name || 'You (Aisha)'
     const currentUserId = currentUser?.id || 'usr_you'
 
     const tripExpenses = (expenses || []).filter((exp) => !trip?.id || exp.tripId === trip.id)
 
+    // Map of memberName -> { owedToMe: number, iOweThem: number, expenseIds: string[], isAllSettled: boolean }
+    const memberMap = new Map<
+      string,
+      {
+        personName: string
+        owedToMe: number
+        iOweThem: number
+        expenseIds: string[]
+        isAllSettled: boolean
+      }
+    >()
+
+    const getMemberShare = (exp: Expense, personName: string) => {
+      const expAmount = exp.convertedAmount || exp.amount
+      if (exp.splitBreakdown) {
+        const keys = Object.keys(exp.splitBreakdown)
+        const matchedKey = keys.find(
+          (k) =>
+            k.toLowerCase() === personName.toLowerCase() ||
+            (personName.toLowerCase().includes('you') &&
+              (k.toLowerCase().includes('you') || k.toLowerCase().includes(currentUserName.toLowerCase())))
+        )
+        if (matchedKey && exp.splitBreakdown[matchedKey] !== undefined) {
+          return Math.round(exp.splitBreakdown[matchedKey])
+        }
+      }
+      const count = exp.splitBetween ? exp.splitBetween.length : 1
+      return Math.round(expAmount / count)
+    }
+
     if (tripExpenses.length > 0) {
       tripExpenses.forEach((exp) => {
         if (exp.isShared && exp.splitBetween && exp.splitBetween.length > 1) {
-          const getMemberShare = (personName: string) => {
-            if (exp.splitBreakdown) {
-              const keys = Object.keys(exp.splitBreakdown)
-              const matchedKey = keys.find(
-                (k) =>
-                  k.toLowerCase() === personName.toLowerCase() ||
-                  (personName.toLowerCase().includes('you') &&
-                    (k.toLowerCase().includes('you') || k.toLowerCase().includes(currentUserName.toLowerCase())))
-              )
-              if (matchedKey && exp.splitBreakdown[matchedKey] !== undefined) {
-                return Math.round(exp.splitBreakdown[matchedKey])
-              }
-            }
-            return Math.round(exp.convertedAmount / exp.splitBetween.length)
-          }
-
-          const isPayer =
+          const isPayerMe =
             exp.paidBy.toLowerCase().includes(currentUserName.toLowerCase()) ||
             exp.paidBy === currentUserId ||
             (exp.paidBy.toLowerCase().includes('you') &&
               (currentUserId === 'usr_aisha' || currentUserId === 'usr_you'))
 
-          if (isPayer) {
-            exp.splitBetween.forEach((person, idx) => {
+          if (isPayerMe) {
+            // I paid this expense; each co-member owes me their share
+            exp.splitBetween.forEach((person) => {
               if (
                 !person.toLowerCase().includes('you') &&
                 !person.toLowerCase().includes(currentUserName.toLowerCase())
               ) {
                 const resolvedName = resolveMemberName(person)
-                list.push({
-                  id: `exp_debt_${exp.id}_${idx}`,
-                  person: resolvedName,
-                  avatar: resolvedName.toLowerCase().includes('ravi')
-                    ? '👨🏽'
-                    : resolvedName.toLowerCase().includes('asha')
-                    ? '👩🏻'
-                    : '👤',
-                  direction: 'they_owe_you',
-                  amount: getMemberShare(person),
-                  currency: exp.currency || 'INR',
-                  reason: `${exp.category}: ${exp.merchant} (${exp.splitType === 'custom' ? 'Custom Share' : 'Equal Split'})`,
-                  isSettled: Boolean(exp.isSettled),
-                })
+                const share = getMemberShare(exp, person)
+
+                if (!memberMap.has(resolvedName)) {
+                  memberMap.set(resolvedName, {
+                    personName: resolvedName,
+                    owedToMe: 0,
+                    iOweThem: 0,
+                    expenseIds: [],
+                    isAllSettled: true,
+                  })
+                }
+                const record = memberMap.get(resolvedName)!
+                record.expenseIds.push(exp.id)
+                if (!exp.isSettled) {
+                  record.owedToMe += share
+                  record.isAllSettled = false
+                }
               }
             })
           } else {
+            // Someone else paid this expense; check if I am in the split
             const userIsInSplit = exp.splitBetween.some(
               (p) =>
                 p.toLowerCase().includes('you') ||
@@ -92,28 +111,82 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             )
             if (userIsInSplit) {
               const resolvedPayer = resolveMemberName(exp.paidBy)
-              list.push({
-                id: `exp_debt_${exp.id}_me`,
-                person: resolvedPayer,
-                avatar: resolvedPayer.toLowerCase().includes('ravi')
-                  ? '👨🏽'
-                  : resolvedPayer.toLowerCase().includes('asha')
-                  ? '👩🏻'
-                  : '👤',
-                direction: 'you_owe_them',
-                amount: getMemberShare(currentUserName),
-                currency: exp.currency || 'INR',
-                reason: `${exp.category}: ${exp.merchant} (${exp.splitType === 'custom' ? 'Custom Share' : 'Equal Split'})`,
-                isSettled: Boolean(exp.isSettled),
-              })
+              const myShare = getMemberShare(exp, currentUserName)
+
+              if (!memberMap.has(resolvedPayer)) {
+                memberMap.set(resolvedPayer, {
+                  personName: resolvedPayer,
+                  owedToMe: 0,
+                  iOweThem: 0,
+                  expenseIds: [],
+                  isAllSettled: true,
+                })
+              }
+              const record = memberMap.get(resolvedPayer)!
+              record.expenseIds.push(exp.id)
+              if (!exp.isSettled) {
+                record.iOweThem += myShare
+                record.isAllSettled = false
+              }
             }
           }
         }
       })
     }
 
+    const list: DebtItem[] = []
+
+    memberMap.forEach((rec, personName) => {
+      const net = rec.owedToMe - rec.iOweThem
+      const avatar = personName.toLowerCase().includes('ravi')
+        ? '👨🏽'
+        : personName.toLowerCase().includes('asha')
+        ? '👩🏻'
+        : '👤'
+
+      if (net > 0) {
+        // Person owes currentUser net
+        list.push({
+          id: `debt_net_${personName.replace(/\s+/g, '_')}`,
+          person: personName,
+          avatar,
+          direction: 'they_owe_you',
+          amount: Math.round(net),
+          currency: userHomeCurr,
+          reason: `Net balance across shared trip expenses`,
+          isSettled: rec.owedToMe === 0 && rec.isAllSettled,
+          expenseIds: rec.expenseIds,
+        })
+      } else if (net < 0) {
+        // currentUser owes Person net
+        list.push({
+          id: `debt_net_${personName.replace(/\s+/g, '_')}`,
+          person: personName,
+          avatar,
+          direction: 'you_owe_them',
+          amount: Math.abs(Math.round(net)),
+          currency: userHomeCurr,
+          reason: `Net balance across shared trip expenses`,
+          isSettled: rec.iOweThem === 0 && rec.isAllSettled,
+          expenseIds: rec.expenseIds,
+        })
+      } else if (rec.isAllSettled && rec.expenseIds.length > 0) {
+        list.push({
+          id: `debt_net_${personName.replace(/\s+/g, '_')}`,
+          person: personName,
+          avatar,
+          direction: 'they_owe_you',
+          amount: 0,
+          currency: userHomeCurr,
+          reason: `All shared expenses settled`,
+          isSettled: true,
+          expenseIds: rec.expenseIds,
+        })
+      }
+    })
+
     return list
-  }, [expenses, currentUser])
+  }, [expenses, currentUser, trip])
 
   const [debts, setDebts] = useState<DebtItem[]>(computedDebts)
 
@@ -121,7 +194,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     setDebts(computedDebts)
   }, [computedDebts])
 
-  // Realtime subscription: When ANY user on ANY phone toggles settlement, sync immediately
+  // Realtime subscription: Sync live when settlement status changes
   useEffect(() => {
     if (!isSupabaseConfigured) return
 
@@ -142,20 +215,22 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
     }
   }, [])
 
-  // Toggle settled status directly for a person and broadcast live
+  // Toggle settled status for a aggregated person debt item
   const toggleSettle = async (id: string) => {
     let nextStatus = false
+    let targetItem: DebtItem | undefined
+
     setDebts((prev) =>
       prev.map((d) => {
         if (d.id === id) {
           nextStatus = !d.isSettled
-          return { ...d, isSettled: nextStatus }
+          targetItem = { ...d, isSettled: nextStatus }
+          return targetItem
         }
         return d
       })
     )
 
-    // Broadcast to other phones live over WebSockets
     if (isSupabaseConfigured) {
       const channel = supabase.channel('realtime_settlement_channel')
       channel.send({
@@ -164,13 +239,11 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
         payload: { id, isSettled: nextStatus },
       })
 
-      // If this was a real expense, update database status
-      if (id.startsWith('exp_debt_')) {
-        const parts = id.split('_')
-        const expenseId = parts[2]
-        if (expenseId) {
-          toggleSettleExpenseInSupabase(expenseId, nextStatus)
-        }
+      // Toggle all underlying expense IDs in Supabase database
+      if (targetItem && targetItem.expenseIds && targetItem.expenseIds.length > 0) {
+        targetItem.expenseIds.forEach((expId) => {
+          toggleSettleExpenseInSupabase(expId, nextStatus)
+        })
       }
     }
   }
@@ -370,7 +443,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-slate-900 text-sm truncate">{item.person}</p>
                       <span className="text-xs font-extrabold text-rose-800">
-                        you owe {homeSymbol}{item.amount.toLocaleString()}
+                        Settle {homeSymbol}{item.amount.toLocaleString()} with {item.person}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 truncate">{item.reason}</p>
