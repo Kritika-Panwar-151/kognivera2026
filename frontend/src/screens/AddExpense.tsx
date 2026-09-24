@@ -6,7 +6,7 @@ import {
   type ReceiptOCRResult,
 } from '../services/geminiService'
 import { getRegisteredUsers } from '../services/userRegistry'
-import { formatUserDualCurrency, convertCurrency, getCurrencySymbol } from '../services/currencyService'
+import { formatUserDualCurrency, convertCurrency, getCurrencySymbol, getTripDestinationCurrency } from '../services/currencyService'
 
 interface Props {
   navigate: NavigateFn
@@ -16,7 +16,6 @@ interface Props {
 }
 
 const categories = ['Food', 'Transport', 'Accommodation', 'Activities', 'Shopping', 'Other']
-const currencies = ['INR (₹)', 'EUR (€)', 'USD ($)', 'GBP (£)', 'JPY (¥)', 'SGD (S$)']
 
 const catIcons: Record<string, string> = {
   Food: '🍽️',
@@ -27,19 +26,30 @@ const catIcons: Record<string, string> = {
   Other: '📦',
 }
 
-const FX_RATES: Record<string, number> = {
-  EUR: 94.0,
-  USD: 86.5,
-  GBP: 112.4,
-  SGD: 65.2,
-  JPY: 0.58,
-  INR: 1.0,
-}
-
 export default function AddExpense({ navigate, onAddExpense, trip, currentUser }: Props) {
   // Resolve member display names from trip.members or registered users
   const registered = getRegisteredUsers()
-  const currentUserName = currentUser?.name || 'You (Aisha)'
+  const currentUserName = currentUser?.name || 'You'
+
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const tripDestCurr = getTripDestinationCurrency(trip)
+
+  const defaultUserCurrency = `${userHomeCurr} (${getCurrencySymbol(userHomeCurr).trim()})`
+  const defaultTripCurrency = `${tripDestCurr} (${getCurrencySymbol(tripDestCurr).trim()})`
+
+  const currencies = Array.from(new Set([
+    defaultTripCurrency,
+    defaultUserCurrency,
+    'INR (₹)',
+    'EUR (€)',
+    'USD ($)',
+    'GBP (£)',
+    'CHF (CHF)',
+    'JPY (¥)',
+    'SGD (S$)',
+    'AED (د.إ)',
+    'THB (฿)',
+  ]))
 
   const tripMemberNames: string[] = (trip?.members || ['usr_you', 'usr_ravi', 'usr_asha']).map(
     (id) => {
@@ -55,10 +65,7 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   // Dual Entry Mode: 'manual' vs 'ocr'
   const [entryMode, setEntryMode] = useState<'ocr' | 'manual'>('manual')
 
-  const defaultUserCurrency = currentUser?.homeCurrency
-    ? `${currentUser.homeCurrency.toUpperCase()} (${currentUser.homeCurrency.toUpperCase() === 'EUR' ? '€' : currentUser.homeCurrency.toUpperCase() === 'USD' ? '$' : currentUser.homeCurrency.toUpperCase() === 'GBP' ? '£' : '₹'})`
-    : 'INR (₹)'
-  const [currency, setCurrency] = useState(defaultUserCurrency)
+  const [currency, setCurrency] = useState(defaultTripCurrency)
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('Food')
   const [merchant, setMerchant] = useState('')
@@ -90,7 +97,6 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   const [aiWarning, setAiWarning] = useState<string | null>(null)
 
   // Currency & Math calculations
-  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
   const currCode = currency.split(' ')[0]
   const numAmount = parseFloat(amount) || 0
   const convertedAmount = Math.round(convertCurrency(numAmount, currCode, userHomeCurr))
@@ -781,16 +787,16 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
         </div>
 
         {/* =========================================================================
-            SPLIT BILL & MEMBER MULTI-SELECTION SECTION
+            SPLIT BILL & MEMBER SELECTION SECTION
         ========================================================================= */}
-        <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3.5">
+        <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <span className="text-xs font-extrabold text-slate-900 uppercase tracking-wide block">
-                Split Bill With Members ({selectedMembers.length}/{tripMemberNames.length})
+                Select Members to Split With ({selectedMembers.length}/{tripMemberNames.length})
               </span>
               <p className="text-[11px] text-slate-500">
-                Choose who shares this expense. Debts track automatically in Group Settlement.
+                You are selected by default. Equal shares calculate automatically.
               </p>
             </div>
 
@@ -801,7 +807,7 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
                 onClick={handleSelectAllMembers}
                 className="px-2.5 py-1 text-[11px] font-bold bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg transition shadow-2xs"
               >
-                👥 All ({tripMemberNames.length})
+                👥 Select All ({tripMemberNames.length})
               </button>
               <button
                 type="button"
@@ -861,115 +867,18 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
             })}
           </div>
 
-          {/* Cost Allocation Mode Switcher (Equal vs Custom) */}
-          <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-600">Split Method:</span>
-            <div className="flex bg-slate-200 p-0.5 rounded-xl text-xs">
-              <button
-                type="button"
-                onClick={() => setSplitMode('equal')}
-                className={`px-3 py-1 font-bold rounded-lg transition ${
-                  splitMode === 'equal'
-                    ? 'bg-white text-teal-800 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                ⚖️ Equal Split
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSplitMode('custom')
-                  if (Object.keys(customBreakdown).length === 0) {
-                    handleDistributeEvenly()
-                  }
-                }}
-                className={`px-3 py-1 font-bold rounded-lg transition ${
-                  splitMode === 'custom'
-                    ? 'bg-white text-indigo-700 shadow-2xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                ✏️ Custom Split
-              </button>
-            </div>
-          </div>
-
-          {/* Equal Split Live Preview */}
-          {splitMode === 'equal' ? (
-            <div className="p-3 bg-white rounded-xl border border-teal-200 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-base">⚖️</span>
-                <span className="text-slate-700 font-medium">
-                  Divided equally across <strong>{selectedMembers.length} member{selectedMembers.length > 1 ? 's' : ''}</strong>
-                </span>
-              </div>
-              <span className="text-xs font-black text-teal-900 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
-                ₹{equalSharePerPerson} / person
+          {/* Equal Split Live Summary */}
+          <div className="p-3 bg-white rounded-xl border border-teal-200 flex items-center justify-between text-xs mt-2">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚖️</span>
+              <span className="text-slate-700 font-medium">
+                Equal Split across <strong>{selectedMembers.length} member{selectedMembers.length > 1 ? 's' : ''}</strong>
               </span>
             </div>
-          ) : (
-            /* Custom Split Inputs */
-            <div className="space-y-2 bg-white p-3 rounded-xl border border-indigo-200">
-              <div className="flex items-center justify-between text-xs pb-1.5 border-b border-slate-100">
-                <span className="font-bold text-indigo-950">Custom Member Shares (₹ INR)</span>
-                <button
-                  type="button"
-                  onClick={handleDistributeEvenly}
-                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline"
-                >
-                  Reset Evenly
-                </button>
-              </div>
-
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {selectedMembers.map((m) => {
-                  const val =
-                    customBreakdown[m] !== undefined
-                      ? customBreakdown[m]
-                      : (convertedAmount / selectedMembers.length).toFixed(2)
-
-                  return (
-                    <div
-                      key={m}
-                      className="flex items-center justify-between gap-3 p-2 bg-slate-50 rounded-xl border border-slate-200"
-                    >
-                      <span className="text-xs font-bold text-slate-800 truncate">{m}</span>
-                      <div className="flex items-center bg-white border border-slate-200 rounded-lg px-2 py-1 w-28 shadow-2xs">
-                        <span className="text-[11px] font-bold text-slate-400 mr-1">₹</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={val}
-                          onChange={(e) => handleSetCustomAmount(m, e.target.value)}
-                          className="w-full text-xs font-black text-slate-900 outline-none text-right"
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Checksum & Balance Status */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                <span className="text-slate-500 font-medium">
-                  Allocated: <strong>₹{totalAllocatedCustom.toFixed(2)}</strong> / ₹{convertedAmount.toFixed(2)}
-                </span>
-                <span
-                  className={`font-black text-xs px-2 py-0.5 rounded-md ${
-                    Math.abs(customRemaining) < 0.01
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-rose-100 text-rose-800'
-                  }`}
-                >
-                  {Math.abs(customRemaining) < 0.01
-                    ? '✓ Balanced'
-                    : `Remaining: ₹${customRemaining.toFixed(2)}`}
-                </span>
-              </div>
-            </div>
-          )}
+            <span className="text-xs font-black text-teal-900 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200">
+              {getCurrencySymbol(userHomeCurr)}{equalSharePerPerson} / person
+            </span>
+          </div>
         </div>
 
         {/* CATEGORY CAP BREACH PREVIEW WARNING */}
