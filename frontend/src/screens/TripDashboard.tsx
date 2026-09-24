@@ -463,15 +463,18 @@ export default function TripDashboard({
       >
         <div className="absolute top-5 left-5 flex items-center gap-2 flex-wrap">
           <span className="bg-white/90 backdrop-blur-sm text-teal-800 px-3 py-1.5 rounded-full text-xs font-bold shadow-xs">
-            ✈️ ACTIVE TRIP · {trip.currency}
+            ✈️ ACTIVE TRIP · {tripDestCurr}
           </span>
           {trip.isGroupTrip && (
             <span className="bg-teal-600/90 text-white px-3 py-1.5 rounded-full text-xs font-bold">
               👥 {trip.adults || partyMembers.length} Adults{trip.children ? ` · ${trip.children} Children` : ''}
             </span>
           )}
-          <span className="bg-emerald-500/90 text-white px-3 py-1.5 rounded-full text-xs font-bold">
-            💰 Group Fund: {currencySymbol}{budget.toLocaleString()}
+          <span className="bg-emerald-500/90 text-white px-3 py-1.5 rounded-full text-xs font-bold flex flex-col">
+            <span>💰 Group Fund: {groupBudgetDual.primary}</span>
+            {groupBudgetDual.secondary && (
+              <span className="text-[10px] font-medium opacity-90">≈ {groupBudgetDual.secondary}</span>
+            )}
           </span>
         </div>
 

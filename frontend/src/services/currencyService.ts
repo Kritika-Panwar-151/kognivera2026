@@ -202,15 +202,21 @@ export function formatUserDualCurrency(
  * Resolves the exact destination currency for any trip record,
  * checking trip.currency, destinationCountry, or destination string.
  */
-export function getTripDestinationCurrency(trip?: { currency?: string; destinationCountry?: string; destination?: string } | null): string {
+export function getTripDestinationCurrency(trip?: { currency?: string; destinationCountry?: string; destination?: string; name?: string } | null): string {
   if (!trip) return 'USD'
+  const searchStr = `${trip.destinationCountry || ''} ${trip.destination || ''} ${trip.name || ''}`.toLowerCase()
+  if (searchStr.includes('switzerland') || searchStr.includes('zurich') || searchStr.includes('geneva')) return 'CHF'
+  if (searchStr.includes('japan') || searchStr.includes('tokyo') || searchStr.includes('kyoto') || searchStr.includes('osaka')) return 'JPY'
+  if (searchStr.includes('france') || searchStr.includes('paris') || searchStr.includes('germany') || searchStr.includes('italy') || searchStr.includes('rome') || searchStr.includes('spain')) return 'EUR'
+  if (searchStr.includes('uk') || searchStr.includes('london') || searchStr.includes('england') || searchStr.includes('britain')) return 'GBP'
+  if (searchStr.includes('usa') || searchStr.includes('states') || searchStr.includes('york') || searchStr.includes('america')) return 'USD'
+  if (searchStr.includes('india') || searchStr.includes('delhi') || searchStr.includes('mumbai') || searchStr.includes('goa')) return 'INR'
+  if (searchStr.includes('singapore')) return 'SGD'
+  if (searchStr.includes('thailand') || searchStr.includes('bangkok')) return 'THB'
+  if (searchStr.includes('uae') || searchStr.includes('dubai')) return 'AED'
+  if (searchStr.includes('australia') || searchStr.includes('sydney')) return 'AUD'
+  if (searchStr.includes('canada') || searchStr.includes('toronto')) return 'CAD'
+
   if (trip.currency && trip.currency.trim()) return trip.currency.toUpperCase()
-  const dest = trip.destinationCountry || trip.destination || ''
-  if (dest.toLowerCase().includes('switzerland') || dest.toLowerCase().includes('zurich')) return 'CHF'
-  if (dest.toLowerCase().includes('japan') || dest.toLowerCase().includes('tokyo')) return 'JPY'
-  if (dest.toLowerCase().includes('france') || dest.toLowerCase().includes('paris') || dest.toLowerCase().includes('germany') || dest.toLowerCase().includes('italy')) return 'EUR'
-  if (dest.toLowerCase().includes('uk') || dest.toLowerCase().includes('london') || dest.toLowerCase().includes('england')) return 'GBP'
-  if (dest.toLowerCase().includes('usa') || dest.toLowerCase().includes('states') || dest.toLowerCase().includes('york')) return 'USD'
-  if (dest.toLowerCase().includes('india') || dest.toLowerCase().includes('delhi') || dest.toLowerCase().includes('mumbai')) return 'INR'
   return 'USD'
 }
