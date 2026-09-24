@@ -162,6 +162,8 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [isConverterOpen, setIsConverterOpen] = useState(false)
   const [, setLoadingData] = useState(true)
+  const [pendingInviteTrips, setPendingInviteTrips] = useState<Trip[]>([])
+  const [selectedInviteTrip, setSelectedInviteTrip] = useState<Trip | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
 
   // Sync active trip ID and user trips to localStorage
