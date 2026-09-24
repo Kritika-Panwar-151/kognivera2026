@@ -19,6 +19,7 @@ import {
   type CanonicalIntent,
   type CanonicalCategory,
 } from './multilingualDictionary'
+import { getCurrencySymbol } from './currencyService'
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ''
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null
