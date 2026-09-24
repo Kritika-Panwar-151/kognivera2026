@@ -300,6 +300,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
   const handleExecuteConfirmedSettle = () => {
     if (!confirmModalTarget) return
     const target = confirmModalTarget
+    setConfirmModalTarget(null)
     toggleSettle(target.id)
     setToastMsg(
       `✓ Successfully settled ${homeSymbol}${target.amount.toLocaleString()} with ${target.person}!`
