@@ -7,6 +7,8 @@ interface Props {
   navigate: NavigateFn
   onOpenConverter: () => void
   onSignOut?: () => void
+  pendingInviteCount?: number
+  onOpenInviteModal?: () => void
 }
 
 export default function TopBar({
@@ -16,6 +18,8 @@ export default function TopBar({
   navigate,
   onOpenConverter,
   onSignOut,
+  pendingInviteCount = 0,
+  onOpenInviteModal,
 }: Props) {
   // Hide TopBar completely on login screen for full immersion
   if (currentScreen === 'login') return null
@@ -49,8 +53,23 @@ export default function TopBar({
         </div>
       </div>
 
-      {/* Right Actions: FX Calculator & User Profile / Logout */}
+      {/* Right Actions: Pending Invites, FX Calculator & User Profile / Logout */}
       <div className="flex items-center gap-2">
+        {/* Pending Trip Invite Badge Button */}
+        {pendingInviteCount > 0 && onOpenInviteModal && (
+          <button
+            type="button"
+            onClick={onOpenInviteModal}
+            className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm animate-pulse"
+            title="You have a pending trip invitation! Tap to join"
+          >
+            <span className="text-sm">🎉</span>
+            <span className="text-[11px] font-extrabold whitespace-nowrap">
+              {pendingInviteCount} Invite{pendingInviteCount > 1 ? 's' : ''}
+            </span>
+          </button>
+        )}
+
         {/* Global Currency Converter Button */}
         <button
           onClick={onOpenConverter}

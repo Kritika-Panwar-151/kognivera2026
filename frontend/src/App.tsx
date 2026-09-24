@@ -437,6 +437,8 @@ export default function App() {
         navigate={navigate}
         onOpenConverter={() => setIsConverterOpen(true)}
         onSignOut={handleSignOut}
+        pendingInviteCount={pendingInviteTrip ? 1 : 0}
+        onOpenInviteModal={() => setShowInviteModal(true)}
       />
 
       {/* Pending Trip Invitation Banner */}
