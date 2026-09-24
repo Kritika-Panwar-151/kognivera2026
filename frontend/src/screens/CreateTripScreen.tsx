@@ -156,6 +156,22 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
         [hostUser.id]: hostPersonalBudget,
       },
       personalBudget: hostPersonalBudget,
+      memberDetails: finalMembers.map((m) => ({
+        userId: m.id,
+        role: m.id === hostUser.id ? 'owner' : 'editor',
+        status: m.id === hostUser.id ? 'active' : 'pending',
+        personalBudget: m.id === hostUser.id ? hostPersonalBudget : 0,
+        categoryCaps:
+          m.id === hostUser.id
+            ? {
+                accommodation: Math.round(hostPersonalBudget * 0.35),
+                food: Math.round(hostPersonalBudget * 0.25),
+                transport: Math.round(hostPersonalBudget * 0.2),
+                activities: Math.round(hostPersonalBudget * 0.1),
+                misc: Math.round(hostPersonalBudget * 0.1),
+              }
+            : {},
+      })),
       categoryCaps: {
         accommodation: Math.round(hostPersonalBudget * 0.35),
         food: Math.round(hostPersonalBudget * 0.25),
