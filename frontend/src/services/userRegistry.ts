@@ -140,6 +140,87 @@ export function registerUser(newUser: User): User[] {
   return updated
 }
 
+const CREDENTIALS_KEY = 'tripwallet_user_credentials'
+
+// Canonical seed passwords for default users
+const DEFAULT_PASSWORDS: Record<string, string> = {
+  'aisha.rossi@example.invalid': 'TripWallet@2026',
+  'ravi.sharma@example.invalid': 'TripWallet@2026',
+  'pooja.tanaka@example.invalid': 'TripWallet@2026',
+  'david.chen@example.invalid': 'TripWallet@2026',
+  'elena.rostova@example.invalid': 'TripWallet@2026',
+}
+
+export function getStoredCredentials(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(CREDENTIALS_KEY)
+    if (raw) {
+      return { ...DEFAULT_PASSWORDS, ...JSON.parse(raw) }
+    }
+  } catch (e) {
+    console.warn('Error reading credentials:', e)
+  }
+  return { ...DEFAULT_PASSWORDS }
+}
+
+export function saveUserCredentials(email: string, password: string): void {
+  try {
+    const creds = getStoredCredentials()
+    creds[email.trim().toLowerCase()] = password
+    localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(creds))
+  } catch (e) {
+    console.warn('Error saving credentials:', e)
+  }
+}
+
+export function userExists(emailOrUsername: string): boolean {
+  const q = emailOrUsername.trim().toLowerCase()
+  const users = getRegisteredUsers()
+  return users.some(
+    (u) =>
+      u.email.toLowerCase() === q ||
+      u.name.toLowerCase() === q ||
+      u.id.toLowerCase() === q
+  )
+}
+
+export function verifyUserCredentials(
+  emailOrUsername: string,
+  password: string
+): { success: boolean; user?: User; error?: string } {
+  const q = emailOrUsername.trim().toLowerCase()
+  const users = getRegisteredUsers()
+
+  const matchedUser = users.find(
+    (u) =>
+      u.email.toLowerCase() === q ||
+      u.name.toLowerCase() === q ||
+      u.id.toLowerCase() === q
+  )
+
+  if (!matchedUser) {
+    return {
+      success: false,
+      error: 'Account not found. Please click "Create Account" to register first.',
+    }
+  }
+
+  const creds = getStoredCredentials()
+  const storedPassword = creds[matchedUser.email.toLowerCase()]
+
+  if (storedPassword && storedPassword !== password) {
+    return {
+      success: false,
+      error: 'Incorrect password. Please enter the password you registered with.',
+    }
+  }
+
+  return {
+    success: true,
+    user: matchedUser,
+  }
+}
+
 export function searchUsers(query: string): User[] {
   const q = query.trim().toLowerCase()
   const users = getRegisteredUsers()
@@ -151,3 +232,4 @@ export function searchUsers(query: string): User[] {
       (u.homeCountry && u.homeCountry.toLowerCase().includes(q))
   )
 }
+

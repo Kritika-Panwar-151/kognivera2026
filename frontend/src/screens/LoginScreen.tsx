@@ -5,6 +5,9 @@ import {
   DEFAULT_USERS,
   getRegisteredUsers,
   registerUser,
+  saveUserCredentials,
+  verifyUserCredentials,
+  userExists,
 } from '../services/userRegistry'
 import {
   CANONICAL_COUNTRIES,
@@ -94,6 +97,13 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
       })
       return
     }
+    if (userExists(email.trim())) {
+      setMessage({
+        text: 'An account with this email already exists. Please switch to "Sign In" to log in.',
+        type: 'error',
+      })
+      return
+    }
     if (!pwdCriteria.hasLength) {
       setMessage({ text: 'Password must be at least 8 characters long', type: 'error' })
       return
@@ -126,6 +136,15 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
     try {
       if (isSignUp) {
         // ================= MULTI-STEP SIGN UP =================
+        if (userExists(email.trim())) {
+          setMessage({
+            text: 'An account with this email already exists. Please switch to "Sign In" to log in.',
+            type: 'error',
+          })
+          setLoading(false)
+          return
+        }
+
         let userId = `usr_${Date.now().toString(36)}`
 
         if (isSupabaseConfigured) {
@@ -144,7 +163,9 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
           if (error) {
             console.warn('Supabase auth notice:', error.message)
             setMessage({ text: error.message, type: 'error' })
-          } else if (data.user) {
+            setLoading(false)
+            return
+          } else if (data?.user) {
             userId = data.user.id
           }
 
@@ -205,17 +226,18 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
           locale,
         }
 
-        // Cache locally and persist session
+        // Persist profile and credentials
         registerUser(newUser)
+        saveUserCredentials(email.trim(), password)
         localStorage.setItem('tripwallet_auth_user', JSON.stringify(newUser))
         onSelectUser(newUser)
 
-        setMessage({ text: 'Account created in database! Opening your dashboard...', type: 'success' })
+        setMessage({ text: 'Account created successfully in database! Opening your dashboard...', type: 'success' })
         setTimeout(() => navigate('trip-dashboard'), 700)
       } else {
         // ================= SIGN IN =================
         if (!email.trim() || !password.trim()) {
-          setMessage({ text: 'Please enter your email and password', type: 'error' })
+          setMessage({ text: 'Please enter both your email address and password', type: 'error' })
           setLoading(false)
           return
         }
@@ -228,7 +250,9 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
 
           if (error) {
             console.warn('Supabase signin error:', error.message)
-            // If Supabase failed, check registered users fallback
+            setMessage({ text: error.message || 'Invalid email or password', type: 'error' })
+            setLoading(false)
+            return
           } else if (data?.user) {
             const registered = getRegisteredUsers()
             const matched = registered.find((u) => u.email.toLowerCase() === email.toLowerCase())
@@ -249,35 +273,21 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
           }
         }
 
-        // Match against local registered database
-        const registered = getRegisteredUsers()
-        const matched = registered.find(
-          (u) =>
-            u.email.toLowerCase() === email.toLowerCase() ||
-            u.name.toLowerCase() === email.toLowerCase()
-        )
-
-        if (matched) {
-          localStorage.setItem('tripwallet_auth_user', JSON.stringify(matched))
-          onSelectUser(matched)
-          setMessage({ text: `Welcome back, ${matched.name}!`, type: 'success' })
-          setTimeout(() => navigate('trip-dashboard'), 600)
-        } else {
-          // Create session user
-          const sessionUser: User = {
-            id: `usr_${Date.now().toString(36)}`,
-            name: email.split('@')[0],
-            email: email.trim(),
-            homeCurrency: autoCurrency,
-            avatar: '👤',
-            role: 'Trip Organizer',
-          }
-          registerUser(sessionUser)
-          localStorage.setItem('tripwallet_auth_user', JSON.stringify(sessionUser))
-          onSelectUser(sessionUser)
-          setMessage({ text: 'Signed in!', type: 'success' })
-          setTimeout(() => navigate('trip-dashboard'), 600)
+        // Validate strictly against registered database
+        const result = verifyUserCredentials(email, password)
+        if (!result.success || !result.user) {
+          setMessage({
+            text: result.error || 'Account not found. Please click "Create Account" first.',
+            type: 'error',
+          })
+          setLoading(false)
+          return
         }
+
+        localStorage.setItem('tripwallet_auth_user', JSON.stringify(result.user))
+        onSelectUser(result.user)
+        setMessage({ text: `Welcome back, ${result.user.name}!`, type: 'success' })
+        setTimeout(() => navigate('trip-dashboard'), 600)
       }
     } catch (err: any) {
       setMessage({ text: err.message || 'Authentication error', type: 'error' })
@@ -399,6 +409,12 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
               >
                 Don't have an account? Create one now →
               </button>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 text-center">
+              <p className="text-[11px] text-slate-400">
+                🔒 Only verified registered accounts are accepted. Create an account first, or use canonical demo profile <span className="font-semibold text-slate-600">aisha.rossi@example.invalid</span> (Password: <span className="font-semibold text-slate-600">TripWallet@2026</span>).
+              </p>
             </div>
           </form>
         ) : signUpStep === 1 ? (
