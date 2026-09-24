@@ -102,7 +102,7 @@ export default function ExpenseHistory({
     const origCurr = (exp.currency || userHomeCurr).toUpperCase()
     if (origCurr !== userHomeCurr) {
       const sym = getCurrencySymbol(origCurr)
-      return `Receipt: ${sym}${exp.amount.toLocaleString('en-IN')} ${origCurr}`
+      return `Receipt: ${sym}${exp.amount.toLocaleString()} ${origCurr}`
     }
     if (tripDestCurr.toUpperCase() !== userHomeCurr) {
       const dual = formatUserDualCurrency(exp.convertedAmount, userHomeCurr, userHomeCurr, tripDestCurr)
@@ -476,7 +476,7 @@ export default function ExpenseHistory({
                                 <div className="flex items-center gap-2">
                                   <div className="text-right shrink-0">
                                     <p className="font-bold text-slate-900 text-base">
-                                      {getCurrencySymbol(userHomeCurr)}{expUserAmount.toLocaleString('en-IN')} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
+                                      {getCurrencySymbol(userHomeCurr)}{expUserAmount.toLocaleString()} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
                                     </p>
                                     {secText && (
                                       <p className="text-[11px] font-bold text-indigo-700 font-mono">
@@ -592,7 +592,7 @@ export default function ExpenseHistory({
                                 <div className="flex items-center gap-2">
                                   <div className="text-right shrink-0">
                                     <p className="font-extrabold text-slate-900 text-base">
-                                      {getCurrencySymbol(userHomeCurr)}{expUserAmount.toLocaleString('en-IN')} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
+                                      {getCurrencySymbol(userHomeCurr)}{expUserAmount.toLocaleString()} <span className="text-xs font-semibold text-slate-500">{userHomeCurr}</span>
                                     </p>
                                     {secText && (
                                       <p className="text-xs font-bold text-teal-700 font-mono">
@@ -631,7 +631,7 @@ export default function ExpenseHistory({
                                     Split by {exp.splitBetween?.length || groupCount}
                                   </span>
                                   <span className="text-slate-600 font-semibold text-[11px]">
-                                    Each owes {getCurrencySymbol(userHomeCurr)}{expUserShare.toLocaleString('en-IN')} {userHomeCurr}
+                                    Each owes {getCurrencySymbol(userHomeCurr)}{expUserShare.toLocaleString()} {userHomeCurr}
                                   </span>
                                 </div>
                                 {tripDestCurr !== userHomeCurr && (
@@ -663,6 +663,8 @@ export default function ExpenseHistory({
             onEditExpense?.(updated)
             setEditingExpense(null)
           }}
+          currentUser={currentUser}
+          trip={trips.find((t) => isTripMatch(editingExpense.tripId, t.id)) || trips[0]}
         />
       )}
     </div>

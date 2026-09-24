@@ -278,7 +278,7 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
         text,
         availableMembers: tripMemberNames,
         currentUser: { id: currentUser?.id || 'usr_you', name: currentUserName },
-        defaultCurrency: trip?.currency || 'INR',
+        defaultCurrency: trip?.currency || userHomeCurr || 'EUR',
         tripBudget: trip?.budget || 60000,
       })
 
@@ -706,8 +706,8 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
           </div>
 
           {(() => {
-            const userHomeCurr = currentUser?.homeCurrency || 'INR'
-            const tripDestCurr = trip?.currency || 'JPY'
+            const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+            const tripDestCurr = getTripDestinationCurrency(trip)
             const dualFX = formatUserDualCurrency(numAmount, currCode, userHomeCurr, tripDestCurr)
             return (
               <div className="mt-2 p-3 bg-teal-50/90 border border-teal-200/80 rounded-2xl flex items-center justify-between text-xs">

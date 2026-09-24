@@ -1,31 +1,39 @@
 import { useState } from 'react'
-import type { Expense } from '../types'
-import { convertCurrency, getCurrencySymbol } from '../services/currencyService'
+import type { Expense, User, Trip } from '../types'
+import { convertCurrency, getCurrencySymbol, getTripDestinationCurrency } from '../services/currencyService'
 
 interface Props {
   expense: Expense
   isOpen: boolean
   onClose: () => void
   onSave: (updated: Expense) => void
+  currentUser?: User | null
+  trip?: Trip | null
 }
 
 const categories = ['Food', 'Transport', 'Accommodation', 'Activities', 'Shopping', 'Other']
-const currencies = ['INR', 'EUR', 'USD', 'GBP', 'CHF', 'JPY', 'SGD', 'AED', 'THB']
+const currencies = ['EUR', 'USD', 'INR', 'GBP', 'CHF', 'JPY', 'SGD', 'AED', 'THB']
 
-export default function EditExpenseModal({ expense, isOpen, onClose, onSave }: Props) {
+export default function EditExpenseModal({ expense, isOpen, onClose, onSave, currentUser, trip }: Props) {
   if (!isOpen) return null
+
+  const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
+  const tripDestCurr = getTripDestinationCurrency(trip)
+  const defaultCurr = expense.currency || tripDestCurr || userHomeCurr
 
   const [merchant, setMerchant] = useState(expense.merchant)
   const [amount, setAmount] = useState(String(expense.amount))
-  const [currency, setCurrency] = useState(expense.currency || 'INR')
+  const [currency, setCurrency] = useState(defaultCurr)
   const [category, setCategory] = useState(expense.category || 'Food')
   const [date, setDate] = useState(expense.date || new Date().toISOString().split('T')[0])
+  const [paidBy, setPaidBy] = useState(expense.paidBy || currentUser?.name || 'You')
   const [isShared, setIsShared] = useState<boolean>(
     Boolean(expense.isShared && expense.splitBetween && expense.splitBetween.length > 1)
   )
 
   const numAmount = parseFloat(amount) || 0
-  const convertedAmount = Math.round(convertCurrency(numAmount, currency, 'INR'))
+  const convertedAmount = Math.round(convertCurrency(numAmount, currency, userHomeCurr))
+  const rate = convertCurrency(1, currency, userHomeCurr).toFixed(2)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -121,10 +129,12 @@ export default function EditExpenseModal({ expense, isOpen, onClose, onSave }: P
             </div>
           </div>
 
-          {currency !== 'INR' && (
+          {currency !== userHomeCurr && (
             <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 flex items-center justify-between">
-              <span>Converted (1 {currency} = ₹{rate}):</span>
-              <strong className="font-extrabold text-amber-950">₹{convertedAmount.toLocaleString()} INR</strong>
+              <span>Converted (1 {currency} = {getCurrencySymbol(userHomeCurr)}{rate}):</span>
+              <strong className="font-extrabold text-amber-950">
+                {getCurrencySymbol(userHomeCurr)}{convertedAmount.toLocaleString()} {userHomeCurr}
+              </strong>
             </div>
           )}
 

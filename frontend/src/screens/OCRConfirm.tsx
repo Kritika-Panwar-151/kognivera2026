@@ -78,7 +78,7 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
   const tripDestCurr = getTripDestinationCurrency(trip)
   const numAmount = parseFloat(fields.amount || '0')
-  const converted = Math.round(convertCurrency(numAmount, fields.currency, tripDestCurr))
+  const converted = Math.round(convertCurrency(numAmount, fields.currency, userHomeCurr))
 
   const activeMembersCount = Math.max(selectedMembers.length, 1)
   const equalSharePerPerson = (converted / activeMembersCount).toFixed(2)
