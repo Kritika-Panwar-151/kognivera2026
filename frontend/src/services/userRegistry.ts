@@ -151,3 +151,77 @@ export function searchUsers(query: string): User[] {
       (u.homeCountry && u.homeCountry.toLowerCase().includes(q))
   )
 }
+
+// ================= 5 FAILED ATTEMPTS / 2-HOUR LOCKOUT =================
+const LOGIN_ATTEMPTS_KEY = 'tripwallet_login_attempts'
+const MAX_LOGIN_ATTEMPTS = 5
+const LOCKOUT_DURATION_MS = 2 * 60 * 60 * 1000 // 2 hours in ms
+
+export interface LockoutStatus {
+  isLocked: boolean
+  remainingMinutes?: number
+  attemptsLeft?: number
+}
+
+export function checkLoginLockout(email: string): LockoutStatus {
+  try {
+    const raw = localStorage.getItem(LOGIN_ATTEMPTS_KEY)
+    if (!raw) return { isLocked: false, attemptsLeft: MAX_LOGIN_ATTEMPTS }
+    const records: Record<string, { count: number; lockedUntil?: number }> = JSON.parse(raw)
+    const record = records[email.trim().toLowerCase()]
+    if (!record) return { isLocked: false, attemptsLeft: MAX_LOGIN_ATTEMPTS }
+
+    if (record.lockedUntil && Date.now() < record.lockedUntil) {
+      const remainingMinutes = Math.ceil((record.lockedUntil - Date.now()) / (60 * 1000))
+      return { isLocked: true, remainingMinutes }
+    }
+
+    // Lockout expired, reset record
+    if (record.lockedUntil && Date.now() >= record.lockedUntil) {
+      delete records[email.trim().toLowerCase()]
+      localStorage.setItem(LOGIN_ATTEMPTS_KEY, JSON.stringify(records))
+      return { isLocked: false, attemptsLeft: MAX_LOGIN_ATTEMPTS }
+    }
+
+    return {
+      isLocked: false,
+      attemptsLeft: Math.max(0, MAX_LOGIN_ATTEMPTS - (record.count || 0)),
+    }
+  } catch {
+    return { isLocked: false, attemptsLeft: MAX_LOGIN_ATTEMPTS }
+  }
+}
+
+export function recordFailedLogin(email: string): { isLocked: boolean; remainingMinutes?: number; attemptsLeft: number } {
+  try {
+    const key = email.trim().toLowerCase()
+    const raw = localStorage.getItem(LOGIN_ATTEMPTS_KEY)
+    const records: Record<string, { count: number; lockedUntil?: number }> = raw ? JSON.parse(raw) : {}
+    const existing = records[key] || { count: 0 }
+    existing.count = (existing.count || 0) + 1
+
+    if (existing.count >= MAX_LOGIN_ATTEMPTS) {
+      existing.lockedUntil = Date.now() + LOCKOUT_DURATION_MS
+      records[key] = existing
+      localStorage.setItem(LOGIN_ATTEMPTS_KEY, JSON.stringify(records))
+      return { isLocked: true, remainingMinutes: 120, attemptsLeft: 0 }
+    }
+
+    records[key] = existing
+    localStorage.setItem(LOGIN_ATTEMPTS_KEY, JSON.stringify(records))
+    return { isLocked: false, attemptsLeft: MAX_LOGIN_ATTEMPTS - existing.count }
+  } catch {
+    return { isLocked: false, attemptsLeft: 4 }
+  }
+}
+
+export function clearFailedLogins(email: string): void {
+  try {
+    const key = email.trim().toLowerCase()
+    const raw = localStorage.getItem(LOGIN_ATTEMPTS_KEY)
+    if (!raw) return
+    const records = JSON.parse(raw)
+    delete records[key]
+    localStorage.setItem(LOGIN_ATTEMPTS_KEY, JSON.stringify(records))
+  } catch {}
+}
