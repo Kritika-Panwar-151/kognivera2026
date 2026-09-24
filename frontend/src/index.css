@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+:root {
+  font-family: 'Poppins', sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f0fdfa;
+  color: #164e63;
+}
+
+/* Change purple UI elements to tropical teal */
+[class*="purple"] {
+  color: #0f766e !important;
+}
+
+[class*="bg-purple"] {
+  background-color: #0f766e !important;
+}
+
+[class*="border-purple"] {
+  border-color: #99f6e4 !important;
+}
+
+/* Keep buttons attractive */
+button {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Smooth travel-app feel */
+* {
+  box-sizing: border-box;
+}
+
+img {
+  max-width: 100%;
+  object-fit: cover;
+}
