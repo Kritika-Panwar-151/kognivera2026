@@ -350,7 +350,8 @@ export default function TripDashboard({
       ...(trip.memberBudgets || {}),
       [activeUser.id]: newAmount,
     }
-    const newTotalTripBudget = Object.values(updatedMemberBudgets).reduce((sum, val) => sum + val, 0)
+    const sumMemberBudgets = Object.values(updatedMemberBudgets).reduce((sum, val) => sum + val, 0)
+    const newTotalTripBudget = Math.max(trip.budget || 0, sumMemberBudgets)
 
     const updatedTrip: Trip = {
       ...trip,
@@ -388,7 +389,8 @@ export default function TripDashboard({
       ...(trip.memberBudgets || {}),
       [userId]: 0,
     }
-    const newTotalBudget = Object.values(updatedMemberBudgets).reduce((a, b) => a + b, 0)
+    const sumMemberBudgets = Object.values(updatedMemberBudgets).reduce((a, b) => a + b, 0)
+    const newTotalBudget = Math.max(trip.budget || 0, sumMemberBudgets)
     const updatedMemberDetails = [
       ...(trip.memberDetails || []),
       { userId, role: 'editor' as const, status: 'pending' as const, personalBudget: 0, invitedByUserId: activeUser.id },
@@ -419,7 +421,8 @@ export default function TripDashboard({
     const updatedMemberBudgets = { ...(trip.memberBudgets || {}) }
     delete updatedMemberBudgets[userId]
 
-    const newTotalBudget = Object.values(updatedMemberBudgets).reduce((a, b) => a + b, 0)
+    const sumMemberBudgets = Object.values(updatedMemberBudgets).reduce((a, b) => a + b, 0)
+    const newTotalBudget = Math.max(trip.budget || 0, sumMemberBudgets)
     const updatedMemberDetails = (trip.memberDetails || []).filter((d) => d.userId !== userId)
 
     const updatedTrip: Trip = {

@@ -150,7 +150,7 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
       startDate,
       endDate,
       currency: autoCurrency,
-      budget: hostPersonalBudget,
+      budget: totalGroupBudget || hostPersonalBudget,
       spent: 0,
       ownerId: hostUser.id,
       adults: parseInt(adults) || 1,

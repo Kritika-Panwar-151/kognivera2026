@@ -226,7 +226,11 @@ export default function App() {
         const pendingLocalTrips = prevTrips.filter(
           (pt) => pt.id.startsWith('trp_') && !userTrips.some((ut) => ut.id === pt.id)
         )
-        return deduplicateTrips([...pendingLocalTrips, ...userTrips])
+        const merged = deduplicateTrips([...pendingLocalTrips, ...userTrips])
+        try {
+          localStorage.setItem('tripwallet_user_trips', JSON.stringify(merged))
+        } catch (e) {}
+        return merged
       })
 
       setCurrentTripState((prev) => {
