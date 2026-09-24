@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { NavigateFn, Trip, User } from '../types'
+import type { NavigateFn, Trip, User, Expense } from '../types'
 import EditTripModal from '../components/EditTripModal'
 import { formatUserDualCurrency, getTripDestinationCurrency } from '../services/currencyService'
 import { resolveCityName } from '../services/geminiService'
@@ -10,6 +10,7 @@ interface Props {
   currentUser?: User | null
   onSelectTrip: (trip: Trip) => void
   onUpdateTrip?: (updatedTrip: Trip) => void
+  expenses?: Expense[]
 }
 
 const tripImages: Record<string, string> = {
@@ -19,7 +20,7 @@ const tripImages: Record<string, string> = {
     'https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=1200&q=80',
 }
 
-export default function HomeScreen({ navigate, trips, currentUser, onSelectTrip, onUpdateTrip }: Props) {
+export default function HomeScreen({ navigate, trips, currentUser, onSelectTrip, onUpdateTrip, expenses = [] }: Props) {
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null)
   const [isOtherTripsExpanded, setIsOtherTripsExpanded] = useState(true)
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
@@ -85,8 +86,12 @@ export default function HomeScreen({ navigate, trips, currentUser, onSelectTrip,
             const tripDestCurr = getTripDestinationCurrency(activeTrip)
 
             // Group level calculations
+            const activeTripExpenses = expenses.filter(
+              (e) => e.tripId === activeTrip.id || (!e.tripId && (activeTrip.id === 'europe' || activeTrip.id === 'trp_europe'))
+            )
+            const activeTripExpensesSum = activeTripExpenses.reduce((s, e) => s + (e.convertedAmount || e.amount || 0), 0)
             const groupBudget = activeTrip.budget || 60000
-            const groupSpent = activeTrip.spent || 0
+            const groupSpent = activeTripExpenses.length > 0 ? activeTripExpensesSum : (activeTrip.spent || 0)
             const groupRemaining = Math.max(0, groupBudget - groupSpent)
             const groupPct = Math.min(100, Math.round((groupSpent / (groupBudget || 1)) * 100))
 

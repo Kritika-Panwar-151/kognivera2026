@@ -735,6 +735,7 @@ export default function App() {
             navigate={navigate}
             trips={trips}
             currentUser={currentUser}
+            expenses={expenses}
             onSelectTrip={(trip) => {
               setCurrentTrip(trip)
               navigate('trip-dashboard')

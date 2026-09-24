@@ -3,12 +3,16 @@ import { isUserMatch } from '../../services/userRegistry'
 
 export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Expense[]) {
   // Filter expenses strictly belonging to this trip
-  const tripExpenses = trip?.id ? (expenses || []).filter((e) => e.tripId === trip.id) : []
-  const tripExpenseSum = tripExpenses.reduce((sum, e) => sum + (e.convertedAmount || 0), 0)
+  const tripExpenses = trip?.id
+    ? (expenses || []).filter(
+        (e) => e.tripId === trip.id || (!e.tripId && (trip.id === 'europe' || trip.id === 'trp_europe'))
+      )
+    : []
+  const tripExpenseSum = tripExpenses.reduce((sum, e) => sum + (e.convertedAmount || e.amount || 0), 0)
 
   // Group Budget Metrics
   const budget = trip?.budget || 0
-  const spent = trip?.spent && trip?.spent > 0 ? trip.spent : tripExpenseSum
+  const spent = tripExpenses.length > 0 ? tripExpenseSum : (trip?.spent || 0)
   const remaining = Math.max(0, budget - spent)
   const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0
 
