@@ -55,7 +55,8 @@ export default function App() {
   const [expenses, setExpenses] = useState<Expense[]>([])
   const [isConverterOpen, setIsConverterOpen] = useState(false)
   const [, setLoadingData] = useState(true)
-  const [pendingInviteTrip, setPendingInviteTrip] = useState<Trip | null>(null)
+  const [pendingInviteTrips, setPendingInviteTrips] = useState<Trip[]>([])
+  const [selectedInviteTrip, setSelectedInviteTrip] = useState<Trip | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
 
   // Helper to filter trips strictly belonging to the logged-in user
@@ -116,10 +117,10 @@ export default function App() {
           try {
             const pendingList = await fetchPendingTripInvites(currentUser.id)
             if (pendingList && pendingList.length > 0) {
-              const pendingRecord = pendingList[0]
-              const pTrip = pendingRecord.trips
-              if (pTrip) {
-                setPendingInviteTrip({
+              const list: Trip[] = pendingList
+                .map((rec: any) => rec.trips)
+                .filter(Boolean)
+                .map((pTrip: any) => ({
                   id: pTrip.trip_id,
                   name: pTrip.title,
                   destination: pTrip.destination_city_id || 'Destination',
@@ -129,8 +130,10 @@ export default function App() {
                   budget: Number(pTrip.budget || 0),
                   spent: 0,
                   partySize: pTrip.party_size || 1,
-                })
-              }
+                }))
+              setPendingInviteTrips(list)
+            } else {
+              setPendingInviteTrips([])
             }
           } catch (e) {
             console.warn('Pending invites check error:', e)
@@ -167,9 +170,10 @@ export default function App() {
       try {
         const pendingList = await fetchPendingTripInvites(currentUser.id)
         if (pendingList && pendingList.length > 0) {
-          const pTrip = pendingList[0].trips
-          if (pTrip) {
-            setPendingInviteTrip({
+          const list: Trip[] = pendingList
+            .map((rec: any) => rec.trips)
+            .filter(Boolean)
+            .map((pTrip: any) => ({
               id: pTrip.trip_id,
               name: pTrip.title,
               destination: pTrip.destination_city_id || 'Destination',
@@ -179,10 +183,10 @@ export default function App() {
               budget: Number(pTrip.budget || 0),
               spent: 0,
               partySize: pTrip.party_size || 1,
-            })
-          }
+            }))
+          setPendingInviteTrips(list)
         } else {
-          setPendingInviteTrip(null)
+          setPendingInviteTrips([])
         }
       } catch (e) {
         console.warn('Realtime pending invites check error:', e)
@@ -326,13 +330,37 @@ export default function App() {
     }
 
     const freshTrips = await fetchTripsFromSupabase()
-    setTrips(freshTrips)
+    updateTripsSafely(freshTrips, currentUser)
     const joined = freshTrips.find((t) => t.id === tripId)
     if (joined) {
       setCurrentTrip(joined)
     }
-    setPendingInviteTrip(null)
-    setShowInviteModal(false)
+
+    setPendingInviteTrips((prev) => prev.filter((t) => t.id !== tripId))
+    if (selectedInviteTrip?.id === tripId) {
+      setSelectedInviteTrip(null)
+      setShowInviteModal(false)
+    }
+  }
+
+  const handleDeclineInvite = async (tripId: string) => {
+    if (!currentUser) return
+    setPendingInviteTrips((prev) => prev.filter((t) => t.id !== tripId))
+    if (selectedInviteTrip?.id === tripId) {
+      setSelectedInviteTrip(null)
+      setShowInviteModal(false)
+    }
+    try {
+      if (isSupabaseConfigured) {
+        await supabase
+          .from('trip_members')
+          .update({ status: 'declined' })
+          .eq('trip_id', tripId)
+          .eq('user_id', currentUser.id)
+      }
+    } catch (e) {
+      console.warn('Decline invite error:', e)
+    }
   }
 
   const navigate = (s: Screen) => {
@@ -651,36 +679,50 @@ export default function App() {
         navigate={navigate}
         onOpenConverter={() => setIsConverterOpen(true)}
         onSignOut={handleSignOut}
-        pendingInviteCount={pendingInviteTrip ? 1 : 0}
-        onOpenInviteModal={() => setShowInviteModal(true)}
+        pendingInviteCount={pendingInviteTrips.length}
+        pendingInviteTrips={pendingInviteTrips}
+        onSelectInviteTrip={(trip) => {
+          setSelectedInviteTrip(trip)
+          setShowInviteModal(true)
+        }}
+        onDeclineInviteTrip={handleDeclineInvite}
+        onOpenInviteModal={() => {
+          if (pendingInviteTrips.length > 0) {
+            setSelectedInviteTrip(pendingInviteTrips[0])
+            setShowInviteModal(true)
+          }
+        }}
       />
 
       {/* Pending Trip Invitation Banner */}
-      {pendingInviteTrip && screen !== 'login' && (
+      {pendingInviteTrips.length > 0 && screen !== 'login' && (
         <div className="max-w-4xl mx-auto px-4 pt-3 w-full">
           <div className="bg-linear-to-r from-teal-600 to-emerald-600 text-white p-3.5 rounded-2xl shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-teal-400/40 animate-in fade-in slide-in-from-top-3 duration-300">
             <div className="flex items-center gap-2.5">
               <span className="text-2xl">📬</span>
               <div>
                 <p className="text-xs font-bold leading-tight">
-                  You are invited to join <span className="underline decoration-teal-200">{pendingInviteTrip.name}</span>!
+                  You have <span className="underline decoration-teal-200">{pendingInviteTrips.length} pending trip invitation{pendingInviteTrips.length > 1 ? 's' : ''}</span>!
                 </p>
                 <p className="text-[11px] text-teal-100">
-                  Set your personal budget & category preferences to join the group pot.
+                  {pendingInviteTrips[0].name} ({pendingInviteTrips[0].destination}) & more. Set budget & join your friends!
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2 self-end sm:self-auto">
               <button
                 type="button"
-                onClick={() => setPendingInviteTrip(null)}
+                onClick={() => handleDeclineInvite(pendingInviteTrips[0].id)}
                 className="px-2.5 py-1 text-[11px] text-teal-100 hover:text-white transition"
               >
                 Dismiss
               </button>
               <button
                 type="button"
-                onClick={() => setShowInviteModal(true)}
+                onClick={() => {
+                  setSelectedInviteTrip(pendingInviteTrips[0])
+                  setShowInviteModal(true)
+                }}
                 className="px-3.5 py-1.5 bg-white text-teal-800 text-xs font-black rounded-xl shadow-xs hover:bg-teal-50 active:scale-95 transition whitespace-nowrap"
               >
                 Set Budget & Join
@@ -708,12 +750,15 @@ export default function App() {
       />
 
       {/* Trip Invite Modal */}
-      {pendingInviteTrip && (
+      {selectedInviteTrip && (
         <TripInviteModal
-          trip={pendingInviteTrip}
+          trip={selectedInviteTrip}
           currentUser={currentUser}
           isOpen={showInviteModal}
-          onClose={() => setShowInviteModal(false)}
+          onClose={() => {
+            setShowInviteModal(false)
+            setSelectedInviteTrip(null)
+          }}
           onAccept={handleAcceptInvite}
         />
       )}

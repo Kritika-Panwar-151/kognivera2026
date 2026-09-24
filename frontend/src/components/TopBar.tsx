@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { NavigateFn, User, Trip, Screen } from '../types'
 
 interface Props {
@@ -8,6 +9,9 @@ interface Props {
   onOpenConverter: () => void
   onSignOut?: () => void
   pendingInviteCount?: number
+  pendingInviteTrips?: Trip[]
+  onSelectInviteTrip?: (trip: Trip) => void
+  onDeclineInviteTrip?: (tripId: string) => void
   onOpenInviteModal?: () => void
 }
 
@@ -19,8 +23,13 @@ export default function TopBar({
   onOpenConverter,
   onSignOut,
   pendingInviteCount = 0,
+  pendingInviteTrips = [],
+  onSelectInviteTrip,
+  onDeclineInviteTrip,
   onOpenInviteModal,
 }: Props) {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+
   // Hide TopBar completely on login screen for full immersion
   if (currentScreen === 'login') return null
 
@@ -54,20 +63,87 @@ export default function TopBar({
       </div>
 
       {/* Right Actions: Pending Invites, FX Calculator & User Profile / Logout */}
-      <div className="flex items-center gap-2">
-        {/* Pending Trip Invite Badge Button */}
-        {pendingInviteCount > 0 && onOpenInviteModal && (
-          <button
-            type="button"
-            onClick={onOpenInviteModal}
-            className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm animate-pulse"
-            title="You have a pending trip invitation! Tap to join"
-          >
-            <span className="text-sm">🎉</span>
-            <span className="text-[11px] font-extrabold whitespace-nowrap">
-              {pendingInviteCount} Invite{pendingInviteCount > 1 ? 's' : ''}
-            </span>
-          </button>
+      <div className="flex items-center gap-2 relative">
+        {/* Pending Trip Invite Badge Button & Interactive Dropdown */}
+        {pendingInviteCount > 0 && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsDropdownOpen((prev) => !prev)}
+              className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-sm animate-pulse cursor-pointer"
+              title="You have pending trip invitations! Tap to view requests"
+            >
+              <span className="text-sm">🎉</span>
+              <span className="text-[11px] font-extrabold whitespace-nowrap">
+                {pendingInviteCount} Invite{pendingInviteCount > 1 ? 's' : ''}
+              </span>
+              <span className="text-[10px]">▼</span>
+            </button>
+
+            {/* Dropdown Menu listing all pending trip requests */}
+            {isDropdownOpen && (
+              <div className="absolute right-0 top-11 w-80 bg-white border border-amber-200 rounded-2xl shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+                    <span>📬 Pending Requests</span>
+                    <span className="bg-amber-100 text-amber-900 px-2 py-0.2 rounded-full text-[10px]">
+                      {pendingInviteTrips.length}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDropdownOpen(false)}
+                    className="text-xs text-slate-400 hover:text-slate-700 font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-64 overflow-y-auto">
+                  {pendingInviteTrips.length === 0 ? (
+                    <p className="text-xs text-slate-400 text-center py-4">No pending invitations.</p>
+                  ) : (
+                    pendingInviteTrips.map((pTrip) => (
+                      <div
+                        key={pTrip.id}
+                        className="p-2.5 bg-slate-50 hover:bg-teal-50/50 border border-slate-200 rounded-xl space-y-2 transition"
+                      >
+                        <div>
+                          <p className="text-xs font-black text-slate-900 leading-tight">{pTrip.name}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            📍 {pTrip.destination} · {pTrip.startDate}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsDropdownOpen(false)
+                              if (onDeclineInviteTrip) onDeclineInviteTrip(pTrip.id)
+                            }}
+                            className="flex-1 py-1 px-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-bold rounded-lg transition text-center"
+                          >
+                            Decline
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsDropdownOpen(false)
+                              if (onSelectInviteTrip) onSelectInviteTrip(pTrip)
+                            }}
+                            className="flex-1 py-1 px-2 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-black rounded-lg transition text-center shadow-2xs"
+                          >
+                            Set Budget & Join
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Dedicated AI Guardian Copilot Button */}
