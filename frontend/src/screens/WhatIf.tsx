@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react'
+import type { NavigateFn, Trip, User, Expense } from '../types'
 import { formatUserDualCurrency, getTripDestinationCurrency, convertCurrency, getCurrencySymbol } from '../services/currencyService'
 import { useBudget } from '../features/overall-budget/useBudget'
 

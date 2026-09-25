@@ -84,6 +84,8 @@ export interface Expense {
   splitType?: 'equal' | 'custom'
   splitBreakdown?: Record<string, number>
   notes?: string
+  isSettled?: boolean
+  homeAmount?: number
 }
 
 export interface SettlementDebt {

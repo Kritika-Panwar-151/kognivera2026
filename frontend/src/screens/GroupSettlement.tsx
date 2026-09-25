@@ -591,7 +591,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       {/* ONE-TIME SETTLEMENT CONFIRMATION MODAL */}
       <SettleConfirmationModal
         isOpen={Boolean(confirmModalTarget)}
-        onClose={() => setSettleConfirmTarget(null)}
+        onClose={() => setConfirmModalTarget(null)}
         onConfirm={handleExecuteConfirmedSettle}
         item={confirmModalTarget}
         homeSymbol={homeSymbol}

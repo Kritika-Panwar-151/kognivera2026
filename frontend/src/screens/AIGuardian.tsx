@@ -119,7 +119,7 @@ export default function AIGuardian({ navigate, trip, currentUser, onAddExpense }
       date: new Date().toISOString().split('T')[0],
       paidBy: action.paidBy,
       isShared: action.isShared,
-      personalSplitMembers: action.splitMembers,
+      splitBetween: action.splitMembers,
       source: 'ai_guardian',
     }
 

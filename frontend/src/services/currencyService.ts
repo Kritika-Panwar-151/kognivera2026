@@ -199,6 +199,8 @@ export function formatUserDualCurrency(
     secondary: secondaryText,
     primaryAmount,
     secondaryAmount,
+    primarySymbol,
+    secondarySymbol,
   }
 }
 
