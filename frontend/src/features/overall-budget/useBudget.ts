@@ -1,6 +1,7 @@
 import type { Trip, User, Expense } from '../common/types'
 import { isUserMatch, getRegisteredUsers } from '../../services/userRegistry'
 import { convertCurrency, getTripDestinationCurrency, isTripMatch } from '../../services/currencyService'
+import { calculateHareMemberBreakdown } from '../../features/group-settlement/largestRemainder'
 
 export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Expense[]) {
   const destCurr = getTripDestinationCurrency(trip)
@@ -95,38 +96,44 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
     trip?.personalBudget ??
     Math.round(budget / Math.max(trip?.members?.length || 1, 1))
 
-  // Calculate personal spend for currentUser using Upfront Cash Flow & Settlement Reimbursement
+  // Calculate personal spend for currentUser using exact share deductions across shared & personal expenses
   let personalSpent = 0
 
   if (tripExpenses.length > 0) {
     tripExpenses.forEach((e) => {
+      const eAmountHome = convertCurrency(e.convertedAmount || e.amount, e.currency || userHomeCurr, userHomeCurr)
       const isPaidByMe = isUserMatch(e.paidBy, currentUser)
-      const isSplitWithMe =
-        e.splitBetween && e.splitBetween.some((m) => isUserMatch(m, currentUser))
-      const eAmountDest = convertCurrency(e.amount, e.currency || userHomeCurr, destCurr)
+      const splitMembers = e.splitBetween && e.splitBetween.length > 0 ? e.splitBetween : (trip?.members || ['usr_you'])
+      const isSplitWithMe = splitMembers.some((m) => isUserMatch(m, currentUser))
 
-      if (isPaidByMe) {
-        // Payer paid the full amount upfront out of pocket -> deduct full amount initially
-        const fullAmountHome = convertCurrency(eAmountDest, destCurr, userHomeCurr)
-        personalSpent += fullAmountHome
-
-        // If shared and settled by co-travelers, subtract non-payer settled shares (reimbursement)
-        if (e.isShared && e.isSettled && e.splitBetween && e.splitBetween.length > 1) {
-          const nonPayerCount = e.splitBetween.length - 1
-          const reimbursedDest = (eAmountDest / e.splitBetween.length) * nonPayerCount
-          const reimbursedHome = convertCurrency(reimbursedDest, destCurr, userHomeCurr)
-          personalSpent -= reimbursedHome
+      if (e.isShared && splitMembers.length > 1) {
+        if (isSplitWithMe) {
+          if (e.splitBreakdown) {
+            const keys = Object.keys(e.splitBreakdown)
+            const matchedKey = keys.find((k) => isUserMatch(k, currentUser))
+            if (matchedKey && e.splitBreakdown[matchedKey] !== undefined) {
+              personalSpent += Math.round(e.splitBreakdown[matchedKey])
+            } else {
+              personalSpent += Math.round(eAmountHome / Math.max(splitMembers.length, 1))
+            }
+          } else {
+            const hareMap = calculateHareMemberBreakdown(eAmountHome, splitMembers)
+            const matchedKey = Object.keys(hareMap).find((k) => isUserMatch(k, currentUser))
+            if (matchedKey && hareMap[matchedKey] !== undefined) {
+              personalSpent += Math.round(hareMap[matchedKey])
+            } else {
+              personalSpent += Math.round(eAmountHome / Math.max(splitMembers.length, 1))
+            }
+          }
         }
-      } else if (e.isShared && isSplitWithMe && e.isSettled) {
-        // Co-traveler only has their share deducted AFTER settling
-        const shareCount = e.splitBetween ? e.splitBetween.length : (trip?.members?.length || 1)
-        const shareDest = eAmountDest / shareCount
-        const shareHome = convertCurrency(shareDest, destCurr, userHomeCurr)
-        personalSpent += shareHome
+      } else {
+        if (isPaidByMe) {
+          personalSpent += Math.round(eAmountHome)
+        }
       }
     })
   } else {
-    personalSpent = spent > 0 ? Math.round(spent / Math.max(trip?.members?.length || 1, 1)) : 0
+    personalSpent = 0
   }
 
   const personalRemaining = Math.max(0, personalBudget - personalSpent)

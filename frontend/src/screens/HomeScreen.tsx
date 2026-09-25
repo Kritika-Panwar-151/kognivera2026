@@ -3,6 +3,7 @@ import type { NavigateFn, Trip, User, Expense } from '../types'
 import EditTripModal from '../components/EditTripModal'
 import { formatUserDualCurrency, getTripDestinationCurrency, isTripMatch } from '../services/currencyService'
 import { resolveCityName } from '../services/geminiService'
+import { useBudget } from '../features/overall-budget/useBudget'
 
 interface Props {
   navigate: NavigateFn
@@ -85,22 +86,17 @@ export default function HomeScreen({ navigate, trips, currentUser, onSelectTrip,
             const resolvedCity = resolveCityName(activeTrip.destination, activeTrip.name)
             const tripDestCurr = getTripDestinationCurrency(activeTrip)
 
-            // Group level calculations
-            const activeTripExpenses = expenses.filter(
-              (e) => isTripMatch(e.tripId, activeTrip.id)
-            )
-            const activeTripExpensesSum = activeTripExpenses.reduce((s, e) => s + (e.convertedAmount || e.amount || 0), 0)
-            const groupBudget = activeTrip.budget || 60000
-            const groupSpent = activeTripExpenses.length > 0 ? activeTripExpensesSum : (activeTrip.spent || 0)
-            const groupRemaining = Math.max(0, groupBudget - groupSpent)
-            const groupPct = Math.min(100, Math.round((groupSpent / (groupBudget || 1)) * 100))
-
-            // Personal level calculations
-            const memberCount = Math.max(activeTrip.partySize || activeTrip.members?.length || 1, 1)
-            const personalBudget = activeTrip.personalBudget || Math.round(groupBudget / memberCount)
-            const personalSpent = Math.round(groupSpent / memberCount)
-            const personalRemaining = Math.max(0, personalBudget - personalSpent)
-            const personalPct = Math.min(100, Math.round((personalSpent / (personalBudget || 1)) * 100))
+            // Group & Personal budget metrics calculated via useBudget hook
+            const {
+              budget: groupBudget,
+              spent: groupSpent,
+              remaining: groupRemaining,
+              pct: groupPct,
+              personalBudget,
+              personalSpent,
+              personalRemaining,
+              personalPct,
+            } = useBudget(activeTrip, currentUser || undefined, expenses)
 
             const groupBudgetDual = formatUserDualCurrency(groupBudget, userHomeCurr, userHomeCurr, tripDestCurr)
             const groupRemainingDual = formatUserDualCurrency(groupRemaining, userHomeCurr, userHomeCurr, tripDestCurr)
