@@ -48,8 +48,12 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
     'CHF (CHF)',
     'JPY (¥)',
     'SGD (S$)',
+    'MYR (RM)',
     'AED (د.إ)',
     'THB (฿)',
+    'AUD (A$)',
+    'CAD (CA$)',
+    'CNY (¥)',
   ]))
 
   const tripMemberNames: string[] = (trip?.members || (currentUser ? [currentUser.id] : [])).map(
@@ -143,12 +147,12 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
       // Auto-fill form fields
       setMerchant(res.merchant || 'Scanned Merchant')
       setAmount(String(res.amount || '0'))
-      if (res.currency.includes('EUR')) setCurrency('EUR (€)')
-      else if (res.currency.includes('USD')) setCurrency('USD ($)')
-      else if (res.currency.includes('GBP')) setCurrency('GBP (£)')
-      else if (res.currency.includes('JPY')) setCurrency('JPY (¥)')
-      else if (res.currency.includes('SGD')) setCurrency('SGD (S$)')
-      else setCurrency('INR (₹)')
+      const matchedCurr = currencies.find((c) => c.startsWith(res.currency.trim().toUpperCase()))
+      if (matchedCurr) {
+        setCurrency(matchedCurr)
+      } else {
+        setCurrency(`${res.currency.trim().toUpperCase()} (${getCurrencySymbol(res.currency).trim()})`)
+      }
 
       if (res.date) setDate(res.date)
       if (res.category && categories.includes(res.category)) {

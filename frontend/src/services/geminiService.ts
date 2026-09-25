@@ -84,18 +84,32 @@ export async function parseReceiptWithGeminiVision({
     try {
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
       const prompt = `You are an expert AI Receipt OCR specialist for TripWallet.
-Analyze this receipt image and extract structured financial data.
+Analyze this receipt image and extract structured financial data accurately.
+
+RULES FOR TOTAL AMOUNT & CURRENCY:
+1. Extract the actual final payable total sum (e.g. "Total Amt Rounded", "Total Incl GST", "Grand Total"). Do NOT use line item counts, tax percentages, or payment/tender lines like "Payment" or "Change Due".
+2. Recognize currency symbols and codes accurately:
+   - "RM" or "RINGGIT" -> "MYR"
+   - "$" -> "USD" (or "SGD", "AUD", "CAD" if country is specified)
+   - "€" -> "EUR"
+   - "£" -> "GBP"
+   - "₹" or "RS" -> "INR"
+   - "¥" -> "JPY"
+   - "CHF" -> "CHF"
+   - "THB" or "฿" -> "THB"
+   - "AED" -> "AED"
+3. Do NOT include invoice numbers, payments, change due, or item counts as line items.
 
 EXTRACT AND RETURN STRICT JSON ONLY (no markdown formatting, no code fences):
 {
-  "merchant": "Name of the business, restaurant, hotel, or store",
-  "amount": numeric total sum paid,
-  "currency": "3-letter standard currency code like INR, USD, EUR, GBP, JPY",
-  "date": "Transaction date in YYYY-MM-DD format (if year is missing, assume 2026)",
+  "merchant": "Full name of the store, business, restaurant or hotel",
+  "amount": numeric final total sum paid,
+  "currency": "3-letter standard ISO currency code (e.g. MYR, INR, USD, EUR, GBP, JPY, THB, SGD, CHF)",
+  "date": "Transaction date in YYYY-MM-DD format (extract from receipt if printed)",
   "category": "Food" | "Transport" | "Accommodation" | "Activities" | "Shopping" | "Other",
   "tax": numeric tax/VAT amount if listed,
   "lineItems": [
-    { "description": "item name", "price": numeric price }
+    { "description": "purchased item name", "price": numeric price }
   ],
   "confidence": 0.98
 }`
@@ -118,7 +132,7 @@ EXTRACT AND RETURN STRICT JSON ONLY (no markdown formatting, no code fences):
           amount: typeof parsed.amount === 'number' && !isNaN(parsed.amount) ? parsed.amount : 0,
           currency: parsed.currency || 'INR',
           date: parsed.date || new Date().toISOString().split('T')[0],
-          category: parsed.category || 'Food',
+          category: parsed.category || 'Shopping',
           tax: parsed.tax || 0,
           lineItems: Array.isArray(parsed.lineItems) ? parsed.lineItems : [],
           confidence: parsed.confidence || 0.98,
@@ -127,65 +141,151 @@ EXTRACT AND RETURN STRICT JSON ONLY (no markdown formatting, no code fences):
         }
       }
     } catch (e) {
-      console.warn('Gemini 3.6 Flash OCR failed, trying local Tesseract fallback:', e)
+      console.warn('Gemini 1.5 Flash OCR failed, trying local Tesseract fallback:', e)
     }
   }
 
-  // 2. Real Client-Side OCR Fallback via Tesseract.js (Zero API key needed, zero synthetic data)
+  // 2. Real Client-Side OCR Fallback via Tesseract.js
   try {
     const Tesseract = await import('tesseract.js')
     const { data: { text } } = await Tesseract.recognize(base64Data, 'eng')
     if (text && text.trim().length > 3) {
       const lines = text.split('\n').map((l: string) => l.trim()).filter(Boolean)
 
-      // Merchant from top lines
-      let merchant = lines[0] || 'Scanned Merchant'
-      const skipWords = ['sale', 'cash', 'invoice', 'receipt', 'tax', 'batch', 'customer']
-      for (const line of lines.slice(0, 4)) {
-        if (!skipWords.some((sw) => line.toLowerCase().includes(sw)) && line.length > 2) {
-          merchant = line
-          break
+      // A. Smart Merchant Extraction (Combines top 2 header lines if line 1 continues merchant name)
+      let merchant = 'Scanned Merchant'
+      const skipHeaderWords = ['sale', 'cash', 'invoice', 'receipt', 'tax', 'batch', 'customer', 'reg no', 'gst', 'tel:', 'date:']
+      const headerLines: string[] = []
+      for (const line of lines.slice(0, 5)) {
+        if (!skipHeaderWords.some((sw) => line.toLowerCase().includes(sw)) && line.length > 2) {
+          headerLines.push(line)
+        }
+      }
+      if (headerLines.length > 0) {
+        if (headerLines.length >= 2 && (headerLines[0].endsWith('&') || headerLines[0].endsWith('AND') || headerLines[0].length < 25)) {
+          merchant = `${headerLines[0]} ${headerLines[1]}`
+        } else {
+          merchant = headerLines[0]
         }
       }
 
-      // Amounts and items
+      // B. Robust Currency Detection
+      let detectedCurrency = 'INR'
+      const upperText = text.toUpperCase()
+      if (/\b(RM|MYR)\b/.test(upperText) || upperText.includes('RINGGIT') || upperText.includes('MALAYSIA') || upperText.includes('SELANGOR')) {
+        detectedCurrency = 'MYR'
+      } else if (/\b(SGD|S\$)\b/.test(upperText) || upperText.includes('SINGAPORE')) {
+        detectedCurrency = 'SGD'
+      } else if (/\b(AED|DHS|DIRHAM)\b/.test(upperText) || upperText.includes('DUBAI') || upperText.includes('UAE')) {
+        detectedCurrency = 'AED'
+      } else if (/\b(THB|BAHT)\b/.test(upperText) || text.includes('฿') || upperText.includes('BANGKOK') || upperText.includes('THAILAND')) {
+        detectedCurrency = 'THB'
+      } else if (/\b(CHF)\b/.test(upperText) || upperText.includes('SWITZERLAND') || upperText.includes('ZURICH')) {
+        detectedCurrency = 'CHF'
+      } else if (/\b(JPY|YEN)\b/.test(upperText) || text.includes('¥') || upperText.includes('JAPAN') || upperText.includes('TOKYO')) {
+        detectedCurrency = 'JPY'
+      } else if (/\b(GBP)\b/.test(upperText) || text.includes('£') || upperText.includes('LONDON') || upperText.includes('UK')) {
+        detectedCurrency = 'GBP'
+      } else if (/\b(EUR)\b/.test(upperText) || text.includes('€') || upperText.includes('EURO')) {
+        detectedCurrency = 'EUR'
+      } else if (/\b(USD|US\$)\b/.test(upperText) || text.includes('$')) {
+        detectedCurrency = 'USD'
+      }
+
+      // C. Extract Date from printed receipt text (e.g. 22/12/2017)
+      let extractedDate = new Date().toISOString().split('T')[0]
+      const dateMatch = text.match(/\b([0-3]?[0-9])[\/\.-]([0-1]?[0-9])[\/\.-](20[0-2][0-9]|19[0-9][0-9]|17|18|19|20|21|22|23|24|25|26)\b/)
+      if (dateMatch) {
+        const day = dateMatch[1].padStart(2, '0')
+        const month = dateMatch[2].padStart(2, '0')
+        let year = dateMatch[3]
+        if (year.length === 2) year = `20${year}`
+        extractedDate = `${year}-${month}-${day}`
+      }
+
+      // D. Intelligent Total Amount & Line Item Extraction
       let amount = 0
       let tax = 0
       const lineItems: Array<{ description: string; price: number }> = []
 
+      // Scoring total candidates to avoid picking "Total Item(s): 1" or "Invoice No: CS 67832"
+      let maxTotalScore = -1
+
+      const skipLineItemKeywords = [
+        'invoice', 'cashier', 'date', 'subtotal', 'total', 'payment', 'cash', 'change',
+        'due', 'balance', 'rounded', 'item', 'item(s)', 'tax', 'gst', 'vat', 'company',
+        'reg', 'thank', 'return', 'goods', 'receipt', 'sr @', 'round'
+      ]
+
       for (const line of lines) {
         const lower = line.toLowerCase()
-        if (lower.includes('tax') || lower.includes('cgst') || lower.includes('sgst')) {
-          const m = line.match(/([0-9]+(?:\.[0-9]{1,2})?)/)
-          if (m) tax += parseFloat(m[1])
-        } else if (lower.includes('total') && !lower.includes('subtotal')) {
-          const m = line.match(/([0-9]+(?:\.[0-9]{1,2})?)/)
-          if (m) amount = parseFloat(m[1])
-        } else {
-          const itemMatch = line.match(/^(.+?)\s+[\$₹€£]?\s*([0-9]+(?:\.[0-9]{1,2})?)$/)
-          if (itemMatch && !lower.includes('subtotal') && !lower.includes('cash') && !lower.includes('trace')) {
-            lineItems.push({
-              description: itemMatch[1].trim(),
-              price: parseFloat(itemMatch[2]),
-            })
+
+        // 1. Tax extraction
+        if (lower.includes('tax') || lower.includes('cgst') || lower.includes('sgst') || lower.includes('gst')) {
+          const taxMatch = line.match(/\b([0-9]+\.[0-9]{2})\b/)
+          if (taxMatch) {
+            tax = Math.max(tax, parseFloat(taxMatch[1]))
+          }
+        }
+
+        // 2. High-precision Total Line Matching
+        const isTotalLine = lower.includes('total') || lower.includes('grand total') || lower.includes('net amt') || lower.includes('amt rounded')
+        const isExcludedTotal = lower.includes('item') || lower.includes('qty') || lower.includes('count') || lower.includes('pcs') || lower.includes('subtotal') || lower.includes('excl')
+
+        if (isTotalLine && !isExcludedTotal) {
+          const numbers = line.match(/([0-9]+\.[0-9]{2})/g)
+          if (numbers && numbers.length > 0) {
+            const val = parseFloat(numbers[numbers.length - 1])
+            let score = 1
+            if (lower.includes('rounded') || lower.includes('incl') || lower.includes('grand') || lower.includes('total amt')) {
+              score = 10
+            }
+            if (score > maxTotalScore && val > 0) {
+              maxTotalScore = score
+              amount = val
+            }
+          }
+        }
+
+        // 3. Line Items (Actual purchased products)
+        const isSkipLine = skipLineItemKeywords.some((kw) => lower.includes(kw))
+        if (!isSkipLine) {
+          const itemMatch = line.match(/^(.+?)\s+[\$₹€£RM]?\s*([0-9]+\.[0-9]{2})$/i)
+          if (itemMatch) {
+            const desc = itemMatch[1].replace(/^[0-9.]+\s*x?\s*/i, '').trim()
+            const price = parseFloat(itemMatch[2])
+            if (desc.length > 2 && price > 0) {
+              lineItems.push({
+                description: desc,
+                price,
+              })
+            }
           }
         }
       }
 
+      // Fallback total if total line wasn't explicitly matched
       if (amount === 0 && lineItems.length > 0) {
-        amount = lineItems.reduce((s, it) => s + it.price, 0) + tax
+        amount = lineItems.reduce((s, it) => s + it.price, 0)
       }
 
-      let detectedCurrency = 'INR'
-      if (text.includes('$')) detectedCurrency = 'USD'
-      else if (text.includes('€')) detectedCurrency = 'EUR'
+      // Infer category from merchant name
+      const merchantLower = merchant.toLowerCase()
+      let category = 'Shopping'
+      if (merchantLower.includes('hardware') || merchantLower.includes('electrical') || merchantLower.includes('mart') || merchantLower.includes('store')) {
+        category = 'Shopping'
+      } else if (merchantLower.includes('restaurant') || merchantLower.includes('cafe') || merchantLower.includes('food') || merchantLower.includes('taverna') || merchantLower.includes('dinner')) {
+        category = 'Food'
+      } else if (merchantLower.includes('hotel') || merchantLower.includes('inn') || merchantLower.includes('stay') || merchantLower.includes('hostel')) {
+        category = 'Accommodation'
+      }
 
       return {
-        merchant,
+        merchant: merchant.trim(),
         amount: Math.round(amount * 100) / 100,
         currency: detectedCurrency,
-        date: new Date().toISOString().split('T')[0],
-        category: 'Food',
+        date: extractedDate,
+        category,
         tax: Math.round(tax * 100) / 100,
         lineItems,
         confidence: 0.92,
