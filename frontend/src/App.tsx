@@ -202,7 +202,7 @@ export default function App() {
   useEffect(() => {
     async function loadData() {
       try {
-        const loadedTrips = (await fetchTripsFromSupabase()) || []
+        const loadedTrips = (await fetchTripsFromSupabase(currentUser?.id)) || []
         const loadedExpenses = (await fetchExpensesFromSupabase()) || []
 
         if (currentUser) {

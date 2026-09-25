@@ -235,6 +235,9 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
           locale,
         }
 
+        const activeSessionId = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
+        localStorage.setItem('tripwallet_session_id', activeSessionId)
+
         // Persist profile and credentials
         clearFailedLogins(email)
         registerUser(newUser)
@@ -325,6 +328,9 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
           }
           authUser = result.user
         }
+
+        const activeSessionId = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
+        localStorage.setItem('tripwallet_session_id', activeSessionId)
 
         clearFailedLogins(email)
         localStorage.setItem('tripwallet_auth_user', JSON.stringify(authUser))

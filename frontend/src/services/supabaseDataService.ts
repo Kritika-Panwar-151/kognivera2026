@@ -7,16 +7,48 @@ export const initialTripsFallback: Trip[] = []
 export const initialExpensesFallback: Expense[] = []
 
 // 1. Fetch Trips from Supabase
-export async function fetchTripsFromSupabase(): Promise<Trip[]> {
+export async function fetchTripsFromSupabase(userId?: string): Promise<Trip[]> {
   if (!isSupabaseConfigured) return []
 
   try {
-    const { data: rawTrips, error: tripsErr } = await supabase
-      .from('trips')
-      .select('*')
-      .order('created_at', { ascending: false })
+    let rawTrips: any[] = []
 
-    if (tripsErr || !rawTrips || rawTrips.length === 0) {
+    if (userId) {
+      // 1. Fetch trip_ids where userId is a member
+      const { data: memberRows } = await supabase
+        .from('trip_members')
+        .select('trip_id')
+        .eq('user_id', userId)
+
+      const memberTripIds = (memberRows || []).map((m: any) => m.trip_id)
+
+      if (memberTripIds.length > 0) {
+        const { data, error: tripsErr } = await supabase
+          .from('trips')
+          .select('*')
+          .or(`owner_user_id.eq.${userId},trip_id.in.(${memberTripIds.join(',')})`)
+          .order('created_at', { ascending: false })
+
+        if (!tripsErr && data) rawTrips = data
+      } else {
+        const { data, error: tripsErr } = await supabase
+          .from('trips')
+          .select('*')
+          .eq('owner_user_id', userId)
+          .order('created_at', { ascending: false })
+
+        if (!tripsErr && data) rawTrips = data
+      }
+    } else {
+      const { data, error: tripsErr } = await supabase
+        .from('trips')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (!tripsErr && data) rawTrips = data
+    }
+
+    if (!rawTrips || rawTrips.length === 0) {
       return []
     }
 
