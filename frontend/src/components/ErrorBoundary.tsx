@@ -25,9 +25,10 @@ export default class ErrorBoundary extends Component<Props, State> {
   private handleReset = () => {
     try {
       localStorage.removeItem('tripwallet_current_screen')
+      sessionStorage.clear()
     } catch (e) {}
     this.setState({ hasError: false, error: undefined })
-    window.location.reload()
+    window.location.href = window.location.origin + '/?v=' + Date.now()
   }
 
   public render() {
