@@ -27,7 +27,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       localStorage.removeItem('tripwallet_current_screen')
     } catch (e) {}
     this.setState({ hasError: false, error: undefined })
-    window.location.href = '/'
+    window.location.reload()
   }
 
   public render() {
