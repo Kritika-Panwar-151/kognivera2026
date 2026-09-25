@@ -114,9 +114,10 @@ export default function App() {
     return null
   }
 
-  const getStoredTrips = (): Trip[] => {
+  const getStoredTrips = (user: User | null): Trip[] => {
+    if (!user) return []
     try {
-      const stored = localStorage.getItem('tripwallet_user_trips')
+      const stored = localStorage.getItem(`tripwallet_user_trips_${user.id}`)
       if (stored) {
         const parsed = JSON.parse(stored)
         if (Array.isArray(parsed) && parsed.length > 0) return parsed
@@ -124,7 +125,10 @@ export default function App() {
     } catch (e) {
       console.warn('Failed reading stored trips:', e)
     }
-    return DEFAULT_DEMO_TRIPS
+    if (user.id === 'usr_aisha' || user.id === 'usr_you') {
+      return DEFAULT_DEMO_TRIPS
+    }
+    return []
   }
 
   const getStoredActiveTrip = (tripsList: Trip[]): Trip | null => {
@@ -151,7 +155,7 @@ export default function App() {
   }
 
   const initialUser = getStoredUser()
-  const initialTrips = getStoredTrips()
+  const initialTrips = getStoredTrips(initialUser)
   const initialCurrentTrip = getStoredActiveTrip(initialTrips)
   const initialScreen = getStoredScreen(initialUser)
 
@@ -166,16 +170,16 @@ export default function App() {
   const [selectedInviteTrip, setSelectedInviteTrip] = useState<Trip | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
 
-  // Sync active trip ID and user trips to localStorage
+  // Sync active trip ID and user trips to localStorage per user
   useEffect(() => {
-    if (trips && trips.length > 0) {
+    if (currentUser && trips) {
       try {
-        localStorage.setItem('tripwallet_user_trips', JSON.stringify(trips))
+        localStorage.setItem(`tripwallet_user_trips_${currentUser.id}`, JSON.stringify(trips))
       } catch (e) {
         console.warn('Failed saving trips to localStorage:', e)
       }
     }
-  }, [trips])
+  }, [trips, currentUser])
 
   useEffect(() => {
     if (currentTrip?.id) {
@@ -198,10 +202,18 @@ export default function App() {
     if (!user) return []
     return allTrips.filter((t) => {
       // 1. User is the trip owner
-      if (t.ownerId === user.id) return true
-      // 2. User is an active/accepted member (pending invites belong exclusively in PendingRequestsModal)
-      const detail = t.memberDetails?.find((d) => d.userId === user.id)
+      if (t.ownerId === user.id || isUserMatch(t.ownerId, user)) return true
+
+      // 2. User is an active/accepted member
+      const detail = t.memberDetails?.find((d) => isUserMatch(d.userId, user))
       if (detail && (detail.status === 'active' || detail.status === 'accepted')) return true
+
+      const isDirectMember = t.members && t.members.some((m) => isUserMatch(m, user))
+      if (isDirectMember) {
+        if (detail && detail.status === 'pending') return false
+        return true
+      }
+
       return false
     })
   }
@@ -216,32 +228,33 @@ export default function App() {
     })
   }
 
-  // Safe trip updater ensuring user isolation is always preserved and page refresh never wipes data
+  // Safe trip updater ensuring user isolation is always preserved
   const updateTripsSafely = (freshTrips: Trip[], targetUser: User | null) => {
+    if (!targetUser) {
+      setTrips([])
+      setCurrentTripState(null)
+      return
+    }
+
     const userTrips = deduplicateTrips(filterTripsForUser(freshTrips, targetUser))
     
-    // Only update if Supabase returned actual user trips; avoid clearing local/fallback state with empty array
-    if (userTrips.length > 0) {
-      setTrips((prevTrips) => {
-        const pendingLocalTrips = prevTrips.filter(
-          (pt) => pt.id.startsWith('trp_') && !userTrips.some((ut) => ut.id === pt.id)
-        )
-        const merged = deduplicateTrips([...pendingLocalTrips, ...userTrips])
-        try {
-          localStorage.setItem('tripwallet_user_trips', JSON.stringify(merged))
-        } catch (e) {}
-        return merged
-      })
+    setTrips((prevTrips) => {
+      const pendingLocalTrips = prevTrips.filter(
+        (pt) => (pt.ownerId === targetUser.id || isUserMatch(pt.ownerId, targetUser)) && !userTrips.some((ut) => ut.id === pt.id)
+      )
+      const merged = deduplicateTrips([...userTrips, ...pendingLocalTrips])
+      try {
+        localStorage.setItem(`tripwallet_user_trips_${targetUser.id}`, JSON.stringify(merged))
+      } catch (e) {}
+      return merged
+    })
 
-      setCurrentTripState((prev) => {
-        if (prev) {
-          const updated = userTrips.find((t) => t.id === prev.id)
-          if (updated) return updated
-          return prev
-        }
-        return userTrips[0]
-      })
-    }
+    setCurrentTripState((prev) => {
+      if (prev && userTrips.some((t) => t.id === prev.id)) {
+        return userTrips.find((t) => t.id === prev.id) || null
+      }
+      return userTrips.length > 0 ? userTrips[0] : null
+    })
   }
 
   // Safe expense merger ensuring DB sync never clears local expenses when DB returns empty array
@@ -292,18 +305,25 @@ export default function App() {
           // Strict user-filtered trips
           updateTripsSafely(loadedTrips, currentUser)
 
-          const normalized = (loadedExpenses || []).map((e) => {
-            const origCurr = (e.currency || 'INR').toUpperCase()
-            const destCurr = getTripDestinationCurrency(currentTrip)
-            const destConv = convertCurrency(e.amount || 0, origCurr, destCurr)
-            return {
-              ...e,
-              convertedAmount: e.convertedAmount && e.convertedAmount > 0 ? e.convertedAmount : (destConv > 0 ? destConv : (e.amount || 0)),
-            }
-          })
+          const userTrips = filterTripsForUser(loadedTrips, currentUser)
+          const userTripIds = new Set(userTrips.map((t) => t.id))
+
+          const normalized = (loadedExpenses || [])
+            .filter((e) => userTripIds.has(e.tripId))
+            .map((e) => {
+              const origCurr = (e.currency || 'INR').toUpperCase()
+              const destCurr = getTripDestinationCurrency(currentTrip)
+              const destConv = convertCurrency(e.amount || 0, origCurr, destCurr)
+              return {
+                ...e,
+                convertedAmount: e.convertedAmount && e.convertedAmount > 0 ? e.convertedAmount : (destConv > 0 ? destConv : (e.amount || 0)),
+              }
+            })
 
           if (normalized.length > 0) {
             mergeExpensesSafely(normalized)
+          } else {
+            setExpenses([])
           }
         } else {
           // If no user is logged in, keep state completely clean
@@ -554,6 +574,11 @@ export default function App() {
       console.warn('Error saving auth user:', e)
     }
 
+    const initialUserTrips = getStoredTrips(user)
+    setTrips(initialUserTrips)
+    setCurrentTripState(initialUserTrips.length > 0 ? initialUserTrips[0] : null)
+    setExpenses([])
+
     fetchTripsFromSupabase().then((freshTrips) => {
       updateTripsSafely(freshTrips, user)
     })
@@ -573,7 +598,7 @@ export default function App() {
     }
     setCurrentUser(null)
     setCurrentTripState(null)
-    setTrips(DEFAULT_DEMO_TRIPS)
+    setTrips([])
     setExpenses([])
     setScreenState('login')
   }
@@ -746,7 +771,7 @@ export default function App() {
     return expenses.filter((e) => isTripMatch(e.tripId, currentTrip.id))
   }, [expenses, currentTrip?.id])
 
-  const activeTrip = currentTrip || (trips.length > 0 ? trips[0] : DEFAULT_DEMO_TRIPS[0])
+  const activeTrip = currentTrip || (trips.length > 0 ? trips[0] : null)
 
   const renderScreen = () => {
     switch (screen) {
