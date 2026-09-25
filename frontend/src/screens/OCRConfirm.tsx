@@ -5,6 +5,8 @@ import { saveExpenseToSupabase } from '../services/supabaseDataService'
 import { getRegisteredUsers } from '../services/userRegistry'
 import { convertCurrency, getCurrencySymbol, getTripDestinationCurrency } from '../services/currencyService'
 
+import { calculateHareMemberBreakdown } from '../features/group-settlement/largestRemainder'
+
 interface Props {
   navigate: NavigateFn
   onAddExpense?: (expense: Expense) => void
@@ -139,13 +141,19 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
     const isShared = finalMembers.length > 1
 
     let splitBreakdown: Record<string, number> | undefined = undefined
-    if (splitMode === 'custom' && isShared) {
-      splitBreakdown = {}
-      finalMembers.forEach((m) => {
-        splitBreakdown![m] =
-          parseFloat(customBreakdown[m]) ||
-          Math.round((converted / finalMembers.length) * 100) / 100
-      })
+    if (isShared) {
+      if (splitMode === 'custom') {
+        splitBreakdown = {}
+        const hareFallback = calculateHareMemberBreakdown(converted, finalMembers)
+        finalMembers.forEach((m) => {
+          splitBreakdown![m] =
+            parseFloat(customBreakdown[m]) ||
+            hareFallback[m] ||
+            Math.round((converted / finalMembers.length) * 100) / 100
+        })
+      } else {
+        splitBreakdown = calculateHareMemberBreakdown(converted, finalMembers)
+      }
     }
 
     const newExp: Expense = {
