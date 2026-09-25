@@ -87,6 +87,7 @@ export default function HomeScreen({ navigate, trips, currentUser, onSelectTrip,
             const tripDestCurr = getTripDestinationCurrency(activeTrip)
 
             // Group & Personal budget metrics calculated via useBudget hook
+            const memberCount = Math.max(activeTrip.partySize || activeTrip.members?.length || 1, 1)
             const {
               budget: groupBudget,
               spent: groupSpent,
