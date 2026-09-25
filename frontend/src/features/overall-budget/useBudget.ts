@@ -148,7 +148,15 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
                 : Math.round(eAmountHome / Math.max(splitMembers.length, 1))
 
               const debtKey = `debt_${e.id}_${m}`
-              const isMemberSettled = e.isSettled || settledIds.has(e.id) || settledIds.has(debtKey)
+              const cleanM = m.toLowerCase().replace(/\s+/g, '').replace(/\((current user|you|admin|owner|editor|viewer)\)/gi, '')
+              const isMemberSettled =
+                e.isSettled ||
+                settledIds.has(e.id) ||
+                settledIds.has(debtKey) ||
+                settledIds.has(m) ||
+                settledIds.has(cleanM) ||
+                settledIds.has(`settle_${m}`) ||
+                settledIds.has(`settle_${cleanM}`)
 
               if (isMemberSettled) {
                 // Settled money received -> credited back / added to Payer's personal budget
