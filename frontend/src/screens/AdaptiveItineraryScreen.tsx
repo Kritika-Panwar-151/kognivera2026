@@ -967,7 +967,7 @@ export default function AdaptiveItineraryScreen({ navigate, trip, currentUser }:
                         {item.rating && (
                           <span className="text-[10px] font-extrabold bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-md flex items-center gap-1">
                             <span>⭐</span> {item.rating}
-                            {item.reviewCount ? ` (${item.reviewCount > 1000 ? `${(item.reviewCount / 1000).toFixed(1)}k` : item.reviewCount} reviews)` : ''}
+                            {item.reviewCount ? ` (${typeof item.reviewCount === 'number' && item.reviewCount > 1000 ? `${(item.reviewCount / 1000).toFixed(1)}k` : item.reviewCount} reviews)` : ''}
                           </span>
                         )}
 

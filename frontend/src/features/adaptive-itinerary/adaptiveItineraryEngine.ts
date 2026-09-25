@@ -59,7 +59,7 @@ export function getDefaultItinerary(trip: Trip): ItineraryItem[] {
   const isUSD = curr === 'USD'
 
   // Pre-configured rich itinerary items for days 1 to 5
-  return [
+  const items: ItineraryItem[] = [
     // DAY 1
     {
       id: `itinerary_${trip.id}_d1_1`,
@@ -221,8 +221,11 @@ export function getDefaultItinerary(trip: Trip): ItineraryItem[] {
       location: 'Jazz Cellar Club',
       isLocked: false,
     },
-  ].map((item) => ({
+  ]
+
+  return items.map((item): ItineraryItem => ({
     ...item,
+    category: item.category as ItineraryItem['category'],
     mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.title + ', ' + (item.location || dest))}`,
     rating: 4.8,
     reviewCount: 1420,

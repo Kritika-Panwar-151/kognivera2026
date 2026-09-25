@@ -1,4 +1,4 @@
-import type { Screen, NavigateFn } from '../types'
+import type { Screen, NavigateFn } from '../../types'
 
 interface Props {
   currentScreen: Screen

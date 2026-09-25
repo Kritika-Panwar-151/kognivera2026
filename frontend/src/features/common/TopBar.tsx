@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { NavigateFn, User, Trip } from '../types'
+import type { NavigateFn, User, Trip } from '../../types'
 import { getOfflineQueue, flushOfflineQueue } from '../../services/offlineQueueService'
 
 interface Props {

@@ -137,7 +137,7 @@ export default function App() {
 
       // 2. User is an active/accepted member
       const detail = t.memberDetails?.find((d) => isUserMatch(d.userId, user))
-      if (detail && (detail.status === 'active' || detail.status === 'accepted')) return true
+      if (detail && (detail.status === 'active' || (detail.status as string) === 'accepted')) return true
 
       const isDirectMember = t.members && t.members.some((m) => isUserMatch(m, user))
       if (isDirectMember) {
@@ -410,7 +410,7 @@ export default function App() {
                   ...(t.memberBudgets || {}),
                   [joinedId]: joinedBudget,
                 }
-                const sumBudgets = Object.values(memberBudgets).reduce((sum, v) => sum + v, 0)
+                const sumBudgets = (Object.values(memberBudgets) as number[]).reduce((sum, v) => sum + (v || 0), 0)
                 return {
                   ...t,
                   members,
@@ -678,7 +678,7 @@ export default function App() {
   const handleAddExpense = (newExpense: Expense) => {
     setExpenses((prev) => deduplicateExpenses([newExpense, ...prev]))
     if (currentTrip) {
-      setCurrentTrip((prev) =>
+      setCurrentTripState((prev) =>
         prev
           ? {
               ...prev,
@@ -704,7 +704,7 @@ export default function App() {
     const toDelete = expenses.find((e) => e.id === expenseId)
     setExpenses((prev) => prev.filter((e) => e.id !== expenseId))
     if (toDelete && currentTrip) {
-      setCurrentTrip((prev) =>
+      setCurrentTripState((prev) =>
         prev
           ? {
               ...prev,
@@ -734,7 +734,7 @@ export default function App() {
     setExpenses((prev) => prev.map((e) => (e.id === updatedExpense.id ? updatedExpense : e)))
     if (oldExpense && currentTrip) {
       const delta = updatedExpense.convertedAmount - oldExpense.convertedAmount
-      setCurrentTrip((prev) =>
+      setCurrentTripState((prev) =>
         prev
           ? {
               ...prev,
@@ -807,7 +807,7 @@ export default function App() {
     }
 
     setTrips((prev) => prev.map((t) => (t.id === tripId ? updateTripState(t) : t)))
-    setCurrentTrip((prev) => (prev && prev.id === tripId ? updateTripState(prev) : prev))
+    setCurrentTripState((prev) => (prev && prev.id === tripId ? updateTripState(prev) : prev))
 
     // Persist to Supabase so other phones receive the updated group budget in real time
     updateMemberPersonalBudgetInSupabase(tripId, userId, newBudget).then(() => {

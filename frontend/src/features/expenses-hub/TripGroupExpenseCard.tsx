@@ -62,9 +62,9 @@ export default function TripGroupExpenseCard({ trip, expenses }: Props) {
                 {e.category === 'Accommodation' ? '🏨' : '🍽️'}
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-900 truncate">{e.title}</p>
+                <p className="text-xs font-bold text-slate-900 truncate">{e.title || e.merchant}</p>
                 <p className="text-[10px] text-slate-400">
-                  {e.date} · Paid by {e.payerName} · Split among 3
+                  {e.date} · Paid by {e.payerName || e.paidBy} · Split among 3
                 </p>
               </div>
             </div>

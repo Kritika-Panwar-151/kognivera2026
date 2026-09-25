@@ -111,6 +111,7 @@ export default function AIGuardian({ navigate, trip, currentUser, onAddExpense }
     const expenseId = `exp_chat_${Date.now()}`
     const newExpense: Expense = {
       id: expenseId,
+      tripId: trip?.id || 'trip_default',
       merchant: action.merchant,
       amount: action.amount,
       currency: action.currency,

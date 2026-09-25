@@ -20,6 +20,8 @@ interface Props {
   onUpdateMemberBudget?: (tripId: string, userId: string, newBudget: number) => void
   onUpdateTripName?: (tripId: string, newName: string) => void
   onUpdateTrip?: (updatedTrip: Trip) => void
+  onDeleteExpense?: (expenseId: string) => void
+  onEditExpense?: (expense: Expense) => void
 }
 
 const defaultCategories = [

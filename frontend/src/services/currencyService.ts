@@ -181,6 +181,8 @@ export function formatUserDualCurrency(
   secondary: string
   primaryAmount: number
   secondaryAmount: number
+  primarySymbol: string
+  secondarySymbol: string
 } {
   const primaryAmount = convertCurrency(amount, fromCurrency, userHomeCurrency)
   const secondaryAmount = convertCurrency(amount, fromCurrency, tripDestinationCurrency)

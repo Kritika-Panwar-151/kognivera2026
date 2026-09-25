@@ -70,10 +70,10 @@ export function resolveMemberName(idOrName: string, registeredUsers?: User[], cu
 /**
  * Robustly checks if a given member string matches the target user.
  */
-export function isUserMatch(memberIdOrName: string | undefined, user: User | null): boolean {
+export function isUserMatch(memberIdOrName: string | undefined, user: Partial<User> | null | undefined): boolean {
   if (!memberIdOrName || !user) return false
   const target = memberIdOrName.toLowerCase().replace(/\s+/g, '').trim()
-  const uid = user.id.toLowerCase().replace(/\s+/g, '').trim()
+  const uid = (user.id || '').toLowerCase().replace(/\s+/g, '').trim()
   const uname = (user.name || '').toLowerCase().replace(/\s+/g, '').trim()
 
   if (target === uid || target === uname) return true

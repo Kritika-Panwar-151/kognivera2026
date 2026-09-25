@@ -65,8 +65,8 @@ export default function PersonalExpenseCard({ expenses, totalSpend, navigate }: 
                 {e.category === 'Food' ? '🍽️' : '🛍️'}
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-slate-900 truncate">{e.title}</p>
-                <p className="text-[10px] text-slate-400">{e.date} · Paid by {e.payerName}</p>
+                <p className="text-xs font-bold text-slate-900 truncate">{e.title || e.merchant}</p>
+                <p className="text-[10px] text-slate-400">{e.date} · Paid by {e.payerName || e.paidBy}</p>
               </div>
             </div>
             <div className="text-right shrink-0">

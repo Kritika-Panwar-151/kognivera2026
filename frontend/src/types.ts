@@ -40,8 +40,9 @@ export interface TripMemberInfo {
   role: 'owner' | 'editor' | 'viewer'
   status: 'pending' | 'active' | 'declined'
   personalBudget: number
-  categoryCaps?: CategoryCaps
+  categoryCaps?: Partial<CategoryCaps>
   invitedByUserId?: string
+  email?: string
 }
 
 export interface Trip {
@@ -86,6 +87,9 @@ export interface Expense {
   notes?: string
   isSettled?: boolean
   homeAmount?: number
+  title?: string
+  payerName?: string
+  source?: string
 }
 
 export interface SettlementDebt {
