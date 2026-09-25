@@ -429,6 +429,91 @@ export default function App() {
 
   const handleAcceptInvite = async (tripId: string, personalBudget: number, categoryCaps: CategoryCaps) => {
     if (!currentUser) return
+
+    // 1. Optimistic Local State Update so UI updates instantly
+    setTrips((prevTrips) => {
+      const updated = prevTrips.map((t) => {
+        if (t.id === tripId) {
+          const updatedMembers = Array.from(new Set([...(t.members || []), currentUser.id]))
+          const existingDetails = t.memberDetails || []
+          const hasDetail = existingDetails.some((d) => isUserMatch(d.userId, currentUser))
+          const updatedDetails = hasDetail
+            ? existingDetails.map((d) =>
+                isUserMatch(d.userId, currentUser)
+                  ? { ...d, status: 'active' as const, personalBudget, categoryCaps }
+                  : d
+              )
+            : [
+                ...existingDetails,
+                { userId: currentUser.id, role: 'editor' as const, status: 'active' as const, personalBudget, categoryCaps },
+              ]
+          const updatedMemberBudgets = {
+            ...(t.memberBudgets || {}),
+            [currentUser.id]: personalBudget,
+          }
+          const sumMemberBudgets = Object.values(updatedMemberBudgets).reduce((sum, v) => sum + v, 0)
+          const newBudget = Math.max(t.budget || 0, sumMemberBudgets)
+
+          return {
+            ...t,
+            members: updatedMembers,
+            memberDetails: updatedDetails,
+            memberBudgets: updatedMemberBudgets,
+            personalBudget,
+            budget: newBudget,
+            isGroupTrip: updatedMembers.length > 1,
+          }
+        }
+        return t
+      })
+      try {
+        localStorage.setItem(`tripwallet_user_trips_${currentUser.id}`, JSON.stringify(updated))
+      } catch (e) {}
+      return updated
+    })
+
+    // Also update current trip state if matching or set active
+    setCurrentTripState((prev) => {
+      const targetTrip = trips.find((t) => t.id === tripId) || selectedInviteTrip || prev
+      if (targetTrip) {
+        const updatedMembers = Array.from(new Set([...(targetTrip.members || []), currentUser.id]))
+        const existingDetails = targetTrip.memberDetails || []
+        const hasDetail = existingDetails.some((d) => isUserMatch(d.userId, currentUser))
+        const updatedDetails = hasDetail
+          ? existingDetails.map((d) =>
+              isUserMatch(d.userId, currentUser)
+                ? { ...d, status: 'active' as const, personalBudget, categoryCaps }
+                : d
+            )
+          : [
+              ...existingDetails,
+              { userId: currentUser.id, role: 'editor' as const, status: 'active' as const, personalBudget, categoryCaps },
+            ]
+        const updatedMemberBudgets = {
+          ...(targetTrip.memberBudgets || {}),
+          [currentUser.id]: personalBudget,
+        }
+        const sumMemberBudgets = Object.values(updatedMemberBudgets).reduce((sum, v) => sum + v, 0)
+        return {
+          ...targetTrip,
+          members: updatedMembers,
+          memberDetails: updatedDetails,
+          memberBudgets: updatedMemberBudgets,
+          personalBudget,
+          budget: Math.max(targetTrip.budget || 0, sumMemberBudgets),
+          isGroupTrip: updatedMembers.length > 1,
+        }
+      }
+      return prev
+    })
+
+    setPendingInviteTrips((prev) => prev.filter((t) => t.id !== tripId))
+    if (selectedInviteTrip?.id === tripId) {
+      setSelectedInviteTrip(null)
+      setShowInviteModal(false)
+    }
+
+    // 2. Persist to Supabase
     await acceptTripInvite(tripId, currentUser.id, personalBudget, categoryCaps)
 
     // Broadcast live over WebSockets so host's phone updates instantly
@@ -440,17 +525,10 @@ export default function App() {
       })
     }
 
+    // 3. Fetch fresh trips from DB
     const freshTrips = await fetchTripsFromSupabase()
-    updateTripsSafely(freshTrips, currentUser)
-    const joined = freshTrips.find((t) => t.id === tripId)
-    if (joined) {
-      setCurrentTrip(joined)
-    }
-
-    setPendingInviteTrips((prev) => prev.filter((t) => t.id !== tripId))
-    if (selectedInviteTrip?.id === tripId) {
-      setSelectedInviteTrip(null)
-      setShowInviteModal(false)
+    if (freshTrips && freshTrips.length > 0) {
+      updateTripsSafely(freshTrips, currentUser)
     }
   }
 

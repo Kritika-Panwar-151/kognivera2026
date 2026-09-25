@@ -60,17 +60,34 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!isBalanced) return
+    if (submitting) return
     setSubmitting(true)
     try {
-      const caps: CategoryCaps = {
-        accommodation,
-        food,
-        transport,
-        activities,
-        misc,
+      let finalAcc = accPct, finalFood = foodPct, finalTrans = transPct, finalAct = actPct, finalMisc = miscPct
+      if (!isBalanced) {
+        const sum = (accPct || 0) + (foodPct || 0) + (transPct || 0) + (actPct || 0) + (miscPct || 0)
+        if (sum > 0) {
+          const ratio = 100 / sum
+          finalAcc = Math.round((accPct || 0) * ratio)
+          finalFood = Math.round((foodPct || 0) * ratio)
+          finalTrans = Math.round((transPct || 0) * ratio)
+          finalAct = Math.round((actPct || 0) * ratio)
+          finalMisc = Math.max(0, 100 - (finalAcc + finalFood + finalTrans + finalAct))
+        } else {
+          finalAcc = 35; finalFood = 25; finalTrans = 20; finalAct = 10; finalMisc = 10
+        }
       }
-      await onAccept(trip.id, personalBudget, caps)
+
+      const budgetVal = personalBudget > 0 ? personalBudget : defaultBudget
+
+      const caps: CategoryCaps = {
+        accommodation: Math.round(budgetVal * (finalAcc / 100)),
+        food: Math.round(budgetVal * (finalFood / 100)),
+        transport: Math.round(budgetVal * (finalTrans / 100)),
+        activities: Math.round(budgetVal * (finalAct / 100)),
+        misc: Math.round(budgetVal * (finalMisc / 100)),
+      }
+      await onAccept(trip.id, budgetVal, caps)
       onClose()
     } catch (err) {
       console.error('Failed to accept invite:', err)
@@ -374,14 +391,10 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
             </button>
             <button
               type="submit"
-              disabled={submitting || personalBudget <= 0 || !isBalanced}
-              className="flex-2 py-3 px-4 bg-teal-600 hover:bg-teal-700 active:scale-98 text-white font-bold text-xs rounded-2xl shadow-md transition disabled:opacity-50 text-center"
+              disabled={submitting}
+              className="flex-2 py-3 px-4 bg-teal-600 hover:bg-teal-700 active:scale-98 text-white font-bold text-xs rounded-2xl shadow-md transition disabled:opacity-50 text-center cursor-pointer"
             >
-              {submitting
-                ? 'Joining Trip...'
-                : !isBalanced
-                ? 'Total Split Must Be 100%'
-                : 'Accept & Join Group'}
+              {submitting ? 'Joining Trip...' : 'Accept & Join Group'}
             </button>
           </div>
         </form>

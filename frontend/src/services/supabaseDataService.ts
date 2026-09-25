@@ -303,7 +303,7 @@ export async function acceptTripInvite(
     const now = new Date().toISOString()
 
     // 1. Update this member's status to 'active' and set their personal budget & category caps
-    const { error: updateErr } = await supabase
+    const { data: updatedRows, error: updateErr } = await supabase
       .from('trip_members')
       .update({
         status: 'active',
@@ -313,11 +313,32 @@ export async function acceptTripInvite(
       })
       .eq('trip_id', tripId)
       .eq('user_id', userId)
+      .select()
 
     if (updateErr) {
       console.error('Failed to accept trip invite:', updateErr.message)
-      return { success: false, error: updateErr.message }
     }
+
+    if (!updatedRows || updatedRows.length === 0) {
+      // Upsert a brand new row for this active user if no row was updated
+      const { error: upsertErr } = await supabase
+        .from('trip_members')
+        .upsert({
+          member_id: `tmb_${Date.now()}_${userId.replace(/[^a-zA-Z0-9]/g, '').slice(-4)}`,
+          trip_id: tripId,
+          user_id: userId,
+          role: 'editor',
+          status: 'active',
+          personal_budget: personalBudget,
+          category_caps: categoryCaps || {},
+          created_at: now,
+          updated_at: now,
+        })
+      if (upsertErr) console.error('Failed to upsert active trip_member:', upsertErr.message)
+    }
+
+    // Ensure trip is_group_trip flag is updated to true in DB
+    await supabase.from('trips').update({ is_group_trip: true }).eq('id', tripId)
 
     // 2. Query all active members to recompute the new Group Budget total
     const { data: allActiveMembers } = await supabase
