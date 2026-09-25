@@ -481,9 +481,9 @@ export default function TripDashboard({
             </span>
           )}
           <span className="bg-emerald-500/90 text-white px-3 py-1.5 rounded-full text-xs font-bold flex flex-col">
-            <span>💰 Group Fund: {groupBudgetDual.primary}</span>
-            {groupBudgetDual.secondary && (
-              <span className="text-[10px] font-medium opacity-90">≈ {groupBudgetDual.secondary}</span>
+            <span>💰 Group Fund: {groupRemainingDual.primary}</span>
+            {groupRemainingDual.secondary && (
+              <span className="text-[10px] font-medium opacity-90">≈ {groupRemainingDual.secondary} (of {groupBudgetDual.primary})</span>
             )}
           </span>
         </div>
@@ -825,13 +825,13 @@ export default function TripDashboard({
               <span className="text-xl">👥</span>
             </div>
             <p className="text-2xl font-black text-slate-900">
-              {groupBudgetDual.primary}
+              {groupRemainingDual.primary}
             </p>
             <p className="text-[10px] text-teal-700 font-mono font-semibold">
-              ≈ {groupBudgetDual.secondary} (Destination)
+              ≈ {groupRemainingDual.secondary} (Destination)
             </p>
             <p className="text-[11px] text-slate-500 font-medium mt-1">
-              Sum of all {partyMembers.length} members' budgets
+              Remaining of {groupBudgetDual.primary} total
             </p>
           </div>
 
@@ -843,7 +843,7 @@ export default function TripDashboard({
             </div>
             <div className="flex items-baseline justify-between">
               <p className="text-2xl font-black text-indigo-900">
-                {personalBudgetDual.primary}
+                {personalRemainingDual.primary}
               </p>
               <button
                 type="button"
@@ -854,10 +854,10 @@ export default function TripDashboard({
               </button>
             </div>
             <p className="text-[10px] text-indigo-700 font-mono font-semibold">
-              ≈ {personalBudgetDual.secondary} (Destination)
+              ≈ {personalRemainingDual.secondary} (Destination)
             </p>
             <p className="text-[11px] text-indigo-600 font-medium mt-1">
-              {personalRemainingDual.primary} remaining for you
+              Remaining of {personalBudgetDual.primary} budget
             </p>
           </div>
 

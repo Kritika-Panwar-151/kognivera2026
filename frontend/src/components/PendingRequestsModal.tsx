@@ -14,6 +14,7 @@ export interface PendingDebtItem {
   reason: string
   isSettled: boolean
   expenseId?: string
+  splits?: { merchant: string; amount: number; category: string; date: string; direction: 'they_owe_you' | 'you_owe_them' }[]
 }
 
 interface Props {
@@ -75,6 +76,7 @@ export default function PendingRequestsModal({
       owedToMe: number
       iOweThem: number
       expenseIds: string[]
+      splits: { merchant: string; amount: number; category: string; date: string; direction: 'they_owe_you' | 'you_owe_them' }[]
     }
   >()
 
@@ -137,11 +139,20 @@ export default function PendingRequestsModal({
             const resolved = resolveMemberName(person)
             const share = getMemberShare(exp, person)
             if (!memberMap.has(resolved)) {
-              memberMap.set(resolved, { personName: resolved, owedToMe: 0, iOweThem: 0, expenseIds: [] })
+              memberMap.set(resolved, { personName: resolved, owedToMe: 0, iOweThem: 0, expenseIds: [], splits: [] })
             }
             const rec = memberMap.get(resolved)!
             rec.owedToMe += share
             rec.expenseIds.push(exp.id)
+            if (share > 0) {
+              rec.splits.push({
+                merchant: exp.merchant || 'Shared Expense',
+                amount: share,
+                category: exp.category || 'Other',
+                date: exp.date || '',
+                direction: 'they_owe_you',
+              })
+            }
           }
         })
       } else {
@@ -150,11 +161,20 @@ export default function PendingRequestsModal({
           const resolvedPayer = resolveMemberName(exp.paidBy)
           const myShare = getMemberShare(exp, currentUserName)
           if (!memberMap.has(resolvedPayer)) {
-            memberMap.set(resolvedPayer, { personName: resolvedPayer, owedToMe: 0, iOweThem: 0, expenseIds: [] })
+            memberMap.set(resolvedPayer, { personName: resolvedPayer, owedToMe: 0, iOweThem: 0, expenseIds: [], splits: [] })
           }
           const rec = memberMap.get(resolvedPayer)!
           rec.iOweThem += myShare
           rec.expenseIds.push(exp.id)
+          if (myShare > 0) {
+            rec.splits.push({
+              merchant: exp.merchant || 'Shared Expense',
+              amount: myShare,
+              category: exp.category || 'Other',
+              date: exp.date || '',
+              direction: 'you_owe_them',
+            })
+          }
         }
       }
     }
@@ -172,9 +192,10 @@ export default function PendingRequestsModal({
         direction: 'they_owe_you',
         amount: Math.round(net),
         currency: userHomeCurr,
-        reason: `Net balance across shared trip expenses`,
+        reason: `Net balance across ${rec.splits.filter((s) => s.direction === 'they_owe_you').length} split expense(s)`,
         isSettled: false,
         expenseId: rec.expenseIds[0],
+        splits: rec.splits.filter((s) => s.direction === 'they_owe_you'),
       })
     } else if (net < 0) {
       pendingDebts.push({
@@ -184,9 +205,10 @@ export default function PendingRequestsModal({
         direction: 'you_owe_them',
         amount: Math.abs(Math.round(net)),
         currency: userHomeCurr,
-        reason: `Settle ${currencySymbol}${Math.abs(Math.round(net))} with ${personName}`,
+        reason: `Net balance across ${rec.splits.filter((s) => s.direction === 'you_owe_them').length} split expense(s)`,
         isSettled: false,
         expenseId: rec.expenseIds[0],
+        splits: rec.splits.filter((s) => s.direction === 'you_owe_them'),
       })
     }
   })
@@ -227,8 +249,15 @@ export default function PendingRequestsModal({
     : []
 
   const handleSettle = (id: string) => {
+    const targetItem = activeDebts.find((d) => d.id === id)
     setSettledIds((prev) => {
       const next = new Set(prev).add(id)
+      if (targetItem) {
+        const rec = memberMap.get(targetItem.person)
+        if (rec?.expenseIds) {
+          rec.expenseIds.forEach((eid) => next.add(eid))
+        }
+      }
       try {
         localStorage.setItem('tripwallet_settled_debt_ids', JSON.stringify(Array.from(next)))
         window.dispatchEvent(new CustomEvent('tripwallet_settlement_updated', { detail: { id } }))
@@ -392,6 +421,30 @@ export default function PendingRequestsModal({
                       </button>
                     </div>
                   </div>
+
+                  {/* INDIVIDUAL SPLIT BREAKDOWN */}
+                  {debt.splits && debt.splits.length > 0 && (
+                    <div className="pt-2 border-t border-slate-100 space-y-1">
+                      {debt.splits.map((s, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-[11px] bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 text-slate-700"
+                        >
+                          <span className="font-semibold truncate">
+                            {s.merchant} <span className="text-slate-400 font-normal">({s.category})</span>
+                          </span>
+                          <span
+                            className={`font-extrabold shrink-0 ${
+                              s.direction === 'they_owe_you' ? 'text-emerald-700' : 'text-rose-600'
+                            }`}
+                          >
+                            {s.direction === 'they_owe_you' ? '+' : '-'}
+                            {currencySymbol}{s.amount.toLocaleString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))
             )

@@ -127,7 +127,10 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
 
   if (tripExpenses.length > 0) {
     tripExpenses.forEach((e) => {
-      const eAmountHome = convertCurrency(e.convertedAmount || e.amount, e.currency || userHomeCurr, userHomeCurr)
+      const eAmountHome =
+        e.convertedAmount && e.convertedAmount > 0
+          ? e.convertedAmount
+          : convertCurrency(e.amount, e.currency || userHomeCurr, userHomeCurr)
       const isPaidByMe = isUserMatch(e.paidBy, currentUser)
       const splitMembers =
         e.splitBetween && e.splitBetween.length > 0
@@ -160,20 +163,13 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
 
               const debtKey = `debt_${e.id}_${m}`
               const cleanM = m.toLowerCase().replace(/\s+/g, '').replace(/\((current user|you|admin|owner|editor|viewer)\)/gi, '')
-              const resolvedM = resolveMemberName(m)
-              const cleanResolvedM = resolvedM.toLowerCase().replace(/\s+/g, '')
 
               const isMemberSettled =
                 e.isSettled ||
                 settledIds.has(e.id) ||
                 settledIds.has(debtKey) ||
-                settledIds.has(m) ||
-                settledIds.has(cleanM) ||
-                settledIds.has(`debt_net_${resolvedM.replace(/\s+/g, '_')}`) ||
-                settledIds.has(`debt_net_${m.replace(/\s+/g, '_')}`) ||
-                settledIds.has(`settle_${m}`) ||
-                settledIds.has(`settle_${cleanM}`) ||
-                settledIds.has(`settle_${cleanResolvedM}`)
+                settledIds.has(`settle_${e.id}_${m}`) ||
+                settledIds.has(`settle_${e.id}_${cleanM}`)
 
               if (isMemberSettled) {
                 // Settled money received -> credited back / added to Payer's personal budget

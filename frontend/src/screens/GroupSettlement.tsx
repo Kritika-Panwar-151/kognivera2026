@@ -15,6 +15,14 @@ interface Props {
   currentUser?: User | null
 }
 
+interface SplitDetail {
+  merchant: string
+  amount: number
+  category: string
+  date: string
+  direction: 'they_owe_you' | 'you_owe_them'
+}
+
 interface DebtItem {
   id: string
   person: string
@@ -25,6 +33,7 @@ interface DebtItem {
   reason: string
   isSettled: boolean
   expenseIds?: string[]
+  splits?: SplitDetail[]
 }
 
 export default function GroupSettlement({ navigate, trip, expenses, currentUser }: Props) {
@@ -38,7 +47,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
 
     const tripExpenses = (expenses || []).filter((exp) => !trip?.id || isTripMatch(exp.tripId, trip.id))
 
-    // Map of memberName -> { owedToMe: number, iOweThem: number, expenseIds: string[], isAllSettled: boolean }
+    // Map of memberName -> { owedToMe: number, iOweThem: number, expenseIds: string[], splits: SplitDetail[], isAllSettled: boolean }
     const memberMap = new Map<
       string,
       {
@@ -46,6 +55,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
         owedToMe: number
         iOweThem: number
         expenseIds: string[]
+        splits: SplitDetail[]
         isAllSettled: boolean
       }
     >()
@@ -119,11 +129,21 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                     owedToMe: 0,
                     iOweThem: 0,
                     expenseIds: [],
+                    splits: [],
                     isAllSettled: true,
                   })
                 }
                 const record = memberMap.get(resolvedName)!
                 record.expenseIds.push(exp.id)
+                if (share > 0) {
+                  record.splits.push({
+                    merchant: exp.merchant || 'Shared Expense',
+                    amount: share,
+                    category: exp.category || 'Other',
+                    date: exp.date || '',
+                    direction: 'they_owe_you',
+                  })
+                }
                 if (!exp.isSettled) {
                   record.owedToMe += share
                   record.isAllSettled = false
@@ -143,11 +163,21 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                   owedToMe: 0,
                   iOweThem: 0,
                   expenseIds: [],
+                  splits: [],
                   isAllSettled: true,
                 })
               }
               const record = memberMap.get(resolvedPayer)!
               record.expenseIds.push(exp.id)
+              if (myShare > 0) {
+                record.splits.push({
+                  merchant: exp.merchant || 'Shared Expense',
+                  amount: myShare,
+                  category: exp.category || 'Other',
+                  date: exp.date || '',
+                  direction: 'you_owe_them',
+                })
+              }
               if (!exp.isSettled) {
                 record.iOweThem += myShare
                 record.isAllSettled = false
@@ -177,9 +207,10 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
           direction: 'they_owe_you',
           amount: Math.round(net),
           currency: userHomeCurr,
-          reason: `Net balance across shared trip expenses`,
+          reason: `Net balance across ${rec.splits.filter((s) => s.direction === 'they_owe_you').length} split expense(s)`,
           isSettled: rec.owedToMe === 0 && rec.isAllSettled,
           expenseIds: rec.expenseIds,
+          splits: rec.splits.filter((s) => s.direction === 'they_owe_you'),
         })
       } else if (net < 0) {
         // currentUser owes Person net
@@ -190,9 +221,10 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
           direction: 'you_owe_them',
           amount: Math.abs(Math.round(net)),
           currency: userHomeCurr,
-          reason: `Net balance across shared trip expenses`,
+          reason: `Net balance across ${rec.splits.filter((s) => s.direction === 'you_owe_them').length} split expense(s)`,
           isSettled: rec.iOweThem === 0 && rec.isAllSettled,
           expenseIds: rec.expenseIds,
+          splits: rec.splits.filter((s) => s.direction === 'you_owe_them'),
         })
       } else if (rec.isAllSettled && rec.expenseIds.length > 0) {
         list.push({
@@ -205,6 +237,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
           reason: `All shared expenses settled`,
           isSettled: true,
           expenseIds: rec.expenseIds,
+          splits: rec.splits,
         })
       }
     })
@@ -450,14 +483,14 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             activeTheyOweYouList.map((item) => (
               <div
                 key={item.id}
-                className="p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 bg-emerald-50/40 border-emerald-200/80 hover:bg-emerald-50"
+                className="p-3.5 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-emerald-50/40 border-emerald-200/80 hover:bg-emerald-50"
               >
                 {/* Person Info */}
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div className="w-10 h-10 rounded-xl bg-white border border-emerald-100 flex items-center justify-center text-xl shrink-0 shadow-2xs">
                     {item.avatar}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-slate-900 text-sm truncate">{item.person}</p>
                       <span className="text-xs font-extrabold text-emerald-800">
@@ -465,6 +498,25 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 truncate">{item.reason}</p>
+
+                    {/* INDIVIDUAL SPLIT ITEMS BREAKDOWN */}
+                    {item.splits && item.splits.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {item.splits.map((s, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between gap-2 text-[11px] bg-white/90 px-2.5 py-1 rounded-lg border border-emerald-100 text-slate-700 shadow-2xs"
+                          >
+                            <span className="font-semibold truncate">
+                              {s.merchant} <span className="text-slate-400 font-normal">({s.category})</span>
+                            </span>
+                            <span className="font-extrabold text-emerald-700 shrink-0">
+                              +{homeSymbol}{s.amount.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -472,7 +524,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                 <button
                   type="button"
                   onClick={() => promptSettleConfirm(item)}
-                  className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-2xs"
+                  className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 rounded-xl text-xs font-bold transition shrink-0 flex items-center justify-center gap-1 shadow-2xs self-end sm:self-center"
                 >
                   <span>Acknowledge Settle</span>
                 </button>
@@ -506,14 +558,14 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             activeYouOweList.map((item) => (
               <div
                 key={item.id}
-                className="p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 bg-rose-50/40 border-rose-200/80 hover:bg-rose-50"
+                className="p-3.5 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-rose-50/40 border-rose-200/80 hover:bg-rose-50"
               >
                 {/* Person Info */}
-                <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div className="w-10 h-10 rounded-xl bg-white border border-rose-100 flex items-center justify-center text-xl shrink-0 shadow-2xs">
                     {item.avatar}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-slate-900 text-sm truncate">{item.person}</p>
                       <span className="text-xs font-extrabold text-rose-800">
@@ -521,6 +573,25 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 truncate">{item.reason}</p>
+
+                    {/* INDIVIDUAL SPLIT ITEMS BREAKDOWN */}
+                    {item.splits && item.splits.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {item.splits.map((s, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between gap-2 text-[11px] bg-white/90 px-2.5 py-1 rounded-lg border border-rose-100 text-slate-700 shadow-2xs"
+                          >
+                            <span className="font-semibold truncate">
+                              {s.merchant} <span className="text-slate-400 font-normal">({s.category})</span>
+                            </span>
+                            <span className="font-extrabold text-rose-700 shrink-0">
+                              -{homeSymbol}{s.amount.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -528,7 +599,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
                 <button
                   type="button"
                   onClick={() => promptSettleConfirm(item)}
-                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white active:scale-95 rounded-xl text-xs font-bold transition shrink-0 flex items-center gap-1 shadow-2xs"
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white active:scale-95 rounded-xl text-xs font-bold transition shrink-0 flex items-center justify-center gap-1 shadow-2xs self-end sm:self-center"
                 >
                   <span>Pay & Settle {homeSymbol}{item.amount.toLocaleString()}</span>
                 </button>
