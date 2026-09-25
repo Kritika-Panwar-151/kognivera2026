@@ -880,83 +880,65 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
           </div>
         </div>
 
-        {/* ================= SECTION 4: CATEGORY BUDGET ALLOCATION (CUSTOM ENTERING) ================= */}
-        <div className="pt-4 border-t border-slate-100 space-y-4">
+        {/* ================= SECTION 4: CATEGORY BUDGET ALLOCATION (COMPACT & EDITABLE) ================= */}
+        <div className="pt-4 border-t border-slate-100 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <span>4. Category Budget Allocation (Custom % & Fixed Caps)</span>
+              <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                4. Category Budget Caps (% Allocation)
               </h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">
-                Allocate fixed percentages or custom amounts of your total budget ({hostHomeSymbol}{hostPersonalBudget.toLocaleString()} {hostHomeCurr}) across spending categories.
+              <p className="text-[11px] text-slate-400">
+                Adjust category breakdown of your {hostHomeSymbol}{hostPersonalBudget.toLocaleString()} {hostHomeCurr} budget
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              {totalPctAllocated !== 100 && (
+                <button
+                  type="button"
+                  onClick={handleAutoBalanceCategories}
+                  className="text-[11px] font-bold text-amber-800 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300 transition cursor-pointer"
+                >
+                  ⚖️ Auto-Balance
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleResetCategoryDefaults}
+                className="text-[11px] font-bold text-teal-800 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 px-2.5 py-1 rounded-lg border border-teal-200 transition cursor-pointer"
+                title="Reset to 35/25/20/10/10"
+              >
+                ↺ Reset (35/25/20/10/10)
+              </button>
               <span
-                className={`text-xs font-extrabold px-3 py-1 rounded-full border transition flex items-center gap-1.5 ${
+                className={`text-xs font-extrabold px-2.5 py-1 rounded-lg border ${
                   totalPctAllocated === 100
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                     : 'bg-amber-50 text-amber-800 border-amber-300'
                 }`}
               >
-                {totalPctAllocated === 100 ? '✅ Total Allocated: 100%' : `⚠️ Total Allocated: ${totalPctAllocated}%`}
+                {totalPctAllocated === 100 ? '✅ 100%' : `⚠️ ${totalPctAllocated}%`}
               </span>
             </div>
           </div>
 
-          {/* Warning banner if allocation sum is not 100% */}
-          {totalPctAllocated !== 100 && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-amber-900">
-              <div className="flex items-center gap-2">
-                <span className="text-base">⚠️</span>
-                <span>
-                  {totalPctAllocated < 100
-                    ? `You have ${100 - totalPctAllocated}% (${hostHomeSymbol}${Math.round(hostPersonalBudget * ((100 - totalPctAllocated) / 100)).toLocaleString()}) unallocated.`
-                    : `You have over-allocated by ${totalPctAllocated - 100}% (${hostHomeSymbol}${Math.round(hostPersonalBudget * ((totalPctAllocated - 100) / 100)).toLocaleString()}).`}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleAutoBalanceCategories}
-                className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-[11px] shrink-0 transition cursor-pointer"
-              >
-                ⚖️ Auto-Balance to 100%
-              </button>
-            </div>
-          )}
-
-          {/* Relative Percentage Stacked Progress Bar */}
-          <div className="space-y-1.5">
-            <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
-              {categoryConfig.map((cat) => {
-                const pct = categoryPcts[cat.key] || 0
-                if (pct <= 0) return null
-                return (
-                  <div
-                    key={cat.key}
-                    style={{ width: `${Math.min(100, pct)}%` }}
-                    className={`${cat.color} h-full transition-all duration-300 relative group`}
-                    title={`${cat.label}: ${pct}%`}
-                  />
-                )
-              })}
-            </div>
-
-            {/* Quick Actions / Reset Buttons */}
-            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
-              <span className="font-medium">Adjust sliders or enter percentages/amounts directly below:</span>
-              <button
-                type="button"
-                onClick={handleResetCategoryDefaults}
-                className="text-teal-700 hover:text-teal-800 font-bold underline cursor-pointer"
-              >
-                ↺ Reset Default (35/25/20/10/10)
-              </button>
-            </div>
+          {/* Compact Stacked Progress Bar */}
+          <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+            {categoryConfig.map((cat) => {
+              const pct = categoryPcts[cat.key] || 0
+              if (pct <= 0) return null
+              return (
+                <div
+                  key={cat.key}
+                  style={{ width: `${Math.min(100, pct)}%` }}
+                  className={`${cat.color} h-full transition-all duration-300`}
+                  title={`${cat.label}: ${pct}% (${hostHomeSymbol}${Math.round(hostPersonalBudget * (pct / 100)).toLocaleString()})`}
+                />
+              )
+            })}
           </div>
 
-          {/* Category Input Rows */}
-          <div className="grid grid-cols-1 gap-3">
+          {/* Compressed Editable Category Grid */}
+          <div className="bg-slate-50/70 rounded-2xl border border-slate-200/80 p-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2">
             {categoryConfig.map((cat) => {
               const pct = categoryPcts[cat.key]
               const amount = Math.round(hostPersonalBudget * (pct / 100))
@@ -964,60 +946,28 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
               return (
                 <div
                   key={cat.key}
-                  className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-teal-200 transition shadow-2xs space-y-2"
+                  className="flex items-center justify-between bg-white border border-slate-200/90 rounded-xl px-3 py-2 shadow-2xs hover:border-teal-300 transition"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-xl p-1.5 rounded-xl bg-slate-50 border border-slate-100">{cat.icon}</span>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-800">{cat.label}</h4>
-                        <span className="text-[10px] font-semibold text-slate-400">
-                          Fixed allocation cap for {cat.label.toLowerCase()}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 self-end sm:self-auto">
-                      {/* Amount Input */}
-                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-                        <span className="text-xs font-bold text-slate-400 mr-1">{hostHomeSymbol}</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="100"
-                          value={amount}
-                          onChange={(e) =>
-                            handleAmountChange(cat.key, parseFloat(e.target.value) || 0, hostPersonalBudget)
-                          }
-                          className="w-24 text-xs font-black text-slate-900 outline-none text-right bg-transparent"
-                        />
-                      </div>
-
-                      {/* Percentage Input */}
-                      <div className="flex items-center bg-teal-50 border border-teal-200 rounded-xl px-2.5 py-1.5">
-                        <input
-                          type="number"
-                          min="0"
-                          max="100"
-                          value={pct}
-                          onChange={(e) => handlePctChange(cat.key, parseFloat(e.target.value) || 0)}
-                          className="w-12 text-xs font-black text-teal-900 outline-none text-right bg-transparent"
-                        />
-                        <span className="text-xs font-bold text-teal-700 ml-1">%</span>
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-base shrink-0">{cat.icon}</span>
+                    <span className="text-xs font-bold text-slate-800 truncate">{cat.label}</span>
                   </div>
 
-                  {/* Range Slider for smooth visual allocation */}
-                  <div className="flex items-center gap-3 pt-1">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={pct}
-                      onChange={(e) => handlePctChange(cat.key, parseFloat(e.target.value) || 0)}
-                      className="w-full accent-teal-600 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                    />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[11px] font-bold text-slate-500">
+                      {hostHomeSymbol}{amount.toLocaleString()}
+                    </span>
+                    <div className="flex items-center bg-teal-50/90 border border-teal-200 rounded-lg px-2 py-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={pct}
+                        onChange={(e) => handlePctChange(cat.key, parseFloat(e.target.value) || 0)}
+                        className="w-9 text-xs font-black text-teal-950 outline-none text-right bg-transparent"
+                      />
+                      <span className="text-[10px] font-bold text-teal-700 ml-0.5">%</span>
+                    </div>
                   </div>
                 </div>
               )
