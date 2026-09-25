@@ -72,11 +72,20 @@ export function resolveMemberName(idOrName: string, registeredUsers?: User[], cu
  */
 export function isUserMatch(memberIdOrName: string | undefined, user: Partial<User> | null | undefined): boolean {
   if (!memberIdOrName || !user) return false
-  const target = memberIdOrName.toLowerCase().replace(/\s+/g, '').trim()
-  const uid = (user.id || '').toLowerCase().replace(/\s+/g, '').trim()
-  const uname = (user.name || '').toLowerCase().replace(/\s+/g, '').trim()
+  const rawTarget = memberIdOrName.toLowerCase().trim()
+  const target = rawTarget
+    .replace(/\((current user|you|admin|owner|editor|viewer)\)/gi, '')
+    .replace(/\s+/g, '')
+    .trim()
 
-  if (target === uid || target === uname) return true
+  const uid = (user.id || '').toLowerCase().replace(/\s+/g, '').trim()
+  const uname = (user.name || '')
+    .toLowerCase()
+    .replace(/\((current user|you|admin|owner|editor|viewer)\)/gi, '')
+    .replace(/\s+/g, '')
+    .trim()
+
+  if (target === uid || target === uname || rawTarget === uid || rawTarget === uname) return true
   if (target === 'usr_you' || target === 'you') return true
 
   // Compare numerical suffixes e.g. usr_000000000019 -> 19 vs User19 -> 19
@@ -85,7 +94,10 @@ export function isUserMatch(memberIdOrName: string | undefined, user: Partial<Us
   const unameNum = uname.replace(/^(usr_|user_?)/i, '').replace(/^0+/g, '')
 
   if (targetNum && (targetNum === uidNum || targetNum === unameNum)) return true
-  if (uid.includes(target) || target.includes(uid) || uname.includes(target) || target.includes(uname)) return true
+  if (uid && target.includes(uid)) return true
+  if (uname && target.includes(uname)) return true
+  if (uid && uid.includes(target)) return true
+  if (uname && uname.includes(target)) return true
 
   return false
 }

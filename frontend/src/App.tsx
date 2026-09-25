@@ -677,12 +677,19 @@ export default function App() {
 
   const handleAddExpense = (newExpense: Expense) => {
     setExpenses((prev) => deduplicateExpenses([newExpense, ...prev]))
+    setTrips((prev) =>
+      prev.map((t) =>
+        isTripMatch(t.id, newExpense.tripId) || (currentTrip && t.id === currentTrip.id)
+          ? { ...t, spent: Math.round((t.spent || 0) + (newExpense.convertedAmount || newExpense.amount || 0)) }
+          : t
+      )
+    )
     if (currentTrip) {
       setCurrentTripState((prev) =>
         prev
           ? {
               ...prev,
-              spent: prev.spent + newExpense.convertedAmount,
+              spent: Math.round((prev.spent || 0) + (newExpense.convertedAmount || newExpense.amount || 0)),
             }
           : null
       )

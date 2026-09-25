@@ -127,7 +127,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
           }
         }
       } else {
-        if (isPaidByMe) {
+        if (isPaidByMe || isSplitWithMe) {
           personalSpent += Math.round(eAmountHome)
         }
       }
