@@ -207,7 +207,14 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
   }, [expenses, currentUser, trip])
 
   // Persistent Set of settled debt IDs to guarantee settled cards vanish immediately and never reappear upon re-render
-  const [locallySettledIds, setLocallySettledIds] = useState<Set<string>>(new Set())
+  const [locallySettledIds, setLocallySettledIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('tripwallet_settled_debt_ids')
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
 
   // Realtime subscription: Sync live when settlement status changes on any device
   useEffect(() => {
@@ -218,7 +225,13 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       .on('broadcast', { event: 'settle_toggle' }, (payload: any) => {
         if (payload?.payload?.id) {
           const { id } = payload.payload
-          setLocallySettledIds((prev) => new Set(prev).add(id))
+          setLocallySettledIds((prev) => {
+            const next = new Set(prev).add(id)
+            try {
+              localStorage.setItem('tripwallet_settled_debt_ids', JSON.stringify(Array.from(next)))
+            } catch {}
+            return next
+          })
         }
       })
       .subscribe()
@@ -247,6 +260,11 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       next.add(id)
       if (targetItem?.expenseIds) {
         targetItem.expenseIds.forEach((eid) => next.add(eid))
+      }
+      try {
+        localStorage.setItem('tripwallet_settled_debt_ids', JSON.stringify(Array.from(next)))
+      } catch (e) {
+        console.warn('Failed to store settled debt IDs in localStorage:', e)
       }
       return next
     })

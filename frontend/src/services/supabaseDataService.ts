@@ -159,6 +159,7 @@ export async function fetchExpensesFromSupabase(tripId?: string): Promise<Expens
         paidBy: payerId,
         isShared,
         splitBetween,
+        isSettled: Boolean(e.is_settled),
       }
     })
   } catch (err) {
