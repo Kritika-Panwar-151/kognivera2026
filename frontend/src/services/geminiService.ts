@@ -79,10 +79,10 @@ export async function parseReceiptWithGeminiVision({
     throw new Error('No receipt image provided for scanning')
   }
 
-  // 1. Live Google Gemini Vision OCR with gemini-3.6-flash
+  // 1. Live Google Gemini Vision OCR with gemini-1.5-flash
   if (genAI && GEMINI_API_KEY && GEMINI_API_KEY !== 'your_gemini_api_key_here') {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
       const prompt = `You are an expert AI Receipt OCR specialist for TripWallet.
 Analyze this receipt image and extract structured financial data.
 
@@ -248,7 +248,7 @@ CRITICAL IDENTITY & ACCESS RULES:
   if (genAI && GEMINI_API_KEY && GEMINI_API_KEY !== 'your_gemini_api_key_here') {
     try {
       const model = genAI.getGenerativeModel({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-1.5-flash',
         systemInstruction: systemInstructions,
       })
 
@@ -408,7 +408,7 @@ export async function parseNaturalLanguageExpenseWithLLM({
   // 1. Try Gemini Generative AI if key is configured
   if (genAI) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
       const prompt = `
 You are the AI Financial Entity Extractor for TripWallet.
 A traveler typed/spoke an expense: "${cleanInput}"
@@ -665,7 +665,7 @@ export async function forecastSpendRunwayWithLLM({
   // 1. Try Gemini LLM for predictive intelligence
   if (genAI) {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
       const prompt = `
 You are the Chief AI Travel Financial Officer for TripWallet.
 Analyze this live group trip and predict financial runway and overrun risk:
@@ -869,7 +869,7 @@ export async function queryGuardianCopilotWithLLM(
   // 2. Try Gemini 1.5 Flash if available
   if (genAI && GEMINI_API_KEY && GEMINI_API_KEY !== 'your_gemini_api_key_here') {
     try {
-      const model = genAI.getGenerativeModel({ model: 'gemini-3.6-flash' })
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
       const prompt = `
 You are the AI Travel Guardian & Financial Copilot for TripWallet.
 
