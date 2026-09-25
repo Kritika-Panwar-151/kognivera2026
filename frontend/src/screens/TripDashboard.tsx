@@ -718,84 +718,170 @@ export default function TripDashboard({
       {/* =========================
           DUAL-TIER QUICK STATS CARDS: GROUP BUDGET + MY PERSONAL BUDGET
       ========================= */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
-        {/* CARD 1: GROUP TRIP BUDGET */}
-        <div className="bg-white rounded-2xl border border-teal-200 shadow-sm p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Group Trip Budget</p>
-            <span className="text-xl">👥</span>
-          </div>
-          <p className="text-2xl font-black text-slate-900">
-            {groupBudgetDual.primary}
-          </p>
-          <p className="text-[10px] text-teal-700 font-mono font-semibold">
-            ≈ {groupBudgetDual.secondary} (Destination)
-          </p>
-          <p className="text-[11px] text-slate-500 font-medium mt-1">
-            Sum of all {partyMembers.length} members' budgets
-          </p>
-        </div>
-
-        {/* CARD 2: MY PERSONAL BUDGET */}
-        <div className="bg-indigo-50/50 rounded-2xl border border-indigo-200 shadow-sm p-4 hover:shadow-md transition relative">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">My Personal Budget</p>
-            <span className="text-xl">👤</span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <p className="text-2xl font-black text-indigo-900">
-              {personalBudgetDual.primary}
+      {/* =========================
+          DUAL-TIER QUICK STATS CARDS: SOLO vs GROUP TRIP MODES
+      ========================= */}
+      {partyMembers.length <= 1 ? (
+        /* SOLO TRIP MODE: UNIFIED SOLO STATS CARDS */
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
+          {/* CARD 1: MY TRIP BUDGET */}
+          <div className="bg-indigo-50/50 rounded-2xl border border-indigo-200 shadow-sm p-4 hover:shadow-md transition relative">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] text-indigo-700 font-bold uppercase tracking-wider">My Trip Budget</p>
+              <span className="text-xl">🧳</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <p className="text-2xl font-black text-indigo-950">
+                {personalBudgetDual.primary}
+              </p>
+              <button
+                type="button"
+                onClick={openBudgetEditor}
+                className="text-[10px] bg-indigo-600 text-white font-bold px-2 py-0.5 rounded-lg hover:bg-indigo-700 transition cursor-pointer"
+              >
+                Edit
+              </button>
+            </div>
+            <p className="text-[10px] text-indigo-700 font-mono font-semibold">
+              ≈ {personalBudgetDual.secondary} (Destination)
             </p>
-            <button
-              type="button"
-              onClick={openBudgetEditor}
-              className="text-[10px] bg-indigo-600 text-white font-bold px-2 py-0.5 rounded-lg hover:bg-indigo-700 transition"
-            >
-              Edit
-            </button>
+            <p className="text-[11px] text-indigo-600 font-medium mt-1">
+              {personalRemainingDual.primary} remaining for your trip
+            </p>
           </div>
-          <p className="text-[10px] text-indigo-700 font-mono font-semibold">
-            ≈ {personalBudgetDual.secondary} (Destination)
-          </p>
-          <p className="text-[11px] text-indigo-600 font-medium mt-1">
-            {personalRemainingDual.primary} remaining for you
-          </p>
-        </div>
 
-        {/* CARD 3: GROUP SPENT TO DATE */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Group Spent to Date</p>
-            <span className="text-xl">🧾</span>
+          {/* CARD 2: MY SPENT TO DATE */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 hover:shadow-md transition">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">My Spent to Date</p>
+              <span className="text-xl">💳</span>
+            </div>
+            <p className="text-2xl font-black text-slate-900">
+              {personalSpentDual.primary}
+            </p>
+            <p className="text-[10px] text-teal-700 font-mono font-semibold">
+              ≈ {personalSpentDual.secondary} (Destination)
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">
+              {personalPct}% of total budget used
+            </p>
           </div>
-          <p className="text-2xl font-black text-slate-900">
-            {groupSpentDual.primary}
-          </p>
-          <p className="text-[10px] text-teal-700 font-mono font-semibold">
-            ≈ {groupSpentDual.secondary} (Destination)
-          </p>
-          <p className="text-[11px] text-slate-400 mt-1">
-            {daysGone} of {daysTotal} days used ({pct}%)
-          </p>
-        </div>
 
-        {/* CARD 4: MY PERSONAL SPEND */}
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">My Personal Spend</p>
-            <span className="text-xl">💳</span>
+          {/* CARD 3: SAFE DAILY PACE */}
+          <div className="bg-white rounded-2xl border border-teal-200 shadow-sm p-4 hover:shadow-md transition">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] text-teal-800 font-bold uppercase tracking-wider">Safe Daily Pace</p>
+              <span className="text-xl">📊</span>
+            </div>
+            <p className="text-2xl font-black text-slate-900">
+              {personalSafeDailyDual.primary}
+            </p>
+            <p className="text-[10px] text-teal-700 font-mono font-semibold">
+              ≈ {personalSafeDailyDual.secondary} (Destination)
+            </p>
+            <p className="text-[11px] text-teal-700 font-medium mt-1">
+              Daily target across {daysLeft} day(s) left
+            </p>
           </div>
-          <p className="text-2xl font-black text-emerald-800">
-            {personalSpentDual.primary}
-          </p>
-          <p className="text-[10px] text-teal-700 font-mono font-semibold">
-            ≈ {personalSpentDual.secondary} (Destination)
-          </p>
-          <p className="text-[11px] text-emerald-600 font-semibold mt-1">
-            {personalPct}% of individual cap ({daysLeft} days left)
-          </p>
+
+          {/* CARD 4: TRIP DURATION & DAYS */}
+          <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-4 hover:shadow-md transition">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider">Trip Duration</p>
+              <span className="text-xl">📅</span>
+            </div>
+            <p className="text-2xl font-black text-emerald-950">
+              {daysLeft} Day{daysLeft !== 1 ? 's' : ''} Left
+            </p>
+            <p className="text-[10px] text-emerald-700 font-mono font-semibold">
+              {daysGone} of {daysTotal} day(s) completed
+            </p>
+            <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+              Solo Traveller Mode
+            </p>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* GROUP TRIP MODE: GROUP & PERSONAL BUDGET COMPARISON CARDS */
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-6">
+          {/* CARD 1: GROUP TRIP BUDGET */}
+          <div className="bg-white rounded-2xl border border-teal-200 shadow-sm p-4 hover:shadow-md transition">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Group Trip Budget</p>
+              <span className="text-xl">👥</span>
+            </div>
+            <p className="text-2xl font-black text-slate-900">
+              {groupBudgetDual.primary}
+            </p>
+            <p className="text-[10px] text-teal-700 font-mono font-semibold">
+              ≈ {groupBudgetDual.secondary} (Destination)
+            </p>
+            <p className="text-[11px] text-slate-500 font-medium mt-1">
+              Sum of all {partyMembers.length} members' budgets
+            </p>
+          </div>
+
+          {/* CARD 2: MY PERSONAL BUDGET */}
+          <div className="bg-indigo-50/50 rounded-2xl border border-indigo-200 shadow-sm p-4 hover:shadow-md transition relative">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider">My Personal Budget</p>
+              <span className="text-xl">👤</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <p className="text-2xl font-black text-indigo-900">
+                {personalBudgetDual.primary}
+              </p>
+              <button
+                type="button"
+                onClick={openBudgetEditor}
+                className="text-[10px] bg-indigo-600 text-white font-bold px-2 py-0.5 rounded-lg hover:bg-indigo-700 transition"
+              >
+                Edit
+              </button>
+            </div>
+            <p className="text-[10px] text-indigo-700 font-mono font-semibold">
+              ≈ {personalBudgetDual.secondary} (Destination)
+            </p>
+            <p className="text-[11px] text-indigo-600 font-medium mt-1">
+              {personalRemainingDual.primary} remaining for you
+            </p>
+          </div>
+
+          {/* CARD 3: GROUP SPENT TO DATE */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 hover:shadow-md transition">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Group Spent to Date</p>
+              <span className="text-xl">🧾</span>
+            </div>
+            <p className="text-2xl font-black text-slate-900">
+              {groupSpentDual.primary}
+            </p>
+            <p className="text-[10px] text-teal-700 font-mono font-semibold">
+              ≈ {groupSpentDual.secondary} (Destination)
+            </p>
+            <p className="text-[11px] text-slate-400 mt-1">
+              {daysGone} of {daysTotal} days used ({pct}%)
+            </p>
+          </div>
+
+          {/* CARD 4: MY PERSONAL SPEND */}
+          <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-4 hover:shadow-md transition">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">My Personal Spend</p>
+              <span className="text-xl">💳</span>
+            </div>
+            <p className="text-2xl font-black text-emerald-800">
+              {personalSpentDual.primary}
+            </p>
+            <p className="text-[10px] text-teal-700 font-mono font-semibold">
+              ≈ {personalSpentDual.secondary} (Destination)
+            </p>
+            <p className="text-[11px] text-emerald-600 font-semibold mt-1">
+              {personalPct}% of individual cap ({daysLeft} days left)
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* =========================
           BUDGET GAUGE & AI GUARDIAN SECTION
