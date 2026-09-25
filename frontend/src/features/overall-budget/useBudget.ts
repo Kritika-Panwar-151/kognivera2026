@@ -1,9 +1,21 @@
+import { useState, useEffect } from 'react'
 import type { Trip, User, Expense } from '../common/types'
 import { isUserMatch, getRegisteredUsers } from '../../services/userRegistry'
 import { convertCurrency, getTripDestinationCurrency, isTripMatch } from '../../services/currencyService'
 import { calculateHareMemberBreakdown } from '../../features/group-settlement/largestRemainder'
 
 export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Expense[]) {
+  const [settlementVersion, setSettlementVersion] = useState(0)
+
+  useEffect(() => {
+    const handleUpdate = () => setSettlementVersion((v) => v + 1)
+    window.addEventListener('tripwallet_settlement_updated', handleUpdate)
+    window.addEventListener('storage', handleUpdate)
+    return () => {
+      window.removeEventListener('tripwallet_settlement_updated', handleUpdate)
+      window.removeEventListener('storage', handleUpdate)
+    }
+  }, [])
   const destCurr = getTripDestinationCurrency(trip)
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
   const registeredUsers = getRegisteredUsers()
@@ -96,8 +108,22 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
     trip?.personalBudget ??
     Math.round(budget / Math.max(trip?.members?.length || 1, 1))
 
-  // Calculate personal spend for currentUser using exact share deductions across shared & personal expenses
-  let personalSpent = 0
+  // Helper to read persistent set of settled debt IDs
+  const getSettledIds = (): Set<string> => {
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('tripwallet_settled_debt_ids')
+        return stored ? new Set(JSON.parse(stored)) : new Set()
+      }
+    } catch {}
+    return new Set()
+  }
+
+  const settledIds = getSettledIds()
+
+  // Out-of-pocket cash paid vs reimbursements received from settled co-member debts
+  let personalGrossSpent = 0
+  let personalReimbursementsReceived = 0
 
   if (tripExpenses.length > 0) {
     tripExpenses.forEach((e) => {
@@ -106,35 +132,45 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
       const splitMembers = e.splitBetween && e.splitBetween.length > 0 ? e.splitBetween : (trip?.members || ['usr_you'])
       const isSplitWithMe = splitMembers.some((m) => isUserMatch(m, currentUser))
 
-      if (e.isShared && splitMembers.length > 1) {
-        if (isSplitWithMe) {
-          if (e.splitBreakdown) {
-            const keys = Object.keys(e.splitBreakdown)
-            const matchedKey = keys.find((k) => isUserMatch(k, currentUser))
-            if (matchedKey && e.splitBreakdown[matchedKey] !== undefined) {
-              personalSpent += Math.round(e.splitBreakdown[matchedKey])
-            } else {
-              personalSpent += Math.round(eAmountHome / Math.max(splitMembers.length, 1))
+      if (isPaidByMe) {
+        // Payer paid full cash out of pocket upfront -> deducted from personal budget
+        personalGrossSpent += Math.round(eAmountHome)
+
+        // If shared with others, check which co-members have settled their debt back to Payer
+        if (e.isShared && splitMembers.length > 1) {
+          const shareMap = e.splitBreakdown || calculateHareMemberBreakdown(eAmountHome, splitMembers)
+
+          splitMembers.forEach((m) => {
+            if (!isUserMatch(m, currentUser)) {
+              const matchedKey = Object.keys(shareMap).find((k) => isUserMatch(k, { id: m, name: m }))
+              const memberShare = matchedKey && shareMap[matchedKey] !== undefined
+                ? Math.round(shareMap[matchedKey])
+                : Math.round(eAmountHome / Math.max(splitMembers.length, 1))
+
+              const debtKey = `debt_${e.id}_${m}`
+              const isMemberSettled = e.isSettled || settledIds.has(e.id) || settledIds.has(debtKey)
+
+              if (isMemberSettled) {
+                // Settled money received -> credited back / added to Payer's personal budget
+                personalReimbursementsReceived += memberShare
+              }
             }
-          } else {
-            const hareMap = calculateHareMemberBreakdown(eAmountHome, splitMembers)
-            const matchedKey = Object.keys(hareMap).find((k) => isUserMatch(k, currentUser))
-            if (matchedKey && hareMap[matchedKey] !== undefined) {
-              personalSpent += Math.round(hareMap[matchedKey])
-            } else {
-              personalSpent += Math.round(eAmountHome / Math.max(splitMembers.length, 1))
-            }
-          }
+          })
         }
-      } else {
-        if (isPaidByMe || isSplitWithMe) {
-          personalSpent += Math.round(eAmountHome)
-        }
+      } else if (isSplitWithMe) {
+        // Someone else paid, user owes their fair share
+        const shareMap = e.splitBreakdown || calculateHareMemberBreakdown(eAmountHome, splitMembers)
+        const matchedKey = Object.keys(shareMap).find((k) => isUserMatch(k, currentUser))
+        const myShare = matchedKey && shareMap[matchedKey] !== undefined
+          ? Math.round(shareMap[matchedKey])
+          : Math.round(eAmountHome / Math.max(splitMembers.length, 1))
+
+        personalGrossSpent += myShare
       }
     })
-  } else {
-    personalSpent = 0
   }
+
+  const personalSpent = Math.max(0, personalGrossSpent - personalReimbursementsReceived)
 
   const personalRemaining = Math.max(0, personalBudget - personalSpent)
   const personalPct =

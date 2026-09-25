@@ -263,6 +263,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       }
       try {
         localStorage.setItem('tripwallet_settled_debt_ids', JSON.stringify(Array.from(next)))
+        window.dispatchEvent(new CustomEvent('tripwallet_settlement_updated', { detail: { id } }))
       } catch (e) {
         console.warn('Failed to store settled debt IDs in localStorage:', e)
       }
