@@ -85,23 +85,38 @@ export default function App() {
     return user ? 'trip-dashboard' : 'login'
   }
 
+  const getStoredExpenses = (user: User | null): Expense[] => {
+    if (!user) return []
+    try {
+      const stored = localStorage.getItem(`tripwallet_user_expenses_${user.id}`)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      }
+    } catch (e) {
+      console.warn('Failed reading stored expenses:', e)
+    }
+    return []
+  }
+
   const initialUser = getStoredUser()
   const initialTrips = getStoredTrips(initialUser)
   const initialCurrentTrip = getStoredActiveTrip(initialTrips)
   const initialScreen = getStoredScreen(initialUser)
+  const initialExpenses = getStoredExpenses(initialUser)
 
   const [currentUser, setCurrentUser] = useState<User | null>(initialUser)
   const [screen, setScreenState] = useState<Screen>(initialScreen)
   const [trips, setTrips] = useState<Trip[]>(initialTrips)
   const [currentTrip, setCurrentTripState] = useState<Trip | null>(initialCurrentTrip)
-  const [expenses, setExpenses] = useState<Expense[]>([])
+  const [expenses, setExpenses] = useState<Expense[]>(initialExpenses)
   const [isConverterOpen, setIsConverterOpen] = useState(false)
   const [, setLoadingData] = useState(true)
   const [pendingInviteTrips, setPendingInviteTrips] = useState<Trip[]>([])
   const [selectedInviteTrip, setSelectedInviteTrip] = useState<Trip | null>(null)
   const [showInviteModal, setShowInviteModal] = useState(false)
 
-  // Sync active trip ID and user trips to localStorage per user
+  // Sync active trip ID, user trips, and expenses to localStorage per user
   useEffect(() => {
     if (currentUser && trips) {
       try {
@@ -111,6 +126,16 @@ export default function App() {
       }
     }
   }, [trips, currentUser])
+
+  useEffect(() => {
+    if (currentUser && expenses) {
+      try {
+        localStorage.setItem(`tripwallet_user_expenses_${currentUser.id}`, JSON.stringify(expenses))
+      } catch (e) {
+        console.warn('Failed saving expenses to localStorage:', e)
+      }
+    }
+  }, [expenses, currentUser])
 
   useEffect(() => {
     if (currentTrip?.id) {
@@ -159,7 +184,7 @@ export default function App() {
     })
   }
 
-  // Safe trip updater ensuring user isolation is always preserved
+  // Safe trip updater ensuring user isolation is always preserved while keeping local budget edits intact
   const updateTripsSafely = (freshTrips: Trip[], targetUser: User | null) => {
     if (!targetUser) {
       setTrips([])
@@ -170,10 +195,36 @@ export default function App() {
     const userTrips = deduplicateTrips(filterTripsForUser(freshTrips, targetUser))
     
     setTrips((prevTrips) => {
+      const mergedTrips = userTrips.map((ut) => {
+        const localMatch = prevTrips.find((pt) => pt.id === ut.id)
+        if (!localMatch) return ut
+
+        const localBudget = localMatch.budget || 0
+        const dbBudget = ut.budget || 0
+        const effectiveBudget = localBudget > 0 ? localBudget : dbBudget
+
+        const mergedMemberBudgets = {
+          ...(ut.memberBudgets || {}),
+          ...(localMatch.memberBudgets || {}),
+        }
+        const mergedCaps =
+          localMatch.categoryCaps && Object.keys(localMatch.categoryCaps).length > 0
+            ? localMatch.categoryCaps
+            : ut.categoryCaps
+
+        return {
+          ...ut,
+          budget: effectiveBudget,
+          personalBudget: localMatch.personalBudget ?? ut.personalBudget,
+          memberBudgets: mergedMemberBudgets,
+          categoryCaps: mergedCaps,
+        }
+      })
+
       const pendingLocalTrips = prevTrips.filter(
-        (pt) => (pt.ownerId === targetUser.id || isUserMatch(pt.ownerId, targetUser)) && !userTrips.some((ut) => ut.id === pt.id)
+        (pt) => (pt.ownerId === targetUser.id || isUserMatch(pt.ownerId, targetUser)) && !mergedTrips.some((ut) => ut.id === pt.id)
       )
-      const merged = deduplicateTrips([...userTrips, ...pendingLocalTrips])
+      const merged = deduplicateTrips([...mergedTrips, ...pendingLocalTrips])
       try {
         localStorage.setItem(`tripwallet_user_trips_${targetUser.id}`, JSON.stringify(merged))
       } catch (e) {}
@@ -191,12 +242,17 @@ export default function App() {
 
   // Safe expense merger ensuring DB sync never clears local expenses when DB returns empty array
   const mergeExpensesSafely = (freshExpenses: Expense[]) => {
-    if (!freshExpenses || !Array.isArray(freshExpenses) || freshExpenses.length === 0) return
     setExpenses((prev) => {
-      const dbIds = new Set(freshExpenses.map((e) => e.id))
+      const dbIds = new Set((freshExpenses || []).map((e) => e.id))
       const localOnly = prev.filter((e) => !dbIds.has(e.id))
-      const combined = [...freshExpenses, ...localOnly]
-      return deduplicateExpenses(combined)
+      const combined = [...(freshExpenses || []), ...localOnly]
+      const deduped = deduplicateExpenses(combined)
+      if (currentUser) {
+        try {
+          localStorage.setItem(`tripwallet_user_expenses_${currentUser.id}`, JSON.stringify(deduped))
+        } catch (e) {}
+      }
+      return deduped
     })
   }
 
@@ -237,11 +293,11 @@ export default function App() {
           // Strict user-filtered trips
           updateTripsSafely(loadedTrips, currentUser)
 
-          const userTrips = filterTripsForUser(loadedTrips, currentUser)
-          const userTripIds = new Set(userTrips.map((t) => t.id))
+          const allUserTrips = filterTripsForUser([...trips, ...loadedTrips], currentUser)
+          const userTripIds = new Set(allUserTrips.map((t) => t.id))
 
           const normalized = (loadedExpenses || [])
-            .filter((e) => userTripIds.has(e.tripId))
+            .filter((e) => !e.tripId || userTripIds.has(e.tripId) || (currentTrip?.id && isTripMatch(e.tripId, currentTrip.id)))
             .map((e) => {
               const origCurr = (e.currency || 'INR').toUpperCase()
               const destCurr = getTripDestinationCurrency(currentTrip)
@@ -252,9 +308,7 @@ export default function App() {
               }
             })
 
-          if (normalized.length > 0) {
-            mergeExpensesSafely(normalized)
-          }
+          mergeExpensesSafely(normalized)
         } else {
           // If no user is logged in, keep state completely clean
           setTrips([])
