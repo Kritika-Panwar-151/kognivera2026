@@ -310,10 +310,14 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
     }
   }
 
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   // -------------------------------------------------------------------------
   // Save & Commit Handlers
   // -------------------------------------------------------------------------
   const handleSave = () => {
+    if (isSubmitting) return
+    setIsSubmitting(true)
     const finalMembers = selectedMembers.length > 0 ? selectedMembers : [paidBy || currentUserName]
     const isShared = finalMembers.length > 1
 

@@ -172,12 +172,6 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
       onAddExpense(newExp)
     }
 
-    try {
-      await saveExpenseToSupabase(newExp, currentUser?.id)
-    } catch (e) {
-      console.warn('Supabase expense save notice:', e)
-    }
-
     localStorage.removeItem('last_scanned_receipt')
     navigate('expense-history')
   }

@@ -33,7 +33,7 @@ import {
 import { enqueueOfflineAction } from './services/offlineQueueService'
 import type { CategoryCaps } from './types'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { syncActiveCurrencies, getTripDestinationCurrency, convertCurrency, isTripMatch } from './services/currencyService'
+import { syncActiveCurrencies, getTripDestinationCurrency, convertCurrency, isTripMatch, deduplicateExpenses } from './services/currencyService'
 
 const DEFAULT_DEMO_TRIPS: Trip[] = [
   {
@@ -250,7 +250,8 @@ export default function App() {
     setExpenses((prev) => {
       const dbIds = new Set(freshExpenses.map((e) => e.id))
       const localOnly = prev.filter((e) => !dbIds.has(e.id))
-      return [...freshExpenses, ...localOnly]
+      const combined = [...freshExpenses, ...localOnly]
+      return deduplicateExpenses(combined)
     })
   }
 
@@ -594,7 +595,7 @@ export default function App() {
   }
 
   const handleAddExpense = (newExpense: Expense) => {
-    setExpenses((prev) => [newExpense, ...prev])
+    setExpenses((prev) => deduplicateExpenses([newExpense, ...prev]))
     if (currentTrip) {
       setCurrentTrip((prev) =>
         prev

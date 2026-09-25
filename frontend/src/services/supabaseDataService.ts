@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import type { Trip, Expense, User } from '../types'
+import { deduplicateExpenses } from './currencyService'
 
 // Clean production fallbacks: zero synthetic data for fresh users
 export const initialTripsFallback: Trip[] = []
@@ -133,7 +134,7 @@ export async function fetchExpensesFromSupabase(tripId?: string): Promise<Expens
       return []
     }
 
-    return rawExpenses.map((e) => {
+    const parsedExpenses: Expense[] = rawExpenses.map((e) => {
       const payerId = e.payer_user_id || 'usr_aisha'
       const rawSplit = Array.isArray(e.split_between) && e.split_between.length > 0
         ? e.split_between
@@ -162,6 +163,8 @@ export async function fetchExpensesFromSupabase(tripId?: string): Promise<Expens
         isSettled: Boolean(e.is_settled),
       }
     })
+
+    return deduplicateExpenses(parsedExpenses)
   } catch (err) {
     console.error('Error fetching expenses from Supabase:', err)
     return []
@@ -397,7 +400,7 @@ export async function saveExpenseToSupabase(expense: Expense, payerUserId: strin
     const isSharedVal = Boolean(expense.isShared && expense.splitBetween && expense.splitBetween.length > 1)
     const splitBetweenArr = isSharedVal ? (expense.splitBetween || [validPayerId]) : [validPayerId]
 
-    const { error } = await supabase.from('expenses').insert({
+    const { error } = await supabase.from('expenses').upsert({
       expense_id: expId,
       trip_id: validTripId,
       payer_user_id: validPayerId,
@@ -410,12 +413,12 @@ export async function saveExpenseToSupabase(expense: Expense, payerUserId: strin
       fx_rate_date: '2026-09-15',
       incurred_at: now,
       entry_method: 'manual',
-      is_settled: false,
+      is_settled: Boolean(expense.isSettled),
       split_between: splitBetweenArr,
       status: 'active',
       created_at: now,
       updated_at: now,
-    })
+    }, { onConflict: 'expense_id' })
 
     if (error) console.error('Supabase expense insert error:', error.message)
   } catch (err) {

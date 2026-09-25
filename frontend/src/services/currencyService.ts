@@ -324,3 +324,35 @@ export function isTripMatch(expenseTripId?: string, targetTripId?: string): bool
     return true
   return eId.includes(tId) || tId.includes(eId)
 }
+
+/**
+ * Deduplicates expenses by both unique ID and semantic signature (tripId + merchant + amount + category + date)
+ */
+export function deduplicateExpenses<T extends { id: string; tripId?: string; merchant?: string; amount?: number; category?: string; date?: string }>(expenses: T[]): T[] {
+  if (!expenses || !Array.isArray(expenses)) return []
+  const seenIds = new Set<string>()
+  const seenSignatures = new Set<string>()
+  const result: T[] = []
+
+  expenses.forEach((e) => {
+    if (!e || !e.id) return
+    // 1. Unique by ID
+    if (seenIds.has(e.id)) return
+    
+    // 2. Unique by semantic signature (tripId + merchant + amount + category + date)
+    const normMerchant = (e.merchant || '').trim().toLowerCase()
+    const normCategory = (e.category || '').trim().toLowerCase()
+    const normTrip = (e.tripId || '').trim().toLowerCase()
+    const normDate = (e.date || '').trim().toLowerCase()
+    const amt = Number(e.amount || 0).toFixed(2)
+    const signature = `${normTrip}_${normMerchant}_${amt}_${normCategory}_${normDate}`
+
+    if (seenSignatures.has(signature)) return
+
+    seenIds.add(e.id)
+    seenSignatures.add(signature)
+    result.push(e)
+  })
+
+  return result
+}
