@@ -23,11 +23,11 @@ interface Props {
 export default function CreateTripScreen({ navigate, currentUser, onCreated }: Props) {
   // Current host user
   const hostUser = currentUser || {
-    id: 'usr_you',
-    name: 'You (Aisha)',
-    email: 'aisha.rossi@example.invalid',
+    id: `usr_${Date.now().toString(36)}`,
+    name: 'You',
+    email: '',
     homeCurrency: 'INR',
-    avatar: '👩🏽',
+    avatar: '👤',
     role: 'Owner',
   }
 

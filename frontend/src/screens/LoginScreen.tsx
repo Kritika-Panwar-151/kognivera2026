@@ -27,7 +27,7 @@ interface Props {
   onSelectUser: (user: User) => void
 }
 
-export const sampleUsers: User[] = DEFAULT_USERS
+export const sampleUsers: User[] = []
 
 const AVATAR_OPTIONS = ['👩🏽', '👨🏽', '👩🏻', '👨🏻', '🧑🏽', '🧳', '🎒', '✈️']
 
@@ -454,31 +454,7 @@ export default function LoginScreen({ navigate, onSelectUser }: Props) {
               </button>
             </div>
 
-            {/* Quick Demo Sign In Buttons */}
-            <div className="mt-4 pt-3 border-t border-slate-100 space-y-2">
-              <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider text-center">
-                Quick Demo Accounts (1-Tap Sign In)
-              </p>
-              <div className="flex flex-wrap gap-1.5 justify-center">
-                {DEFAULT_USERS.slice(0, 4).map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    onClick={() => {
-                      setEmail(u.email)
-                      setPassword('TripWallet@2026')
-                      setMessage({ text: `Pre-filled credentials for ${u.name}. Click 'Sign In' or submit to log in.`, type: 'success' })
-                    }}
-                    className="px-2.5 py-1.5 bg-slate-50 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 rounded-xl text-xs font-bold text-slate-700 transition flex items-center gap-1 shadow-2xs"
-                  >
-                    <span>{u.avatar}</span>
-                    <span>{u.name.split(' ')[0]}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-3 pt-2 text-center">
+            <div className="mt-3 pt-2 text-center border-t border-slate-100">
               <p className="text-[11px] text-slate-400">
                 🔒 Enterprise security with Supabase multi-user auth and real-time ledger encryption.
               </p>

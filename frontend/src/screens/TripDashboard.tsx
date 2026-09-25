@@ -126,11 +126,11 @@ export default function TripDashboard({
   onUpdateTripName,
 }: Props) {
   const activeUser = currentUser || {
-    id: 'usr_you',
-    name: 'You (Aisha)',
-    email: 'aisha.rossi@example.invalid',
+    id: 'usr_user',
+    name: 'You',
+    email: '',
     homeCurrency: 'INR',
-    avatar: '👩🏽',
+    avatar: '👤',
     role: 'Owner',
   }
 
@@ -307,7 +307,7 @@ export default function TripDashboard({
 
   // Look up registered users to display members dynamically
   const registeredUsers = getRegisteredUsers()
-  const partyMembers = (trip.members || ['usr_you', 'usr_ravi', 'usr_asha']).map((memberId) => {
+  const partyMembers = (trip.members || []).map((memberId) => {
     const found = registeredUsers.find((u) => u.id === memberId)
     const detail = trip.memberDetails?.find((d) => d.userId === memberId)
     const isPending = detail ? detail.status === 'pending' : false

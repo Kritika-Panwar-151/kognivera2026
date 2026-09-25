@@ -90,8 +90,8 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
           const isPayerMe =
             exp.paidBy.toLowerCase().includes(currentUserName.toLowerCase()) ||
             exp.paidBy === currentUserId ||
-            (exp.paidBy.toLowerCase().includes('you') &&
-              (currentUserId === 'usr_aisha' || currentUserId === 'usr_you'))
+            exp.paidBy.toLowerCase() === 'you' ||
+            exp.paidBy.toLowerCase() === 'usr_you'
 
           if (isPayerMe) {
             // I paid this expense; each co-member owes me their share

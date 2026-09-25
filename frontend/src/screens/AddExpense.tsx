@@ -52,7 +52,7 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
     'THB (฿)',
   ]))
 
-  const tripMemberNames: string[] = (trip?.members || ['usr_you', 'usr_ravi', 'usr_asha']).map(
+  const tripMemberNames: string[] = (trip?.members || (currentUser ? [currentUser.id] : [])).map(
     (id) => {
       if (id === currentUser?.id) return currentUserName
       const found = registered.find((u) => u.id === id)
@@ -361,11 +361,9 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
   }
 
   const getMemberAvatar = (name: string) => {
-    const lower = name.toLowerCase()
-    if (lower.includes('you') || lower.includes('aisha')) return '👩🏽'
-    if (lower.includes('ravi')) return '👨🏽'
-    if (lower.includes('asha')) return '👩🏻'
-    if (lower.includes('david')) return '👨🏻'
+    const found = registered.find((u) => u.name.toLowerCase() === name.toLowerCase() || u.id === name)
+    if (found?.avatar) return found.avatar
+    if (name === currentUserName || name.toLowerCase().includes('you')) return currentUser?.avatar || '👤'
     return '👤'
   }
 

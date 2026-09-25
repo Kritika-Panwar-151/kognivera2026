@@ -35,73 +35,6 @@ import type { CategoryCaps } from './types'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import { syncActiveCurrencies, getTripDestinationCurrency, convertCurrency, isTripMatch, deduplicateExpenses } from './services/currencyService'
 
-const DEFAULT_DEMO_TRIPS: Trip[] = [
-  {
-    id: 'europe',
-    name: 'Europe Adventure',
-    destination: 'Rome, Italy & Zurich, Switzerland',
-    destinationCountry: 'Europe',
-    startDate: '2026-09-12',
-    endDate: '2026-09-20',
-    currency: 'EUR',
-    budget: 60000,
-    personalBudget: 20000,
-    spent: 26172,
-    partySize: 3,
-    ownerId: 'usr_aisha',
-    members: ['usr_aisha', 'usr_ravi', 'usr_pooja'],
-    memberDetails: [
-      { userId: 'usr_aisha', role: 'owner', status: 'active', personalBudget: 20000 },
-      { userId: 'usr_ravi', role: 'editor', status: 'active', personalBudget: 20000 },
-      { userId: 'usr_pooja', role: 'viewer', status: 'active', personalBudget: 20000 },
-    ],
-    memberBudgets: {
-      usr_aisha: 20000,
-      usr_ravi: 20000,
-      usr_pooja: 20000,
-    },
-    categoryCaps: {
-      accommodation: 21000,
-      food: 15000,
-      transport: 12000,
-      activities: 6000,
-      misc: 6000,
-    },
-  },
-  {
-    id: 'goa',
-    name: 'Goa Getaway',
-    destination: 'Goa, India',
-    destinationCountry: 'India',
-    startDate: '2026-10-05',
-    endDate: '2026-10-09',
-    currency: 'INR',
-    budget: 25000,
-    personalBudget: 8333,
-    spent: 8420,
-    partySize: 3,
-    ownerId: 'usr_aisha',
-    members: ['usr_aisha', 'usr_ravi', 'usr_pooja'],
-    memberDetails: [
-      { userId: 'usr_aisha', role: 'owner', status: 'active', personalBudget: 8333 },
-      { userId: 'usr_ravi', role: 'editor', status: 'active', personalBudget: 8333 },
-      { userId: 'usr_pooja', role: 'viewer', status: 'active', personalBudget: 8333 },
-    ],
-    memberBudgets: {
-      usr_aisha: 8333,
-      usr_ravi: 8333,
-      usr_pooja: 8333,
-    },
-    categoryCaps: {
-      accommodation: 8750,
-      food: 6250,
-      transport: 5000,
-      activities: 2500,
-      misc: 2500,
-    },
-  },
-]
-
 export default function App() {
   // Read persisted user session from localStorage
   const getStoredUser = (): User | null => {
@@ -124,9 +57,6 @@ export default function App() {
       }
     } catch (e) {
       console.warn('Failed reading stored trips:', e)
-    }
-    if (user.id === 'usr_aisha' || user.id === 'usr_you') {
-      return DEFAULT_DEMO_TRIPS
     }
     return []
   }

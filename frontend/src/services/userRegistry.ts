@@ -1,78 +1,7 @@
 import type { User } from '../types'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 
-export const DEFAULT_USERS: User[] = [
-  {
-    id: 'usr_aisha',
-    name: 'Aisha Rossi',
-    email: 'aisha.rossi@example.invalid',
-    homeCurrency: 'INR',
-    homeCountry: 'India',
-    homeCity: 'Bengaluru',
-    avatar: '👩🏽',
-    role: 'Trip Organizer / Owner',
-    budgetBand: 'mid',
-    travelStyle: 'cultural',
-    travellerType: 'friends',
-    locale: 'en-IN',
-  },
-  {
-    id: 'usr_ravi',
-    name: 'Ravi Sharma',
-    email: 'ravi.sharma@example.invalid',
-    homeCurrency: 'INR',
-    homeCountry: 'India',
-    homeCity: 'New Delhi',
-    avatar: '👨🏽',
-    role: 'Editor / Co-traveler',
-    budgetBand: 'value',
-    travelStyle: 'comfort',
-    travellerType: 'friends',
-    locale: 'hi',
-  },
-  {
-    id: 'usr_pooja',
-    name: 'Pooja Tanaka',
-    email: 'pooja.tanaka@example.invalid',
-    homeCurrency: 'INR',
-    homeCountry: 'India',
-    homeCity: 'Mumbai',
-    avatar: '👩🏻',
-    role: 'Viewer / Co-traveler',
-    budgetBand: 'shoestring',
-    travelStyle: 'budget',
-    travellerType: 'friends',
-    locale: 'en-IN',
-  },
-  {
-    id: 'usr_david',
-    name: 'David Chen',
-    email: 'david.chen@example.invalid',
-    homeCurrency: 'USD',
-    homeCountry: 'United States',
-    homeCity: 'New York',
-    avatar: '👨🏻',
-    role: 'Editor / Co-traveler',
-    budgetBand: 'premium',
-    travelStyle: 'adventure',
-    travellerType: 'friends',
-    locale: 'en-US',
-  },
-  {
-    id: 'usr_elena',
-    name: 'Elena Rostova',
-    email: 'elena.rostova@example.invalid',
-    homeCurrency: 'EUR',
-    homeCountry: 'France',
-    homeCity: 'Paris',
-    avatar: '👩🏼',
-    role: 'Viewer / Co-traveler',
-    budgetBand: 'luxury',
-    travelStyle: 'luxury',
-    travellerType: 'couple',
-    locale: 'fr-FR',
-  },
-]
+export const DEFAULT_USERS: User[] = []
 
 const LOCAL_STORAGE_KEY = 'tripwallet_registered_users'
 
@@ -89,20 +18,13 @@ export function getRegisteredUsers(): User[] {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
     if (raw) {
       const stored: User[] = JSON.parse(raw)
-      const ids = new Set(stored.map((u) => u.id))
-      const combined = [...stored]
-      for (const d of DEFAULT_USERS) {
-        if (!ids.has(d.id)) {
-          combined.push(d)
-        }
-      }
-      liveUsersCache = combined
-      return combined
+      liveUsersCache = stored
+      return stored
     }
   } catch (e) {
     console.warn('Error reading stored users:', e)
   }
-  return DEFAULT_USERS
+  return []
 }
 
 /**
@@ -123,7 +45,6 @@ export function resolveMemberName(idOrName: string, registeredUsers?: User[], cu
       isUserMatch(clean, u)
   )
   if (found) {
-    // Return clean display name (formatting "User19" as "User 19" if unformatted)
     if (found.name.toLowerCase().startsWith('user') && !found.name.includes(' ')) {
       const num = found.name.replace(/^user/i, '')
       if (num) return `User ${num}`
@@ -132,13 +53,6 @@ export function resolveMemberName(idOrName: string, registeredUsers?: User[], cu
   }
 
   if (clean === 'usr_you' || clean.toLowerCase() === 'you') return 'You'
-
-  // Standard user ID mappings
-  if (clean === 'usr_000000000001' || clean === 'usr_aisha') return 'Aisha Rossi'
-  if (clean === 'usr_000000000002' || clean === 'usr_ravi') return 'Ravi Sharma'
-  if (clean === 'usr_000000000003' || clean === 'usr_pooja' || clean === 'usr_asha') return 'Asha Patel'
-  if (clean === 'usr_000000000004' || clean === 'usr_david') return 'David Chen'
-  if (clean === 'usr_000000000005' || clean === 'usr_elena') return 'Elena Rostova'
 
   // Format "usr_19", "User19", "usr_000000000019" -> "User 19"
   if (clean.toLowerCase().startsWith('usr_') || clean.toLowerCase().startsWith('user')) {
@@ -164,10 +78,6 @@ export function isUserMatch(memberIdOrName: string | undefined, user: User | nul
 
   if (target === uid || target === uname) return true
   if (target === 'usr_you' || target === 'you') return true
-  if ((uid === 'usr_aisha' || uid === 'usr_000000000001') && (target === 'usr_aisha' || target === 'usr_000000000001' || target.includes('aisha'))) return true
-  if ((uid === 'usr_ravi' || uid === 'usr_000000000002') && (target === 'usr_ravi' || target === 'usr_000000000002' || target.includes('ravi'))) return true
-  if ((uid === 'usr_pooja' || uid === 'usr_000000000003') && (target === 'usr_pooja' || target === 'usr_000000000003' || target.includes('pooja'))) return true
-  if ((uid === 'usr_david' || uid === 'usr_000000000004') && (target === 'usr_david' || target === 'usr_000000000004' || target.includes('david'))) return true
 
   // Compare numerical suffixes e.g. usr_000000000019 -> 19 vs User19 -> 19
   const targetNum = target.replace(/^(usr_|user_?)/i, '').replace(/^0+/g, '')
@@ -322,25 +232,18 @@ export function registerUser(newUser: User): User[] {
 
 const CREDENTIALS_KEY = 'tripwallet_user_credentials'
 
-// Canonical seed passwords for default users
-const DEFAULT_PASSWORDS: Record<string, string> = {
-  'aisha.rossi@example.invalid': 'TripWallet@2026',
-  'ravi.sharma@example.invalid': 'TripWallet@2026',
-  'pooja.tanaka@example.invalid': 'TripWallet@2026',
-  'david.chen@example.invalid': 'TripWallet@2026',
-  'elena.rostova@example.invalid': 'TripWallet@2026',
-}
+const DEFAULT_PASSWORDS: Record<string, string> = {}
 
 export function getStoredCredentials(): Record<string, string> {
   try {
     const raw = localStorage.getItem(CREDENTIALS_KEY)
     if (raw) {
-      return { ...DEFAULT_PASSWORDS, ...JSON.parse(raw) }
+      return JSON.parse(raw)
     }
   } catch (e) {
     console.warn('Error reading stored credentials:', e)
   }
-  return DEFAULT_PASSWORDS
+  return {}
 }
 
 export function saveUserCredentials(email: string, passwordHash: string): void {

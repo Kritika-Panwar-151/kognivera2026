@@ -18,11 +18,7 @@ export function useTripTravellers(trip?: Trip) {
 
   const travellers = useMemo<Traveller[]>(() => {
     if (!trip || !trip.members || trip.members.length === 0) {
-      return [
-        { id: 'usr_you', name: 'You (Aisha)', avatar: '👩🏽', role: 'Host', isAdult: true, isIncludedInAccounts: true, personalBudget: 25000, status: 'active' },
-        { id: 'usr_ravi', name: 'Ravi Sharma', avatar: '👨🏽', role: 'Adult Member', isAdult: true, isIncludedInAccounts: true, personalBudget: 20000, status: 'active' },
-        { id: 'usr_asha', name: 'Asha Patel', avatar: '👩🏻', role: 'Adult Member', isAdult: true, isIncludedInAccounts: true, personalBudget: 15000, status: 'active' },
-      ]
+      return []
     }
 
     const hostId = trip.ownerId || trip.members[0]
@@ -31,12 +27,12 @@ export function useTripTravellers(trip?: Trip) {
       const detail = trip.memberDetails?.find((d) => d.userId === mId)
       const u = registered.find((reg) => reg.id === mId)
       const isHost = mId === hostId
-      const pBudget = detail?.personalBudget || trip.memberBudgets?.[mId] || (isHost ? trip.personalBudget || 25000 : 0)
+      const pBudget = detail?.personalBudget || trip.memberBudgets?.[mId] || (isHost ? trip.personalBudget || 0 : 0)
 
       return {
         id: mId,
         name: u ? u.name : (isHost ? 'Admin (Host)' : mId),
-        avatar: u ? u.avatar : (isHost ? '👩🏽' : '👤'),
+        avatar: u ? u.avatar : '👤',
         role: isHost ? 'Host' : 'Adult Member',
         isAdult: true,
         isIncludedInAccounts: true,
