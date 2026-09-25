@@ -158,12 +158,10 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
               <input
                 type="number"
                 min="0"
-                step="50"
                 value={personalBudget === 0 ? '' : personalBudget}
                 onFocus={(e) => e.target.select()}
                 onChange={(e) => handleBudgetChange(e.target.value === '' ? 0 : Number(e.target.value))}
                 className="w-full pl-14 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 font-black text-lg focus:bg-white focus:border-teal-500 focus:ring-2 focus:ring-teal-100 outline-none transition"
-                required
               />
             </div>
 
@@ -391,6 +389,7 @@ export default function TripInviteModal({ trip, currentUser, isOpen, onClose, on
             </button>
             <button
               type="submit"
+              onClick={handleSubmit}
               disabled={submitting}
               className="flex-2 py-3 px-4 bg-teal-600 hover:bg-teal-700 active:scale-98 text-white font-bold text-xs rounded-2xl shadow-md transition disabled:opacity-50 text-center cursor-pointer"
             >

@@ -472,40 +472,48 @@ export default function App() {
 
     // 1. Optimistic Local State Update so UI updates instantly
     setTrips((prevTrips) => {
-      const updated = prevTrips.map((t) => {
-        if (t.id === tripId) {
-          const updatedMembers = Array.from(new Set([...(t.members || []), currentUser.id]))
-          const existingDetails = t.memberDetails || []
-          const hasDetail = existingDetails.some((d) => isUserMatch(d.userId, currentUser))
-          const updatedDetails = hasDetail
-            ? existingDetails.map((d) =>
-                isUserMatch(d.userId, currentUser)
-                  ? { ...d, status: 'active' as const, personalBudget, categoryCaps }
-                  : d
-              )
-            : [
-                ...existingDetails,
-                { userId: currentUser.id, role: 'editor' as const, status: 'active' as const, personalBudget, categoryCaps },
-              ]
-          const updatedMemberBudgets = {
-            ...(t.memberBudgets || {}),
-            [currentUser.id]: personalBudget,
-          }
-          const sumMemberBudgets = Object.values(updatedMemberBudgets).reduce((sum, v) => sum + v, 0)
-          const newBudget = Math.max(t.budget || 0, sumMemberBudgets)
+      const exists = prevTrips.some((t) => t.id === tripId)
+      let updated: Trip[] = []
+      const sourceTrip = prevTrips.find((t) => t.id === tripId) || selectedInviteTrip || pendingInviteTrips.find((t) => t.id === tripId)
 
-          return {
-            ...t,
-            members: updatedMembers,
-            memberDetails: updatedDetails,
-            memberBudgets: updatedMemberBudgets,
-            personalBudget,
-            budget: newBudget,
-            isGroupTrip: updatedMembers.length > 1,
-          }
-        }
-        return t
-      })
+      if (!sourceTrip) return prevTrips
+
+      const updatedMembers = Array.from(new Set([...(sourceTrip.members || []), currentUser.id]))
+      const existingDetails = sourceTrip.memberDetails || []
+      const hasDetail = existingDetails.some((d) => isUserMatch(d.userId, currentUser))
+      const updatedDetails = hasDetail
+        ? existingDetails.map((d) =>
+            isUserMatch(d.userId, currentUser)
+              ? { ...d, status: 'active' as const, personalBudget, categoryCaps }
+              : d
+          )
+        : [
+            ...existingDetails,
+            { userId: currentUser.id, role: 'editor' as const, status: 'active' as const, personalBudget, categoryCaps },
+          ]
+      const updatedMemberBudgets = {
+        ...(sourceTrip.memberBudgets || {}),
+        [currentUser.id]: personalBudget,
+      }
+      const sumMemberBudgets = Object.values(updatedMemberBudgets).reduce((sum, v) => sum + v, 0)
+      const newBudget = Math.max(sourceTrip.budget || 0, sumMemberBudgets)
+
+      const acceptedTripObj: Trip = {
+        ...sourceTrip,
+        members: updatedMembers,
+        memberDetails: updatedDetails,
+        memberBudgets: updatedMemberBudgets,
+        personalBudget,
+        budget: newBudget,
+        isGroupTrip: updatedMembers.length > 1,
+      }
+
+      if (exists) {
+        updated = prevTrips.map((t) => (t.id === tripId ? acceptedTripObj : t))
+      } else {
+        updated = [acceptedTripObj, ...prevTrips]
+      }
+
       try {
         localStorage.setItem(`tripwallet_user_trips_${currentUser.id}`, JSON.stringify(updated))
       } catch (e) {}
@@ -514,7 +522,7 @@ export default function App() {
 
     // Also update current trip state if matching or set active
     setCurrentTripState((prev) => {
-      const targetTrip = trips.find((t) => t.id === tripId) || selectedInviteTrip || prev
+      const targetTrip = trips.find((t) => t.id === tripId) || selectedInviteTrip || pendingInviteTrips.find((t) => t.id === tripId) || prev
       if (targetTrip) {
         const updatedMembers = Array.from(new Set([...(targetTrip.members || []), currentUser.id]))
         const existingDetails = targetTrip.memberDetails || []
