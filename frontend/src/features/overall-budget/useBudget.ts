@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { Trip, User, Expense } from '../common/types'
-import { isUserMatch, getRegisteredUsers } from '../../services/userRegistry'
+import { isUserMatch, getRegisteredUsers, resolveMemberName } from '../../services/userRegistry'
 import { convertCurrency, getTripDestinationCurrency, isTripMatch } from '../../services/currencyService'
 import { calculateHareMemberBreakdown } from '../../features/group-settlement/largestRemainder'
 
@@ -129,7 +129,18 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
     tripExpenses.forEach((e) => {
       const eAmountHome = convertCurrency(e.convertedAmount || e.amount, e.currency || userHomeCurr, userHomeCurr)
       const isPaidByMe = isUserMatch(e.paidBy, currentUser)
-      const splitMembers = e.splitBetween && e.splitBetween.length > 0 ? e.splitBetween : (trip?.members || ['usr_you'])
+      const splitMembers =
+        e.splitBetween && e.splitBetween.length > 0
+          ? e.splitBetween
+          : e.splitBreakdown
+          ? Object.keys(e.splitBreakdown)
+          : trip?.members || ['usr_you']
+
+      const isSharedExp =
+        e.isShared ||
+        splitMembers.length > 1 ||
+        (e.splitBreakdown && Object.keys(e.splitBreakdown).length > 1)
+
       const isSplitWithMe = splitMembers.some((m) => isUserMatch(m, currentUser))
 
       if (isPaidByMe) {
@@ -137,7 +148,7 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
         personalGrossSpent += Math.round(eAmountHome)
 
         // If shared with others, check which co-members have settled their debt back to Payer
-        if (e.isShared && splitMembers.length > 1) {
+        if (isSharedExp && splitMembers.length > 1) {
           const shareMap = e.splitBreakdown || calculateHareMemberBreakdown(eAmountHome, splitMembers)
 
           splitMembers.forEach((m) => {
@@ -149,14 +160,20 @@ export function useBudget(trip?: Trip | null, currentUser?: User, expenses?: Exp
 
               const debtKey = `debt_${e.id}_${m}`
               const cleanM = m.toLowerCase().replace(/\s+/g, '').replace(/\((current user|you|admin|owner|editor|viewer)\)/gi, '')
+              const resolvedM = resolveMemberName(m)
+              const cleanResolvedM = resolvedM.toLowerCase().replace(/\s+/g, '')
+
               const isMemberSettled =
                 e.isSettled ||
                 settledIds.has(e.id) ||
                 settledIds.has(debtKey) ||
                 settledIds.has(m) ||
                 settledIds.has(cleanM) ||
+                settledIds.has(`debt_net_${resolvedM.replace(/\s+/g, '_')}`) ||
+                settledIds.has(`debt_net_${m.replace(/\s+/g, '_')}`) ||
                 settledIds.has(`settle_${m}`) ||
-                settledIds.has(`settle_${cleanM}`)
+                settledIds.has(`settle_${cleanM}`) ||
+                settledIds.has(`settle_${cleanResolvedM}`)
 
               if (isMemberSettled) {
                 // Settled money received -> credited back / added to Payer's personal budget

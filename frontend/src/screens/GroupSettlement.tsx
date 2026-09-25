@@ -3,7 +3,7 @@ import type { NavigateFn, Trip, Expense, User } from '../types'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { toggleSettleExpenseInSupabase } from '../services/supabaseDataService'
 import PendingRequestsModal from '../components/PendingRequestsModal'
-import { resolveMemberName } from '../services/userRegistry'
+import { resolveMemberName, isUserMatch } from '../services/userRegistry'
 import { getCurrencySymbol, isTripMatch } from '../services/currencyService'
 import { calculateHareMemberBreakdown, calculateLargestRemainderSplit } from '../features/group-settlement/largestRemainder'
 import SettleConfirmationModal, { SettlingTarget } from '../components/SettleConfirmationModal'
@@ -52,15 +52,20 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
 
     const getMemberShare = (exp: Expense, personName: string) => {
       const expAmount = exp.convertedAmount || exp.amount
-      const splitMembers = exp.splitBetween && exp.splitBetween.length > 0 ? exp.splitBetween : (trip?.members || ['usr_you'])
+      const splitMembers =
+        exp.splitBetween && exp.splitBetween.length > 0
+          ? exp.splitBetween
+          : exp.splitBreakdown
+          ? Object.keys(exp.splitBreakdown)
+          : trip?.members || ['usr_you']
 
       if (exp.splitBreakdown) {
         const keys = Object.keys(exp.splitBreakdown)
         const matchedKey = keys.find(
           (k) =>
+            isUserMatch(k, { id: personName, name: personName }) ||
             k.toLowerCase() === personName.toLowerCase() ||
-            (personName.toLowerCase().includes('you') &&
-              (k.toLowerCase().includes('you') || k.toLowerCase().includes(currentUserName.toLowerCase())))
+            resolveMemberName(k).toLowerCase() === resolveMemberName(personName).toLowerCase()
         )
         if (matchedKey && exp.splitBreakdown[matchedKey] !== undefined) {
           return Math.round(exp.splitBreakdown[matchedKey])
@@ -71,9 +76,9 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
       const hareMap = calculateHareMemberBreakdown(expAmount, splitMembers)
       const matchedKey = Object.keys(hareMap).find(
         (k) =>
+          isUserMatch(k, { id: personName, name: personName }) ||
           k.toLowerCase() === personName.toLowerCase() ||
-          (personName.toLowerCase().includes('you') &&
-            (k.toLowerCase().includes('you') || k.toLowerCase().includes(currentUserName.toLowerCase())))
+          resolveMemberName(k).toLowerCase() === resolveMemberName(personName).toLowerCase()
       )
       if (matchedKey && hareMap[matchedKey] !== undefined) {
         return Math.round(hareMap[matchedKey])
@@ -86,20 +91,25 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
 
     if (tripExpenses.length > 0) {
       tripExpenses.forEach((exp) => {
-        if (exp.isShared && exp.splitBetween && exp.splitBetween.length > 1) {
-          const isPayerMe =
-            exp.paidBy.toLowerCase().includes(currentUserName.toLowerCase()) ||
-            exp.paidBy === currentUserId ||
-            exp.paidBy.toLowerCase() === 'you' ||
-            exp.paidBy.toLowerCase() === 'usr_you'
+        const splitMembers =
+          exp.splitBetween && exp.splitBetween.length > 0
+            ? exp.splitBetween
+            : exp.splitBreakdown
+            ? Object.keys(exp.splitBreakdown)
+            : []
+
+        const isSharedExp =
+          exp.isShared ||
+          splitMembers.length > 1 ||
+          (exp.splitBreakdown && Object.keys(exp.splitBreakdown).length > 1)
+
+        if (isSharedExp && splitMembers.length > 1) {
+          const isPayerMe = isUserMatch(exp.paidBy, currentUser)
 
           if (isPayerMe) {
             // I paid this expense; each co-member owes me their share
-            exp.splitBetween.forEach((person) => {
-              if (
-                !person.toLowerCase().includes('you') &&
-                !person.toLowerCase().includes(currentUserName.toLowerCase())
-              ) {
+            splitMembers.forEach((person) => {
+              if (!isUserMatch(person, currentUser)) {
                 const resolvedName = resolveMemberName(person)
                 const share = getMemberShare(exp, person)
 
@@ -122,11 +132,7 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
             })
           } else {
             // Someone else paid this expense; check if I am in the split
-            const userIsInSplit = exp.splitBetween.some(
-              (p) =>
-                p.toLowerCase().includes('you') ||
-                p.toLowerCase().includes(currentUserName.toLowerCase())
-            )
+            const userIsInSplit = splitMembers.some((p) => isUserMatch(p, currentUser))
             if (userIsInSplit) {
               const resolvedPayer = resolveMemberName(exp.paidBy)
               const myShare = getMemberShare(exp, currentUserName)

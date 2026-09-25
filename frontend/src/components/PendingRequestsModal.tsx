@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Trip, Expense, User } from '../types'
-import { resolveMemberName } from '../services/userRegistry'
+import { resolveMemberName, isUserMatch } from '../services/userRegistry'
 import { getCurrencySymbol } from '../services/currencyService'
 
 export interface PendingDebtItem {
@@ -59,9 +59,9 @@ export default function PendingRequestsModal({
       const keys = Object.keys(exp.splitBreakdown)
       const matchedKey = keys.find(
         (k) =>
+          isUserMatch(k, { id: personName, name: personName }) ||
           k.toLowerCase() === personName.toLowerCase() ||
-          (personName.toLowerCase().includes('you') &&
-            (k.toLowerCase().includes('you') || k.toLowerCase().includes(currentUserName.toLowerCase())))
+          resolveMemberName(k).toLowerCase() === resolveMemberName(personName).toLowerCase()
       )
       if (matchedKey && exp.splitBreakdown[matchedKey] !== undefined) {
         return Math.round(exp.splitBreakdown[matchedKey])
@@ -72,14 +72,24 @@ export default function PendingRequestsModal({
   }
 
   expenses.forEach((exp) => {
-    if (exp.isShared && exp.splitBetween && exp.splitBetween.length > 1 && !exp.isSettled) {
-      const isPayer =
-        exp.paidBy.toLowerCase().includes(currentUserName.toLowerCase()) ||
-        exp.paidBy.toLowerCase().includes('you')
+    const splitMembers =
+      exp.splitBetween && exp.splitBetween.length > 0
+        ? exp.splitBetween
+        : exp.splitBreakdown
+        ? Object.keys(exp.splitBreakdown)
+        : []
+
+    const isSharedExp =
+      exp.isShared ||
+      splitMembers.length > 1 ||
+      (exp.splitBreakdown && Object.keys(exp.splitBreakdown).length > 1)
+
+    if (isSharedExp && splitMembers.length > 1 && !exp.isSettled) {
+      const isPayer = isUserMatch(exp.paidBy, currentUser)
 
       if (isPayer) {
-        exp.splitBetween.forEach((person) => {
-          if (!person.toLowerCase().includes('you') && !person.toLowerCase().includes(currentUserName.toLowerCase())) {
+        splitMembers.forEach((person) => {
+          if (!isUserMatch(person, currentUser)) {
             const resolved = resolveMemberName(person)
             const share = getMemberShare(exp, person)
             if (!memberMap.has(resolved)) {
@@ -91,9 +101,7 @@ export default function PendingRequestsModal({
           }
         })
       } else {
-        const userIsInSplit = exp.splitBetween.some(
-          (p) => p.toLowerCase().includes('you') || p.toLowerCase().includes(currentUserName.toLowerCase())
-        )
+        const userIsInSplit = splitMembers.some((p) => isUserMatch(p, currentUser))
         if (userIsInSplit) {
           const resolvedPayer = resolveMemberName(exp.paidBy)
           const myShare = getMemberShare(exp, currentUserName)
