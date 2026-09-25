@@ -616,11 +616,20 @@ Return a STRICT JSON object in this exact schema (no markdown formatting, just J
 
   // Extract merchant / description
   let merchant = 'Expense'
-  const descCandidates = ['dinner', 'lunch', 'taxi', 'uber', 'coffee', 'museum', 'hotel', 'groceries', 'drinks', 'shopping']
-  for (const c of descCandidates) {
-    if (lower.includes(c)) {
-      merchant = c.charAt(0).toUpperCase() + c.slice(1)
-      break
+  const forMatch = cleanInput.match(/(?:for|on|at|bought|paid)\s+([a-zA-Z0-9\s]+?)(?:\s+(?:split|with|by|for|\d+)|$)/i)
+  if (forMatch && forMatch[1].trim().length > 1 && !/\d+/.test(forMatch[1].trim())) {
+    const rawDesc = forMatch[1].trim()
+    merchant = rawDesc.charAt(0).toUpperCase() + rawDesc.slice(1)
+  } else {
+    const descCandidates = ['dinner', 'lunch', 'breakfast', 'transport', 'taxi', 'uber', 'bus', 'train', 'flight', 'coffee', 'museum', 'hotel', 'groceries', 'drinks', 'shopping']
+    for (const c of descCandidates) {
+      if (lower.includes(c)) {
+        merchant = c.charAt(0).toUpperCase() + c.slice(1)
+        break
+      }
+    }
+    if (merchant === 'Expense' && detectedCat !== 'Other') {
+      merchant = detectedCat
     }
   }
 

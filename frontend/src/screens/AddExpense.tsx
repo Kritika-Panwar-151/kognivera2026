@@ -288,10 +288,12 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
       })
 
       setAmount(String(res.amount))
-      if (res.currency.includes('EUR')) setCurrency('EUR (€)')
-      else if (res.currency.includes('USD')) setCurrency('USD ($)')
-      else if (res.currency.includes('GBP')) setCurrency('GBP (£)')
-      else setCurrency('INR (₹)')
+      const matchedCurr = currencies.find((c) => c.startsWith(res.currency.trim().toUpperCase()))
+      if (matchedCurr) {
+        setCurrency(matchedCurr)
+      } else {
+        setCurrency(`${res.currency.trim().toUpperCase()} (${getCurrencySymbol(res.currency).trim()})`)
+      }
 
       setCategory(res.category)
       setMerchant(res.merchant)

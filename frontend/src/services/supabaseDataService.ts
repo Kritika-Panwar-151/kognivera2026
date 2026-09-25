@@ -312,7 +312,7 @@ export async function acceptTripInvite(
   userId: string,
   personalBudget: number,
   categoryCaps?: any
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; newGroupBudget?: number }> {
   if (!isSupabaseConfigured) return { success: true }
 
   try {
