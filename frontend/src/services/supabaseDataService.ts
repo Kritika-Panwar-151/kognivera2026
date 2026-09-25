@@ -1,6 +1,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import type { Trip, Expense, User } from '../types'
 import { deduplicateExpenses } from './currencyService'
+import { getRegisteredUsers, isUserMatch } from './userRegistry'
 
 // Clean production fallbacks: zero synthetic data for fresh users
 export const initialTripsFallback: Trip[] = []

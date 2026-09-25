@@ -34,6 +34,7 @@ import { enqueueOfflineAction } from './services/offlineQueueService'
 import type { CategoryCaps } from './types'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import { syncActiveCurrencies, getTripDestinationCurrency, convertCurrency, isTripMatch, deduplicateExpenses } from './services/currencyService'
+import { isUserMatch, getRegisteredUsers } from './services/userRegistry'
 
 export default function App() {
   // Read persisted user session from localStorage

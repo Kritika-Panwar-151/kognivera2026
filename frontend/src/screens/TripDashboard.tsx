@@ -1,7 +1,7 @@
 import type { NavigateFn, Trip, Expense, User } from '../types'
 import { useState, useEffect } from 'react'
 import { useBudget } from '../features/overall-budget/useBudget'
-import { getRegisteredUsers } from '../services/userRegistry'
+import { getRegisteredUsers, isUserMatch } from '../services/userRegistry'
 import { resolveCityName, forecastSpendRunwayWithLLM, type SpendForecastReport } from '../services/geminiService'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { broadcastTripChange, inviteMemberToTripInSupabase, removeMemberFromTripInSupabase } from '../services/supabaseDataService'
