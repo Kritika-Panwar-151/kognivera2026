@@ -250,7 +250,9 @@ export default function GroupSettlement({ navigate, trip, expenses, currentUser 
   // Derived debts merging computed debts with local settlement overrides
   const richDebts = useMemo(() => {
     return computedDebts.map((d) => {
-      if (locallySettledIds.has(d.id) || (d.expenseIds && d.expenseIds.every((eid) => locallySettledIds.has(eid)))) {
+      const hasExpenseIds = d.expenseIds && d.expenseIds.length > 0
+      const allExpensesSettled = hasExpenseIds && d.expenseIds!.every((eid) => locallySettledIds.has(eid))
+      if (allExpensesSettled) {
         return { ...d, isSettled: true }
       }
       return d

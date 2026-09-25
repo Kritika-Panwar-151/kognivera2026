@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Trip, Expense, User } from '../types'
 import { resolveMemberName, isUserMatch } from '../services/userRegistry'
-import { getCurrencySymbol } from '../services/currencyService'
+import { getCurrencySymbol, isTripMatch } from '../services/currencyService'
+import { calculateHareMemberBreakdown } from '../features/group-settlement/largestRemainder'
 
 export interface PendingDebtItem {
   id: string
@@ -33,14 +34,38 @@ export default function PendingRequestsModal({
   onSettleExpense,
 }: Props) {
   const [activeTab, setActiveTab] = useState<'debts' | 'invites'>('debts')
-  const [settledIds, setSettledIds] = useState<Set<string>>(new Set())
+  const [settledIds, setSettledIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('tripwallet_settled_debt_ids')
+      return saved ? new Set(JSON.parse(saved)) : new Set()
+    } catch {
+      return new Set()
+    }
+  })
   const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    const syncSettled = () => {
+      try {
+        const saved = localStorage.getItem('tripwallet_settled_debt_ids')
+        if (saved) setSettledIds(new Set(JSON.parse(saved)))
+      } catch {}
+    }
+    window.addEventListener('tripwallet_settlement_updated', syncSettled)
+    window.addEventListener('storage', syncSettled)
+    return () => {
+      window.removeEventListener('tripwallet_settlement_updated', syncSettled)
+      window.removeEventListener('storage', syncSettled)
+    }
+  }, [])
 
   if (!isOpen) return null
 
   const currentUserName = currentUser?.name || 'You (Aisha)'
   const userHomeCurr = (currentUser?.homeCurrency || 'INR').toUpperCase()
   const currencySymbol = getCurrencySymbol(userHomeCurr)
+
+  const tripExpenses = (expenses || []).filter((exp) => !trip?.id || isTripMatch(exp.tripId, trip.id))
 
   // 1. Pending Debts / Split Claims (user-wise aggregated net debts derived strictly from real logged expenses)
   const memberMap = new Map<
@@ -55,6 +80,13 @@ export default function PendingRequestsModal({
 
   const getMemberShare = (exp: Expense, personName: string) => {
     const expAmount = exp.convertedAmount || exp.amount
+    const splitMembers =
+      exp.splitBetween && exp.splitBetween.length > 0
+        ? exp.splitBetween
+        : exp.splitBreakdown
+        ? Object.keys(exp.splitBreakdown)
+        : trip?.members || ['usr_you']
+
     if (exp.splitBreakdown) {
       const keys = Object.keys(exp.splitBreakdown)
       const matchedKey = keys.find(
@@ -67,11 +99,23 @@ export default function PendingRequestsModal({
         return Math.round(exp.splitBreakdown[matchedKey])
       }
     }
-    const count = exp.splitBetween ? exp.splitBetween.length : 1
+
+    const hareMap = calculateHareMemberBreakdown(expAmount, splitMembers)
+    const matchedKey = Object.keys(hareMap).find(
+      (k) =>
+        isUserMatch(k, { id: personName, name: personName }) ||
+        k.toLowerCase() === personName.toLowerCase() ||
+        resolveMemberName(k).toLowerCase() === resolveMemberName(personName).toLowerCase()
+    )
+    if (matchedKey && hareMap[matchedKey] !== undefined) {
+      return Math.round(hareMap[matchedKey])
+    }
+
+    const count = Math.max(splitMembers.length, 1)
     return Math.round(expAmount / count)
   }
 
-  expenses.forEach((exp) => {
+  tripExpenses.forEach((exp) => {
     const splitMembers =
       exp.splitBetween && exp.splitBetween.length > 0
         ? exp.splitBetween
@@ -148,7 +192,13 @@ export default function PendingRequestsModal({
   })
 
   // Filter out already settled ones in local session
-  const activeDebts = pendingDebts.filter((d) => !settledIds.has(d.id))
+  const activeDebts = pendingDebts.filter((d) => {
+    const rec = memberMap.get(d.person)
+    if (rec && rec.expenseIds.length > 0 && rec.expenseIds.every((eid) => settledIds.has(eid))) {
+      return false
+    }
+    return !settledIds.has(d.id)
+  })
 
   const totalOwedToYou = activeDebts
     .filter((d) => d.direction === 'they_owe_you')
@@ -177,8 +227,15 @@ export default function PendingRequestsModal({
     : []
 
   const handleSettle = (id: string) => {
-    setSettledIds((prev) => new Set(prev).add(id))
-    if (onSettleExpense) onSettleExpense(id)
+    setSettledIds((prev) => {
+      const next = new Set(prev).add(id)
+      try {
+        localStorage.setItem('tripwallet_settled_debt_ids', JSON.stringify(Array.from(next)))
+        window.dispatchEvent(new CustomEvent('tripwallet_settlement_updated', { detail: { id } }))
+      } catch {}
+      return next
+    })
+    onSettleExpense?.(id)
   }
 
   const handleRemind = (debt: PendingDebtItem) => {
