@@ -180,10 +180,10 @@ export default function App() {
     })
 
     setCurrentTripState((prev) => {
-      if (prev && userTrips.some((t) => t.id === prev.id)) {
-        return userTrips.find((t) => t.id === prev.id) || null
+      if (prev && merged.some((t) => t.id === prev.id)) {
+        return merged.find((t) => t.id === prev.id) || null
       }
-      return userTrips.length > 0 ? userTrips[0] : null
+      return merged.length > 0 ? merged[0] : null
     })
   }
 
@@ -252,8 +252,6 @@ export default function App() {
 
           if (normalized.length > 0) {
             mergeExpensesSafely(normalized)
-          } else {
-            setExpenses([])
           }
         } else {
           // If no user is logged in, keep state completely clean
