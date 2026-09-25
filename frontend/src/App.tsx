@@ -176,14 +176,15 @@ export default function App() {
       try {
         localStorage.setItem(`tripwallet_user_trips_${targetUser.id}`, JSON.stringify(merged))
       } catch (e) {}
-      return merged
-    })
 
-    setCurrentTripState((prev) => {
-      if (prev && merged.some((t) => t.id === prev.id)) {
-        return merged.find((t) => t.id === prev.id) || null
-      }
-      return merged.length > 0 ? merged[0] : null
+      setCurrentTripState((prev) => {
+        if (prev && merged.some((t) => t.id === prev.id)) {
+          return merged.find((t) => t.id === prev.id) || null
+        }
+        return merged.length > 0 ? merged[0] : null
+      })
+
+      return merged
     })
   }
 
