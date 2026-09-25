@@ -62,23 +62,40 @@ export async function fetchTripsFromSupabase(userId?: string): Promise<Trip[]> {
     const memberDetailsMap = new Map<string, any[]>()
     const memberBudgetsMap = new Map<string, Record<string, number>>()
 
+    const registered = getRegisteredUsers()
     ;(rawMembers || []).forEach((m) => {
       const list = memberMap.get(m.trip_id) || []
-      list.push(m.user_id)
-      memberMap.set(m.trip_id, list)
-
       const details = memberDetailsMap.get(m.trip_id) || []
-      details.push({
+      const bMap = memberBudgetsMap.get(m.trip_id) || {}
+
+      const memberUser = registered.find((u) => u.id === m.user_id || isUserMatch(m.user_id, u))
+      const existingIdx = details.findIndex(
+        (d: any) => d.userId === m.user_id || (memberUser && isUserMatch(d.userId, memberUser))
+      )
+
+      const detailObj = {
         userId: m.user_id,
         role: m.role || 'editor',
         status: m.status || 'active',
         personalBudget: Number(m.personal_budget || 0),
         categoryCaps: m.category_caps || {},
         invitedByUserId: m.invited_by_user_id,
-      })
+      }
+
+      if (existingIdx >= 0) {
+        if (m.status === 'active' || details[existingIdx].status === 'pending') {
+          details[existingIdx] = detailObj
+        }
+      } else {
+        details.push(detailObj)
+        if (!list.includes(m.user_id)) {
+          list.push(m.user_id)
+        }
+      }
+
+      memberMap.set(m.trip_id, list)
       memberDetailsMap.set(m.trip_id, details)
 
-      const bMap = memberBudgetsMap.get(m.trip_id) || {}
       bMap[m.user_id] = Number(m.personal_budget || 0)
       memberBudgetsMap.set(m.trip_id, bMap)
     })
@@ -319,9 +336,43 @@ export async function acceptTripInvite(
       console.error('Failed to accept trip invite:', updateErr.message)
     }
 
-    if (!updatedRows || updatedRows.length === 0) {
-      // Upsert a brand new row for this active user if no row was updated
-      const { error: upsertErr } = await supabase
+    // 1. Fetch all trip_members for this trip to match by user ID or user alias/email
+    const { data: tripMembers } = await supabase
+      .from('trip_members')
+      .select('*')
+      .eq('trip_id', tripId)
+
+    const allRegistered = getRegisteredUsers()
+    const targetUserObj = allRegistered.find((u) => u.id === userId || isUserMatch(userId, u))
+
+    let matchingMemberIds: string[] = []
+    if (tripMembers && tripMembers.length > 0) {
+      tripMembers.forEach((m) => {
+        if (
+          m.user_id === userId ||
+          (targetUserObj && isUserMatch(m.user_id, targetUserObj)) ||
+          (targetUserObj?.email && m.user_id?.toLowerCase() === targetUserObj.email.toLowerCase())
+        ) {
+          matchingMemberIds.push(m.member_id)
+        }
+      })
+    }
+
+    if (matchingMemberIds.length > 0) {
+      // Update ALL matching member rows for this user to active
+      await supabase
+        .from('trip_members')
+        .update({
+          user_id: userId,
+          status: 'active',
+          personal_budget: personalBudget,
+          category_caps: categoryCaps || {},
+          updated_at: now,
+        })
+        .in('member_id', matchingMemberIds)
+    } else {
+      // Upsert a new active row if none existed
+      await supabase
         .from('trip_members')
         .upsert({
           member_id: `tmb_${Date.now()}_${userId.replace(/[^a-zA-Z0-9]/g, '').slice(-4)}`,
@@ -334,7 +385,6 @@ export async function acceptTripInvite(
           created_at: now,
           updated_at: now,
         })
-      if (upsertErr) console.error('Failed to upsert active trip_member:', upsertErr.message)
     }
 
     // Ensure trip is_group_trip flag is updated to true in DB

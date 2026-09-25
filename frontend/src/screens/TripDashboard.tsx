@@ -305,25 +305,37 @@ export default function TripDashboard({
   const personalSafeDailyDual = formatUserDualCurrency(personalSafeDaily, userHomeCurr, userHomeCurr, tripDestCurr)
   const currencySymbol = groupBudgetDual.primarySymbol
 
-  // Look up registered users to display members dynamically
+  // Look up registered users to display members dynamically without duplicates
   const registeredUsers = getRegisteredUsers()
-  const partyMembers = (trip.members || []).map((memberId) => {
-    const found = registeredUsers.find((u) => u.id === memberId)
-    const detail = trip.memberDetails?.find((d) => d.userId === memberId)
+  const partyMembersMap = new Map<string, any>()
+
+  ;(trip.members || []).forEach((memberId) => {
+    const found = registeredUsers.find((u) => u.id === memberId || isUserMatch(memberId, u))
+    const detail = trip.memberDetails?.find(
+      (d) => d.userId === memberId || (found && isUserMatch(d.userId, found)) || isUserMatch(d.userId, { id: memberId, name: memberId, homeCurrency: 'INR' })
+    )
     const isPending = detail ? detail.status === 'pending' : false
     const personalAllocation =
-      trip.memberBudgets?.[memberId] ??
-      (memberId === activeUser.id ? personalBudget : isPending ? 0 : Math.round(budget / Math.max(trip.members?.length || 1, 1)))
+      detail?.personalBudget ||
+      (trip.memberBudgets?.[memberId] !== undefined ? trip.memberBudgets[memberId] : 0) ||
+      (isUserMatch(memberId, activeUser) ? personalBudget : isPending ? 0 : Math.round(budget / Math.max(trip.members?.length || 1, 1)))
 
-    return {
-      id: memberId,
-      name: found ? found.name : memberId === activeUser.id ? activeUser.name : memberId,
-      avatar: found ? found.avatar : '👤',
-      isMe: memberId === activeUser.id,
-      budget: personalAllocation,
-      isPending,
+    const key = found ? found.id : memberId
+    const existing = partyMembersMap.get(key)
+
+    if (!existing || (!isPending && existing.isPending)) {
+      partyMembersMap.set(key, {
+        id: memberId,
+        name: found ? found.name : isUserMatch(memberId, activeUser) ? activeUser.name : memberId,
+        avatar: found ? found.avatar : '👤',
+        isMe: isUserMatch(memberId, activeUser),
+        budget: personalAllocation,
+        isPending,
+      })
     }
   })
+
+  const partyMembers = Array.from(partyMembersMap.values())
 
   const isAdmin = !trip.ownerId || trip.ownerId === activeUser.id || (activeUser.id === 'usr_you' && trip.ownerId === 'usr_you')
 

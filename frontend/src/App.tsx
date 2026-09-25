@@ -384,6 +384,46 @@ export default function App() {
     const syncChannel = supabase.channel('global_trip_sync')
     syncChannel
       .on('broadcast', { event: '*' }, async (payload) => {
+        const p = payload.payload
+        if (p?.tripId && p?.userId) {
+          const joinedId = p.userId
+          const joinedBudget = Number(p.personalBudget || 0)
+          setTrips((prev) =>
+            prev.map((t) => {
+              if (t.id === p.tripId) {
+                const members = Array.from(new Set([...(t.members || []), joinedId]))
+                const details = t.memberDetails || []
+                const foundUser = getRegisteredUsers().find((u) => u.id === joinedId || isUserMatch(joinedId, u))
+                const hasDetail = details.some((d) => isUserMatch(d.userId, foundUser || { id: joinedId, name: '', homeCurrency: 'INR' }))
+                const updatedDetails = hasDetail
+                  ? details.map((d) =>
+                      isUserMatch(d.userId, foundUser || { id: joinedId, name: '', homeCurrency: 'INR' })
+                        ? { ...d, status: 'active' as const, personalBudget: joinedBudget }
+                        : d
+                    )
+                  : [
+                      ...details,
+                      { userId: joinedId, role: 'editor' as const, status: 'active' as const, personalBudget: joinedBudget },
+                    ]
+                const memberBudgets = {
+                  ...(t.memberBudgets || {}),
+                  [joinedId]: joinedBudget,
+                }
+                const sumBudgets = Object.values(memberBudgets).reduce((sum, v) => sum + v, 0)
+                return {
+                  ...t,
+                  members,
+                  memberDetails: updatedDetails,
+                  memberBudgets,
+                  budget: Math.max(t.budget || 0, sumBudgets),
+                  isGroupTrip: members.length > 1,
+                }
+              }
+              return t
+            })
+          )
+        }
+
         const [freshTrips, freshExpenses] = await Promise.all([
           fetchTripsFromSupabase(),
           fetchExpensesFromSupabase(),
