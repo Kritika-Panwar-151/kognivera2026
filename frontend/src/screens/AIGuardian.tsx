@@ -116,6 +116,8 @@ export default function AIGuardian({ navigate, trip, currentUser, onAddExpense }
       amount: action.amount,
       currency: action.currency,
       convertedAmount: action.convertedAmount,
+      homeAmount: action.convertedAmount,
+      homeCurrency: userHomeCurr,
       category: action.category,
       date: new Date().toISOString().split('T')[0],
       paidBy: action.paidBy,

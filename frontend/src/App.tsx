@@ -790,16 +790,17 @@ export default function App() {
       const newTotal = Object.values(updatedBudgets).reduce((sum, b) => sum + b, 0)
       const isCurrentUser = currentUser && userId === currentUser.id
       const effectivePersonal = isCurrentUser ? newBudget : t.personalBudget || newBudget
+      const targetCapsBase = t.isGroupTrip && newTotal > 0 ? newTotal : effectivePersonal
       const updatedCaps = {
-        accommodation: Math.round(effectivePersonal * 0.35),
-        food: Math.round(effectivePersonal * 0.25),
-        transport: Math.round(effectivePersonal * 0.20),
-        activities: Math.round(effectivePersonal * 0.10),
-        misc: Math.round(effectivePersonal * 0.10),
+        accommodation: Math.round(targetCapsBase * 0.35),
+        food: Math.round(targetCapsBase * 0.25),
+        transport: Math.round(targetCapsBase * 0.20),
+        activities: Math.round(targetCapsBase * 0.10),
+        misc: Math.round(targetCapsBase * 0.10),
       }
       return {
         ...t,
-        budget: Math.max(t.budget || 0, newTotal),
+        budget: newTotal > 0 ? newTotal : (t.budget || newBudget),
         memberBudgets: updatedBudgets,
         personalBudget: isCurrentUser ? newBudget : t.personalBudget,
         categoryCaps: updatedCaps,

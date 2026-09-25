@@ -87,6 +87,8 @@ export interface Expense {
   notes?: string
   isSettled?: boolean
   homeAmount?: number
+  homeCurrency?: string
+  exchangeRate?: number
   title?: string
   payerName?: string
   source?: string

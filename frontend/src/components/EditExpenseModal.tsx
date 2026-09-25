@@ -49,6 +49,8 @@ export default function EditExpenseModal({ expense, isOpen, onClose, onSave, cur
       amount: numAmount,
       currency,
       convertedAmount,
+      homeAmount: convertedAmount,
+      homeCurrency: userHomeCurr,
       category,
       date,
       paidBy,

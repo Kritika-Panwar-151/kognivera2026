@@ -117,13 +117,11 @@ export async function fetchTripsFromSupabase(userId?: string): Promise<Trip[]> {
       const dbBudgetTotal = b ? Number(b.total_amount || 0) : 0
       const tripRawBudget = Number(t.budget || 0)
 
-      // Master Group budget is the maximum of explicit group budget, database total, and active members sum
-      const aggregatedGroupBudget = Math.max(
-        dbBudgetTotal,
-        activeMembersSum,
-        tripRawBudget,
-        dbBudgetTotal === 0 && activeMembersSum === 0 && tripRawBudget === 0 ? 50000 : 0
-      )
+      // Master Group budget is strictly the sum of active member personal budgets
+      const aggregatedGroupBudget =
+        activeMembersSum > 0
+          ? activeMembersSum
+          : (dbBudgetTotal || tripRawBudget || (activeMembers.length > 0 ? 0 : 25000))
 
       // Aggregate category caps across all active members if they defined them
       let aggCaps = b
@@ -409,7 +407,7 @@ export async function acceptTripInvite(
       0
     )
     const existingTotal = Number(existingBud?.total_amount || 0)
-    const newGroupBudget = Math.max(existingTotal, activeMembersSum)
+    const newGroupBudget = activeMembersSum > 0 ? activeMembersSum : (existingTotal || 25000)
 
     // Aggregate category caps across all active members
     let sumAccom = 0,
@@ -435,7 +433,17 @@ export async function acceptTripInvite(
       sumMisc = Math.round(newGroupBudget * 0.1)
     }
 
-    // 3. Update the budgets table with the new group total & category caps
+    // 3. Update BOTH trips and budgets tables with the new group total & category caps
+    try {
+      await supabase
+        .from('trips')
+        .update({
+          budget: newGroupBudget,
+          updated_at: now,
+        })
+        .eq('trip_id', tripId)
+    } catch (_) {}
+
     await supabase
       .from('budgets')
       .update({
@@ -449,7 +457,7 @@ export async function acceptTripInvite(
       })
       .eq('trip_id', tripId)
 
-    return { success: true }
+    return { success: true, newGroupBudget }
   } catch (err: any) {
     console.error('acceptTripInvite error:', err)
     return { success: false, error: err.message }
@@ -512,9 +520,9 @@ export async function saveExpenseToSupabase(expense: Expense, payerUserId: strin
       description: expense.merchant,
       amount: expense.amount,
       currency: expense.currency,
-      home_amount: expense.convertedAmount,
-      home_currency: 'INR',
-      fx_rate_date: '2026-09-15',
+      home_amount: expense.convertedAmount || expense.homeAmount || expense.amount,
+      home_currency: expense.homeCurrency || (expense as any).home_currency || 'INR',
+      fx_rate_date: new Date().toISOString().split('T')[0],
       incurred_at: now,
       entry_method: 'manual',
       is_settled: Boolean(expense.isSettled),
@@ -675,9 +683,19 @@ export async function updateMemberPersonalBudgetInSupabase(
       0
     )
     const existingTotal = Number(existingBud?.total_amount || 0)
-    const newGroupBudget = Math.max(existingTotal, activeMembersSum)
+    const newGroupBudget = activeMembersSum > 0 ? activeMembersSum : (existingTotal || newBudget)
 
-    // 3. Update the budgets table with the new group total & category caps
+    // 3. Update BOTH trips and budgets tables with the new group total & category caps
+    try {
+      await supabase
+        .from('trips')
+        .update({
+          budget: newGroupBudget,
+          updated_at: now,
+        })
+        .eq('trip_id', targetTripId)
+    } catch (_) {}
+
     await supabase
       .from('budgets')
       .update({

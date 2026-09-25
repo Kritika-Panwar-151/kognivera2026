@@ -344,6 +344,8 @@ export default function AddExpense({ navigate, onAddExpense, trip, currentUser }
       amount: numAmount,
       currency: currCode,
       convertedAmount,
+      homeAmount: convertedAmount,
+      homeCurrency: userHomeCurr,
       category,
       date: new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
       paidBy,

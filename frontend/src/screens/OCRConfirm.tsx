@@ -155,6 +155,8 @@ export default function OCRConfirm({ navigate, onAddExpense, trip, currentUser }
       amount: numAmount,
       currency: fields.currency,
       convertedAmount: converted,
+      homeAmount: converted,
+      homeCurrency: userHomeCurr,
       category: fields.category,
       date: new Date(fields.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
       paidBy,
