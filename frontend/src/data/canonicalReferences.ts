@@ -230,19 +230,30 @@ export function estimateTravelDistanceKm(
   return 5500 // Default international flight distance
 }
 
+export interface MinBudgetBreakdownItem {
+  label: string
+  amountINR: number
+  icon: string
+  note: string
+}
+
 export interface MinBudgetResult {
   minAmountINR: number
   distanceKm: number
   isDomestic: boolean
-  transportCostINR: number
-  livingCostINR: number
   days: number
   totalParty: number
+  intercityTransitINR: number
+  localTransitINR: number
+  accommodationINR: number
+  foodCostINR: number
+  contingencyINR: number
+  breakdown: MinBudgetBreakdownItem[]
   reasoning: string
 }
 
 /**
- * Calculates distance-based minimum realistic budget (in INR base).
+ * Rigorous distance-based minimum realistic budget calculator (in INR base).
  */
 export function calculateMinimumTripBudgetParams(params: {
   originCity: string
@@ -258,6 +269,7 @@ export function calculateMinimumTripBudgetParams(params: {
 
   const distKm = estimateTravelDistanceKm(originCity, originCountry, destinationCity, destinationCountry)
   const isDomestic = (originCountry || '').toLowerCase() === (destinationCountry || '').toLowerCase()
+  const isSameCity = originCity.toLowerCase().trim() === destinationCity.toLowerCase().trim()
 
   // Calculate trip duration in days
   let days = 1
@@ -272,64 +284,131 @@ export function calculateMinimumTripBudgetParams(params: {
   const numAdults = Math.max(1, adults)
   const numChildren = Math.max(0, children)
   const totalParty = numAdults + numChildren * 0.5
+  const roomsNeeded = Math.ceil(totalParty / 2)
+  const nightsCount = Math.max(0, days - 1)
 
-  // 1. Distance-based Roundtrip Transport Cost (INR per adult)
-  let transportPerAdult = 0
-  if (isDomestic) {
-    if (distKm <= 80) {
-      transportPerAdult = 200 // Local auto / cab / bus
-    } else if (distKm <= 400) {
+  // 1. Intercity Roundtrip Transit (INR per adult)
+  let intercityPerAdult = 0
+  if (isSameCity) {
+    intercityPerAdult = 0
+  } else if (isDomestic) {
+    if (distKm <= 120) {
+      intercityPerAdult = 300 // Short intercity bus/train
+    } else if (distKm <= 500) {
       // e.g. Bengaluru to Chennai (~290 km)
-      transportPerAdult = 800 // Bus or sleeper train round-trip
-    } else if (distKm <= 900) {
-      // e.g. Bengaluru to Goa (~460 km) / Mumbai
-      transportPerAdult = 1800
-    } else if (distKm <= 1800) {
-      // e.g. Bengaluru to New Delhi (~1740 km)
-      transportPerAdult = 3500
+      intercityPerAdult = 900 // Bus or express sleeper train roundtrip
+    } else if (distKm <= 1200) {
+      // e.g. Bengaluru to Goa (~460 km) / Mumbai (~840 km)
+      intercityPerAdult = 2200
     } else {
-      transportPerAdult = 5000
+      // e.g. Bengaluru to New Delhi (~1740 km)
+      intercityPerAdult = 4200
     }
   } else {
-    // International
+    // International Flight + Visa Baseline
     if (distKm <= 3500) {
       // e.g. Dubai, Singapore, Bangkok
-      transportPerAdult = 14000
+      intercityPerAdult = 18000 // Flight + Visa/Insurance
     } else if (distKm <= 8000) {
       // e.g. Europe, Japan
-      transportPerAdult = 38000
+      intercityPerAdult = 50000 // Flight + Schengen/Visa/Insurance
     } else {
       // e.g. US, Australia
-      transportPerAdult = 60000
+      intercityPerAdult = 85000 // Flight + Visa/Insurance
     }
   }
 
-  const totalTransportCost = Math.round(transportPerAdult * numAdults)
+  const intercityTransitINR = Math.round(intercityPerAdult * numAdults)
 
-  // 2. Minimum Living Cost per day (INR per effective person: accommodation + food + basic daily travel)
-  let dailyLivingPerPerson = 600 // Domestic default
+  // 2. Intracity Local Transit per day (INR)
+  const localTransitPerDayPerAdult = isDomestic ? 200 : 800
+  const localTransitINR = Math.round(localTransitPerDayPerAdult * days * numAdults)
+
+  // 3. Accommodation per room per night (INR)
+  let roomPerNightINR = 1200 // Domestic metro default
+  if (isDomestic) {
+    const destLower = (destinationCity || '').toLowerCase()
+    if (destLower.includes('goa') || destLower.includes('mumbai') || destLower.includes('delhi') || destLower.includes('bengaluru')) {
+      roomPerNightINR = 1400
+    } else {
+      roomPerNightINR = 900
+    }
+  } else {
+    const destLower = (destinationCountry || '').toLowerCase()
+    if (destLower.includes('switzerland') || destLower.includes('states') || destLower.includes('kingdom') || destLower.includes('japan') || destLower.includes('france') || destLower.includes('australia') || destLower.includes('singapore') || destLower.includes('emirates')) {
+      roomPerNightINR = 7500
+    } else {
+      roomPerNightINR = 3000
+    }
+  }
+
+  const accommodationINR = Math.round(roomPerNightINR * nightsCount * roomsNeeded)
+
+  // 4. Food & Meals (3 meals/day per person INR)
+  let foodPerPersonPerDayINR = 400 // Domestic baseline (₹100 breakfast, ₹150 lunch, ₹150 dinner)
   if (!isDomestic) {
     const destLower = (destinationCountry || '').toLowerCase()
     if (destLower.includes('switzerland') || destLower.includes('states') || destLower.includes('kingdom') || destLower.includes('japan') || destLower.includes('france') || destLower.includes('australia')) {
-      dailyLivingPerPerson = 5500
+      foodPerPersonPerDayINR = 3500
     } else {
-      dailyLivingPerPerson = 2500
+      foodPerPersonPerDayINR = 1200
     }
   }
 
-  const totalLivingCost = Math.round(dailyLivingPerPerson * days * totalParty)
-  const minAmountINR = totalTransportCost + totalLivingCost
+  const foodCostINR = Math.round(foodPerPersonPerDayINR * days * totalParty)
 
-  const reasoning = `Distance between ${originCity || 'Origin'} and ${destinationCity || 'Destination'} is ~${distKm} km (${isDomestic ? 'Domestic' : 'International'}). Minimum required for ${days} day(s) & ${numAdults} adult(s) includes ₹${totalTransportCost.toLocaleString()} round-trip transit and ₹${totalLivingCost.toLocaleString()} stay/food.`
+  // 5. Subtotal + 10% Contingency Safety Buffer
+  const subtotalINR = intercityTransitINR + localTransitINR + accommodationINR + foodCostINR
+  const contingencyINR = Math.round(subtotalINR * 0.10)
+  const minAmountINR = subtotalINR + contingencyINR
+
+  const breakdown: MinBudgetBreakdownItem[] = [
+    {
+      label: 'Intercity Transit (Roundtrip)',
+      amountINR: intercityTransitINR,
+      icon: '🚌',
+      note: `${numAdults} adult(s) roundtrip transport (${distKm} km)`,
+    },
+    {
+      label: 'Local Transit in Destination',
+      amountINR: localTransitINR,
+      icon: '🚖',
+      note: `₹${localTransitPerDayPerAdult}/day for ${days} day(s)`,
+    },
+    {
+      label: `Accommodation (${nightsCount} night${nightsCount > 1 ? 's' : ''})`,
+      amountINR: accommodationINR,
+      icon: '🏨',
+      note: nightsCount > 0 ? `${roomsNeeded} room(s) @ ₹${roomPerNightINR.toLocaleString()}/night` : 'Day trip (0 nights)',
+    },
+    {
+      label: `Food & Meals (${days} day${days > 1 ? 's' : ''})`,
+      amountINR: foodCostINR,
+      icon: '🍽️',
+      note: `3 meals/day for ${totalParty} person(s)`,
+    },
+    {
+      label: 'Contingency Safety Buffer (10%)',
+      amountINR: contingencyINR,
+      icon: '🛡️',
+      note: 'Emergency & unexpected expense buffer',
+    },
+  ]
+
+  const reasoning = `Travel route from ${originCity || 'Origin'} to ${destinationCity || 'Destination'} is ~${distKm} km (${isDomestic ? 'Domestic' : 'International'}). Itemized non-negotiable minimum cost for ${days} day(s) & ${numAdults} adult(s) is ₹${subtotalINR.toLocaleString()} + 10% safety buffer = ₹${minAmountINR.toLocaleString()}.`
 
   return {
     minAmountINR,
     distanceKm: distKm,
     isDomestic,
-    transportCostINR: totalTransportCost,
-    livingCostINR: totalLivingCost,
     days,
     totalParty,
+    intercityTransitINR,
+    localTransitINR,
+    accommodationINR,
+    foodCostINR,
+    contingencyINR,
+    breakdown,
     reasoning,
   }
 }

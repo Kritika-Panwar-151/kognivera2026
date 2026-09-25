@@ -636,7 +636,7 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
 
           {/* Budget Alert Warning if Below Minimum */}
           {minBudgetCalc.isBelowMin && (
-            <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl space-y-2.5 animate-in fade-in">
+            <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl space-y-3 animate-in fade-in">
               <div className="flex items-start gap-2.5">
                 <span className="text-xl">⚠️</span>
                 <div>
@@ -646,9 +646,39 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
                   <p className="text-xs text-amber-900 mt-1 leading-relaxed font-medium">
                     Entered budget of <strong>{hostHomeSymbol}{hostPersonalBudget.toLocaleString()} {hostHomeCurr}</strong> is insufficient for traveling from <strong>{effectiveOriginCity}</strong> to <strong>{effectiveDestinationCity}</strong> (~{minBudgetCalc.distanceKm} km, {minBudgetCalc.days} day(s), {minBudgetCalc.totalParty} traveler(s)).
                   </p>
-                  <p className="text-[11px] text-amber-800 mt-1 italic font-mono bg-amber-100/60 p-2 rounded-xl border border-amber-200/80">
-                    💡 {minBudgetCalc.reasoning}
-                  </p>
+                </div>
+              </div>
+
+              {/* Itemized Cost Breakdown Table */}
+              <div className="bg-white/90 rounded-xl p-3 border border-amber-200 space-y-1.5 text-xs">
+                <p className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider mb-1 flex items-center justify-between">
+                  <span>📊 Itemized Non-Negotiable Travel Cost Breakdown</span>
+                  <span className="text-amber-700">INR Base → Converted to {hostHomeCurr}</span>
+                </p>
+
+                {minBudgetCalc.breakdown.map((item, idx) => {
+                  const itemInHost = convertCurrency(item.amountINR, 'INR', hostHomeCurr)
+                  const roundedItem = Math.ceil(itemInHost / 10) * 10 || Math.ceil(itemInHost)
+
+                  return (
+                    <div key={idx} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0 text-slate-700">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{item.icon}</span>
+                        <div>
+                          <p className="font-bold text-slate-800 text-xs">{item.label}</p>
+                          <p className="text-[10px] text-slate-400">{item.note}</p>
+                        </div>
+                      </div>
+                      <span className="font-black text-slate-900 text-xs">
+                        {hostHomeSymbol}{roundedItem.toLocaleString()} {hostHomeCurr}
+                      </span>
+                    </div>
+                  )
+                })}
+
+                <div className="pt-2 border-t border-amber-300 flex items-center justify-between text-xs font-black text-amber-950">
+                  <span>Required Minimum Total Budget</span>
+                  <span className="text-sm text-amber-700">{hostHomeSymbol}{minBudgetCalc.minInHostCurr.toLocaleString()} {hostHomeCurr}</span>
                 </div>
               </div>
 
