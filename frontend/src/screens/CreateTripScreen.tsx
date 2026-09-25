@@ -3,7 +3,9 @@ import type { NavigateFn, Trip, User } from '../types'
 import {
   CANONICAL_COUNTRIES,
   CANONICAL_CITIES,
+  getCitiesForCountry,
   getCurrencyForCountry,
+  calculateMinimumTripBudgetParams,
 } from '../data/canonicalReferences'
 import {
   getRegisteredUsers,
@@ -35,6 +37,13 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
   const [originCity, setOriginCity] = useState(currentUser?.homeCity || 'Bengaluru')
   const [destinationCountry, setDestinationCountry] = useState('Switzerland')
   const [destinationCity, setDestinationCity] = useState('Zurich')
+
+  // Custom city input flags
+  const [isCustomOriginCity, setIsCustomOriginCity] = useState(false)
+  const [customOriginInput, setCustomOriginInput] = useState('')
+  const [isCustomDestinationCity, setIsCustomDestinationCity] = useState(false)
+  const [customDestinationInput, setCustomDestinationInput] = useState('')
+
   const getLocalDateString = (offsetDays = 0) => {
     const d = new Date()
     if (offsetDays !== 0) {
@@ -59,6 +68,10 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
     }
   }, [currentUser])
 
+  // Available cities per country
+  const availableOriginCities = useMemo(() => getCitiesForCountry(originCountry), [originCountry])
+  const availableDestinationCities = useMemo(() => getCitiesForCountry(destinationCountry), [destinationCountry])
+
   // Auto-derived currency from Destination Country
   const autoCurrency = useMemo(() => getCurrencyForCountry(destinationCountry), [destinationCountry])
 
@@ -80,12 +93,51 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
   const [selectedMembers, setSelectedMembers] = useState<User[]>([hostUser])
   const [hostPersonalBudget, setHostPersonalBudget] = useState<number>(35000)
 
+  // Calculate Distance-Based Minimum Budget
+  const hostHomeCurr = (hostUser.homeCurrency || 'INR').toUpperCase()
+  const hostHomeSymbol = getCurrencySymbol(hostHomeCurr)
+
+  const effectiveOriginCity = isCustomOriginCity ? customOriginInput || originCity : originCity
+  const effectiveDestinationCity = isCustomDestinationCity ? customDestinationInput || destinationCity : destinationCity
+
+  const minBudgetCalc = useMemo(() => {
+    const res = calculateMinimumTripBudgetParams({
+      originCity: effectiveOriginCity,
+      originCountry,
+      destinationCity: effectiveDestinationCity,
+      destinationCountry,
+      startDate,
+      endDate,
+      adults: parseInt(adults) || 1,
+      children: parseInt(children) || 0,
+    })
+
+    const minInHost = convertCurrency(res.minAmountINR, 'INR', hostHomeCurr)
+    const roundedMin = Math.ceil(minInHost / 100) * 100 || Math.ceil(minInHost)
+
+    return {
+      ...res,
+      minInHostCurr: roundedMin,
+      isBelowMin: hostPersonalBudget < roundedMin,
+    }
+  }, [
+    effectiveOriginCity,
+    originCountry,
+    effectiveDestinationCity,
+    destinationCountry,
+    startDate,
+    endDate,
+    adults,
+    children,
+    hostPersonalBudget,
+    hostHomeCurr,
+  ])
+
   // Dynamic search results across all live registered users
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     const available = allRegisteredUsers.filter((u) => !selectedMembers.some((m) => m.id === u.id))
     if (!q) {
-      // If search box is focused, show live registered users as immediate suggestions
       return isSearchFocused ? available.slice(0, 8) : []
     }
     return available.filter(
@@ -108,19 +160,25 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
 
   const handleOriginCountryChange = (cName: string) => {
     setOriginCountry(cName)
-    const country = CANONICAL_COUNTRIES.find((c) => c.name === cName)
-    if (country) {
-      const city = CANONICAL_CITIES.find((ct) => ct.countryId === country.id)
-      if (city) setOriginCity(city.name)
+    const cities = getCitiesForCountry(cName)
+    if (cities.length > 0) {
+      setOriginCity(cities[0].name)
+      setIsCustomOriginCity(false)
+    } else {
+      setIsCustomOriginCity(true)
+      setCustomOriginInput('')
     }
   }
 
   const handleDestinationCountryChange = (cName: string) => {
     setDestinationCountry(cName)
-    const country = CANONICAL_COUNTRIES.find((c) => c.name === cName)
-    if (country) {
-      const city = CANONICAL_CITIES.find((ct) => ct.countryId === country.id)
-      if (city) setDestinationCity(city.name)
+    const cities = getCitiesForCountry(cName)
+    if (cities.length > 0) {
+      setDestinationCity(cities[0].name)
+      setIsCustomDestinationCity(false)
+    } else {
+      setIsCustomDestinationCity(true)
+      setCustomDestinationInput('')
     }
   }
 
@@ -131,26 +189,29 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
     }
   }
 
-  const handleRemoveMember = (userId: string) => {
-    if (userId === hostUser.id) return // Host cannot be removed
-    setSelectedMembers((prev) => prev.filter((m) => m.id !== userId))
-  }
-
   const handleCreate = () => {
-    // Only real invited members + host
-    const finalMembers = [...selectedMembers]
+    // Check if entered budget is below distance-based minimum
+    let finalBudget = hostPersonalBudget
+    if (minBudgetCalc.isBelowMin) {
+      finalBudget = minBudgetCalc.minInHostCurr
+      setHostPersonalBudget(minBudgetCalc.minInHostCurr)
+    }
 
-    const destinationString = `${destinationCity}, ${destinationCountry}`
-    const originString = `${originCity}, ${originCountry}`
+    const finalMembers = [...selectedMembers]
+    const finalDestCity = isCustomDestinationCity ? customDestinationInput.trim() || 'Destination' : destinationCity
+    const finalOrigCity = isCustomOriginCity ? customOriginInput.trim() || 'Origin' : originCity
+
+    const destinationString = `${finalDestCity}, ${destinationCountry}`
+    const originString = `${finalOrigCity}, ${originCountry}`
 
     const newTrip: Trip = {
       id: `trp_${Date.now().toString(36)}`,
-      name: name.trim() || `${destinationCity || 'New'} Trip`,
+      name: name.trim() || `${finalDestCity} Trip`,
       destination: destinationString,
       startDate,
       endDate,
       currency: autoCurrency,
-      budget: totalGroupBudget || hostPersonalBudget,
+      budget: finalBudget,
       spent: 0,
       ownerId: hostUser.id,
       adults: parseInt(adults) || 1,
@@ -161,33 +222,33 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
       originCountry,
       originCity: originString,
       destinationCountry,
-      destinationCity,
+      destinationCity: finalDestCity,
       memberBudgets: {
-        [hostUser.id]: hostPersonalBudget,
+        [hostUser.id]: finalBudget,
       },
-      personalBudget: hostPersonalBudget,
+      personalBudget: finalBudget,
       memberDetails: finalMembers.map((m) => ({
         userId: m.id,
         role: m.id === hostUser.id ? 'owner' : 'editor',
         status: m.id === hostUser.id ? 'active' : 'pending',
-        personalBudget: m.id === hostUser.id ? hostPersonalBudget : 0,
+        personalBudget: m.id === hostUser.id ? finalBudget : 0,
         categoryCaps:
           m.id === hostUser.id
             ? {
-                accommodation: Math.round(hostPersonalBudget * 0.35),
-                food: Math.round(hostPersonalBudget * 0.25),
-                transport: Math.round(hostPersonalBudget * 0.2),
-                activities: Math.round(hostPersonalBudget * 0.1),
-                misc: Math.round(hostPersonalBudget * 0.1),
+                accommodation: Math.round(finalBudget * 0.35),
+                food: Math.round(finalBudget * 0.25),
+                transport: Math.round(finalBudget * 0.2),
+                activities: Math.round(finalBudget * 0.1),
+                misc: Math.round(finalBudget * 0.1),
               }
             : {},
       })),
       categoryCaps: {
-        accommodation: Math.round(hostPersonalBudget * 0.35),
-        food: Math.round(hostPersonalBudget * 0.25),
-        transport: Math.round(hostPersonalBudget * 0.20),
-        activities: Math.round(hostPersonalBudget * 0.10),
-        misc: Math.round(hostPersonalBudget * 0.10),
+        accommodation: Math.round(finalBudget * 0.35),
+        food: Math.round(finalBudget * 0.25),
+        transport: Math.round(finalBudget * 0.20),
+        activities: Math.round(finalBudget * 0.10),
+        misc: Math.round(finalBudget * 0.10),
       },
     }
 
@@ -217,7 +278,7 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
         </div>
         <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900">Create New Trip & Budget</h1>
         <p className="text-slate-500 text-xs md:text-sm mt-1">
-          Invite members, define personal budgets, and automatically calculate your total group budget fund.
+          Select destination cities, set personal budgets with smart distance validation, and invite travel members.
         </p>
       </div>
 
@@ -240,7 +301,7 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Switzerland Expedition"
+                placeholder={`e.g. ${effectiveDestinationCity || 'Switzerland'} Expedition`}
                 className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
               />
             </div>
@@ -268,17 +329,48 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
                 <label className="block text-xs font-bold text-slate-600 mb-1">
                   Origin City
                 </label>
-                <input
-                  type="text"
-                  value={originCity}
-                  onChange={(e) => setOriginCity(e.target.value)}
-                  placeholder="e.g. Bengaluru"
-                  className="w-full border border-slate-200 bg-white rounded-xl px-3 py-2 text-xs font-medium focus:border-teal-500 outline-none"
-                />
+                {!isCustomOriginCity ? (
+                  <select
+                    value={originCity}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setIsCustomOriginCity(true)
+                      } else {
+                        setOriginCity(e.target.value)
+                      }
+                    }}
+                    className="w-full border border-slate-200 bg-white rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:border-teal-500 outline-none"
+                  >
+                    {availableOriginCities.map((ct) => (
+                      <option key={ct.id} value={ct.name}>
+                        📍 {ct.name}
+                      </option>
+                    ))}
+                    <option value="__custom__">➕ Custom / Other City...</option>
+                  </select>
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={customOriginInput}
+                      onChange={(e) => setCustomOriginInput(e.target.value)}
+                      placeholder="Type custom origin city..."
+                      className="w-full border border-teal-300 bg-white rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:border-teal-500 outline-none pr-8"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomOriginCity(false)}
+                      className="absolute right-2 top-2 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-bold"
+                      title="Switch back to dropdown"
+                    >
+                      Dropdown
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Destination Country & City */}
+            {/* Destination Country & City Dropdown */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-teal-50/40 rounded-2xl border border-teal-100">
               <div>
                 <label className="block text-xs font-bold text-teal-900 mb-1">
@@ -299,15 +391,45 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
 
               <div>
                 <label className="block text-xs font-bold text-teal-900 mb-1">
-                  Destination City
+                  Destination City ({destinationCountry})
                 </label>
-                <input
-                  type="text"
-                  value={destinationCity}
-                  onChange={(e) => setDestinationCity(e.target.value)}
-                  placeholder="e.g. Zurich"
-                  className="w-full border border-teal-200 bg-white rounded-xl px-3 py-2 text-xs font-medium focus:border-teal-500 outline-none"
-                />
+                {!isCustomDestinationCity ? (
+                  <select
+                    value={destinationCity}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setIsCustomDestinationCity(true)
+                      } else {
+                        setDestinationCity(e.target.value)
+                      }
+                    }}
+                    className="w-full border border-teal-200 bg-white rounded-xl px-3 py-2 text-xs font-bold text-teal-950 focus:border-teal-500 outline-none shadow-2xs"
+                  >
+                    {availableDestinationCities.map((ct) => (
+                      <option key={ct.id} value={ct.name}>
+                        🏙️ {ct.name}
+                      </option>
+                    ))}
+                    <option value="__custom__">➕ Custom / Other City...</option>
+                  </select>
+                ) : (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={customDestinationInput}
+                      onChange={(e) => setCustomDestinationInput(e.target.value)}
+                      placeholder="Type custom destination city..."
+                      className="w-full border border-teal-300 bg-white rounded-xl px-3 py-2 text-xs font-bold text-teal-950 focus:border-teal-500 outline-none pr-16"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomDestinationCity(false)}
+                      className="absolute right-2 top-2 text-[10px] bg-teal-100 hover:bg-teal-200 text-teal-800 px-1.5 py-0.5 rounded font-bold"
+                    >
+                      Select List
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -333,17 +455,22 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
               </div>
             </div>
 
-            {/* Human-Readable Date Confirmation Badge */}
+            {/* Human-Readable Date & Distance Confirmation Badge */}
             {startDate && endDate && (
-              <div className="py-2 px-3 bg-teal-50 border border-teal-200/60 rounded-xl flex items-center justify-between text-xs text-teal-900 font-medium">
+              <div className="py-2.5 px-3 bg-teal-50 border border-teal-200/60 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-teal-900 font-medium">
                 <span>
                   📅 <strong>{new Date(startDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
                   {' → '}
                   <strong>{new Date(endDate + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
                 </span>
-                <span className="text-[10px] bg-teal-200/60 text-teal-900 px-2 py-0.5 rounded font-bold">
-                  {Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)))} Days Trip
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] bg-teal-200/60 text-teal-900 px-2 py-0.5 rounded font-bold">
+                    {minBudgetCalc.days} Days Trip
+                  </span>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">
+                    🗺️ ~{minBudgetCalc.distanceKm} km
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -476,15 +603,15 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
           </div>
         </div>
 
-        {/* ================= SECTION 3: PERSONAL BUDGET & INVITED FRIENDS ================= */}
+        {/* ================= SECTION 3: PERSONAL BUDGET & DISTANCE VALIDATION ================= */}
         <div className="pt-4 border-t border-slate-100 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                3. Your Personal Budget & Invited Members
+                3. Your Personal Budget & Distance Validation
               </h2>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Enter your personal budget limit. Invited friends will enter their own personal budget when they join.
+                Set budget limit. System validates minimum budget required based on geographic distance.
               </p>
             </div>
             <span className="text-xs font-extrabold text-teal-800 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
@@ -492,10 +619,51 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
             </span>
           </div>
 
-          {/* 1. Host Personal Budget Input Card */}
+          {/* Distance & Recommended Budget Indicator */}
+          <div className="p-3 bg-teal-50/80 border border-teal-200 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-teal-900 font-medium">
+              <span>✈️ Travel Route:</span>
+              <strong className="text-teal-950 font-bold">{effectiveOriginCity} → {effectiveDestinationCity}</strong>
+              <span className="text-[10px] bg-teal-200/70 text-teal-900 font-bold px-2 py-0.5 rounded-full">
+                ~{minBudgetCalc.distanceKm} km ({minBudgetCalc.isDomestic ? 'Domestic' : 'International'})
+              </span>
+            </div>
+            <div className="text-teal-900 font-medium">
+              <span>Required Min Budget:</span>
+              <strong className="ml-1 text-teal-950 font-black text-sm">{hostHomeSymbol}{minBudgetCalc.minInHostCurr.toLocaleString()} {hostHomeCurr}</strong>
+            </div>
+          </div>
+
+          {/* Budget Alert Warning if Below Minimum */}
+          {minBudgetCalc.isBelowMin && (
+            <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl space-y-2.5 animate-in fade-in">
+              <div className="flex items-start gap-2.5">
+                <span className="text-xl">⚠️</span>
+                <div>
+                  <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">
+                    Budget Warning: Below Distance-Based Travel Minimum
+                  </h4>
+                  <p className="text-xs text-amber-900 mt-1 leading-relaxed font-medium">
+                    Entered budget of <strong>{hostHomeSymbol}{hostPersonalBudget.toLocaleString()} {hostHomeCurr}</strong> is insufficient for traveling from <strong>{effectiveOriginCity}</strong> to <strong>{effectiveDestinationCity}</strong> (~{minBudgetCalc.distanceKm} km, {minBudgetCalc.days} day(s), {minBudgetCalc.totalParty} traveler(s)).
+                  </p>
+                  <p className="text-[11px] text-amber-800 mt-1 italic font-mono bg-amber-100/60 p-2 rounded-xl border border-amber-200/80">
+                    💡 {minBudgetCalc.reasoning}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setHostPersonalBudget(minBudgetCalc.minInHostCurr)}
+                className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>⚡ Auto-Set Budget to Minimum Recommended ({hostHomeSymbol}{minBudgetCalc.minInHostCurr.toLocaleString()} {hostHomeCurr})</span>
+              </button>
+            </div>
+          )}
+
+          {/* Host Personal Budget Input Card */}
           {(() => {
-            const hostHomeCurr = (hostUser.homeCurrency || 'INR').toUpperCase()
-            const hostHomeSymbol = getCurrencySymbol(hostHomeCurr)
             const destSymbol = getCurrencySymbol(autoCurrency)
             const convertedDestEquiv = convertCurrency(hostPersonalBudget, hostHomeCurr, autoCurrency)
 
@@ -520,7 +688,7 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
                   </div>
 
                   <div className="flex flex-col items-start sm:items-end gap-1">
-                    <div className="flex items-center bg-white border-2 border-teal-600/40 rounded-xl px-3 py-2 shadow-2xs focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-100 self-start sm:self-auto">
+                    <div className={`flex items-center bg-white border-2 ${minBudgetCalc.isBelowMin ? 'border-amber-500 ring-2 ring-amber-100' : 'border-teal-600/40'} rounded-xl px-3 py-2 shadow-2xs self-start sm:self-auto`}>
                       <span className="text-xs font-bold text-teal-700 mr-2">{hostHomeSymbol}</span>
                       <input
                         type="number"
@@ -542,20 +710,20 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
                 <div className="flex items-center gap-2 pt-2 border-t border-slate-200/60 flex-wrap">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Presets:</span>
                   {(hostHomeCurr === 'EUR' || hostHomeCurr === 'USD' || hostHomeCurr === 'GBP' || hostHomeCurr === 'CHF'
-                    ? [200, 350, 500, 750]
-                    : [15000, 25000, 35000, 50000]
+                    ? [minBudgetCalc.minInHostCurr, Math.max(350, minBudgetCalc.minInHostCurr * 1.5), Math.max(500, minBudgetCalc.minInHostCurr * 2), Math.max(750, minBudgetCalc.minInHostCurr * 3)]
+                    : [minBudgetCalc.minInHostCurr, Math.max(15000, minBudgetCalc.minInHostCurr * 1.5), Math.max(35000, minBudgetCalc.minInHostCurr * 2), Math.max(50000, minBudgetCalc.minInHostCurr * 3)]
                   ).map((preset) => (
                     <button
                       key={preset}
                       type="button"
-                      onClick={() => setHostPersonalBudget(preset)}
+                      onClick={() => setHostPersonalBudget(Math.round(preset))}
                       className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition ${
-                        hostPersonalBudget === preset
+                        hostPersonalBudget === Math.round(preset)
                           ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
                           : 'bg-white text-slate-600 border-slate-200 hover:border-teal-300'
                       }`}
                     >
-                      {hostHomeSymbol}{hostHomeCurr === 'INR' ? `${(preset / 1000).toFixed(0)}k` : preset}
+                      {hostHomeSymbol}{hostHomeCurr === 'INR' ? `${(Math.round(preset) / 1000).toFixed(1)}k` : Math.round(preset)}
                     </button>
                   ))}
                 </div>
@@ -563,7 +731,7 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
             )
           })()}
 
-          {/* 2. Invited Friends (Awaiting Acceptance) */}
+          {/* Invited Friends List */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
@@ -600,87 +768,10 @@ export default function CreateTripScreen({ navigate, currentUser, onCreated }: P
                         <span className="text-[10px] text-slate-400">{member.email}</span>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-semibold text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
-                        Will set own balance on join
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveMember(member.id)}
-                        className="w-7 h-7 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 flex items-center justify-center text-xs font-bold transition"
-                        title="Cancel Invite"
-                      >
-                        ✕
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-
-          {/* 3. DYNAMIC GROUP BUDGET SUMMATION BANNER */}
-          <div className="bg-linear-to-r from-teal-700 to-[#123B3A] text-white rounded-2xl p-4 shadow-sm space-y-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[10px] uppercase tracking-wider text-teal-200 font-bold block">
-                  Collective Trip Fund
-                </span>
-                <span className="text-2xl font-black">
-                  {autoCurrency} {totalGroupBudget.toLocaleString()}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] bg-teal-600/80 px-2 py-0.5 rounded-full font-bold">
-                  1 Active Member {invitedMembers.length > 0 ? `· ${invitedMembers.length} Pending` : ''}
-                </span>
-                <p className="text-[10px] text-teal-200 mt-1">
-                  Host: {autoCurrency} {hostPersonalBudget.toLocaleString()}
-                </p>
-              </div>
-            </div>
-
-            {/* Dynamic Formula Display */}
-            <div className="pt-2 border-t border-teal-600/60 text-[11px] text-teal-100/90 space-y-0.5">
-              <p className="font-mono">
-                Formula: Σ (Active Member Budgets) = Group Budget
-              </p>
-              <p className="text-[10px] text-teal-200/80">
-                ✨ Group budget automatically expands as invited friends accept on their devices and contribute their personal balances.
-              </p>
-            </div>
-          </div>
-
-          {/* Category Caps Breakdown Preview */}
-          <div className="bg-slate-50 rounded-2xl p-3.5 border border-slate-100 space-y-2">
-            <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-              <span>Automatic Category Caps (PS-08 Standard)</span>
-              <span className="text-teal-700">{autoCurrency} {totalGroupBudget.toLocaleString()}</span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center text-xs">
-              <div className="bg-white p-2 rounded-xl border border-slate-200">
-                <span className="text-slate-400 block text-[10px]">🏨 Stay (35%)</span>
-                <strong className="text-slate-800">{autoCurrency} {Math.round(totalGroupBudget * 0.35).toLocaleString()}</strong>
-              </div>
-              <div className="bg-white p-2 rounded-xl border border-slate-200">
-                <span className="text-slate-400 block text-[10px]">🍽️ Food (25%)</span>
-                <strong className="text-slate-800">{autoCurrency} {Math.round(totalGroupBudget * 0.25).toLocaleString()}</strong>
-              </div>
-              <div className="bg-white p-2 rounded-xl border border-slate-200">
-                <span className="text-slate-400 block text-[10px]">🚗 Transit (20%)</span>
-                <strong className="text-slate-800">{autoCurrency} {Math.round(totalGroupBudget * 0.20).toLocaleString()}</strong>
-              </div>
-              <div className="bg-white p-2 rounded-xl border border-slate-200">
-                <span className="text-slate-400 block text-[10px]">⭐ Activity (10%)</span>
-                <strong className="text-slate-800">{autoCurrency} {Math.round(totalGroupBudget * 0.10).toLocaleString()}</strong>
-              </div>
-              <div className="bg-white p-2 rounded-xl border border-slate-200">
-                <span className="text-slate-400 block text-[10px]">📦 Misc (10%)</span>
-                <strong className="text-slate-800">{autoCurrency} {Math.round(totalGroupBudget * 0.10).toLocaleString()}</strong>
-              </div>
-            </div>
           </div>
         </div>
 
